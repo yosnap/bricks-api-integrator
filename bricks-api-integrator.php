@@ -14,6 +14,9 @@ if (!defined('ABSPATH')) {
     exit; // Evita accesos directos
 }
 
+// Incluir el archivo de autenticación
+require_once plugin_dir_path(__FILE__) . 'auth.php';
+
 // Añadir menú en el Dashboard de WordPress
 add_action('admin_menu', 'bricks_api_integrator_menu');
 
@@ -44,15 +47,32 @@ function bricks_api_integrator_dashboard()
             ?>
         </form>
 
-        <h2><?php esc_html_e('Datos del Endpoint en una Tabla', 'bricks-api-integrator'); ?></h2>
+        <h2><?php esc_html_e('Datos del Endpoint', 'bricks-api-integrator'); ?></h2>
 
         <?php
-        // Obtener el valor actualizado de la URL del endpoint de la base de datos
+        // Obtener el valor actualizado de la URL del endpoint y tipo de autenticación de la base de datos
         $endpoint_url = get_option('bricks_api_endpoint');
+        $auth_type = get_option('bricks_api_auth_type', 'none');
 
         if ($endpoint_url) {
+            $args = [];
+
+            // Configurar la autenticación según el tipo seleccionado
+            if ($auth_type === 'token') {
+                $token = get_option('bricks_api_token', '');
+                $args['headers'] = [
+                    'Authorization' => 'Bearer ' . $token,
+                ];
+            } elseif ($auth_type === 'basic') {
+                $user = get_option('bricks_api_basic_user', '');
+                $password = get_option('bricks_api_basic_password', '');
+                $args['headers'] = [
+                    'Authorization' => 'Basic ' . base64_encode("$user:$password"),
+                ];
+            }
+
             // Realizar la solicitud a la API con la URL actualizada
-            $response = wp_remote_get($endpoint_url);
+            $response = wp_remote_get($endpoint_url, $args);
 
             if (is_wp_error($response)) {
                 echo '<div class="notice notice-error"><p>' . __('Error al conectar con la API', 'bricks-api-integrator') . '</p></div>';
@@ -60,17 +80,34 @@ function bricks_api_integrator_dashboard()
                 $body = wp_remote_retrieve_body($response);
                 $data = json_decode($body, true);
 
-                if (!empty($data)) {
-                    // Mostrar los datos en una tabla
-                    echo '<table class="widefat fixed" cellspacing="0">';
-                    echo '<thead><tr><th>' . esc_html__('Variable PHP', 'bricks-api-integrator') . '</th><th>' . esc_html__('Valor', 'bricks-api-integrator') . '</th></tr></thead>';
-                    echo '<tbody>';
+                // Almacenar todos los ítems (puedes usarlos para otras partes del plugin)
+                $all_items = $data; // Aquí tienes todos los ítems para consumirlos más adelante
 
-                    // Función recursiva para renderizar los datos del array en la tabla
-                    render_payload_table($data, '$payload');
+                if (!empty($all_items)) {
+                    // Mostrar solo el primer ítem en la tabla
+                    $first_item = is_array($all_items) ? reset($all_items) : null;
 
-                    echo '</tbody>';
-                    echo '</table>';
+                    if ($first_item) {
+                        echo '<div class="accordion">';
+                        echo '<button class="accordion-toggle">' . esc_html__('Ver datos del Endpoint', 'bricks-api-integrator') . '</button>';
+                        echo '<div class="accordion-content">';
+
+                        // Generar la tabla HTML para mostrar las variables y valores del primer ítem
+                        echo '<table class="widefat fixed" cellspacing="0">';
+                        echo '<thead><tr><th>' . esc_html__('Variable', 'bricks-api-integrator') . '</th><th>' . esc_html__('Valor', 'bricks-api-integrator') . '</th><th>' . esc_html__('Variable PHP', 'bricks-api-integrator') . '</th></tr></thead>';
+                        echo '<tbody>';
+
+                        // Función para renderizar los campos del primer ítem
+                        render_api_item_table($first_item);
+
+                        echo '</tbody>';
+                        echo '</table>';
+
+                        echo '</div>'; // Cierre de .accordion-content
+                        echo '</div>'; // Cierre de .accordion
+                    } else {
+                        echo '<p>' . __('No se encontró el primer ítem en la respuesta de la API.', 'bricks-api-integrator') . '</p>';
+                    }
                 } else {
                     echo '<p>' . __('No se pudo recuperar ningún dato del endpoint.', 'bricks-api-integrator') . '</p>';
                 }
@@ -83,18 +120,25 @@ function bricks_api_integrator_dashboard()
 <?php
 }
 
-// Función recursiva para renderizar los datos del payload en la tabla
-function render_payload_table($data, $path = '$payload')
+// Función para renderizar los datos del primer ítem en una tabla
+function render_api_item_table($item, $parent_key = '')
 {
-    foreach ($data as $key => $value) {
-        $new_path = $path . "['" . $key . "']";
+    foreach ($item as $key => $value) {
+        // Generar la clave completa si está anidado
+        $variable_key = $parent_key ? $parent_key . "['$key']" : "['$key']";
+
+        // Generar la variable PHP
+        $php_variable = '$payload' . $variable_key;
 
         if (is_array($value)) {
-            render_payload_table($value, $new_path); // Llamada recursiva para arrays
+            // Si el valor es un array, llamar a la función de nuevo (recursiva)
+            render_api_item_table($value, $variable_key);
         } else {
+            // Mostrar la variable, el valor y la variable PHP en una fila
             echo '<tr>';
-            echo '<td><code>' . esc_html($new_path) . '</code></td>';
+            echo '<td><code>' . esc_html($variable_key) . '</code></td>'; // Mostrar clave como "restaurant['nombre']"
             echo '<td>' . esc_html($value) . '</td>';
+            echo '<td><code>' . esc_html($php_variable) . '</code></td>'; // Mostrar variable PHP como "$payload['restaurant']['nombre']"
             echo '</tr>';
         }
     }
@@ -105,7 +149,7 @@ add_action('admin_init', 'bricks_api_integrator_settings_init');
 
 function bricks_api_integrator_settings_init()
 {
-    register_setting('bricks_api_integrator_settings', 'bricks_api_endpoint'); // Aquí se registra la URL
+    register_setting('bricks_api_integrator_settings', 'bricks_api_endpoint');
 
     add_settings_section(
         'bricks_api_integrator_section',
@@ -126,8 +170,64 @@ function bricks_api_integrator_settings_init()
 // Campo de entrada para la URL del endpoint
 function bricks_api_endpoint_render()
 {
-    $url = get_option('bricks_api_endpoint'); // Obtener el valor guardado de la base de datos
+    $url = get_option('bricks_api_endpoint');
 ?>
     <input type="url" name="bricks_api_endpoint" value="<?php echo esc_attr($url); ?>" style="width: 100%;" />
+<?php
+}
+
+// Añadir los estilos para el acordeón y el JavaScript
+add_action('admin_footer', 'bricks_api_integrator_accordion_script');
+
+function bricks_api_integrator_accordion_script()
+{
+?>
+    <style>
+        .accordion {
+            margin-bottom: 10px;
+        }
+
+        .accordion-toggle {
+            background-color: #f1f1f1;
+            border: none;
+            cursor: pointer;
+            padding: 10px 15px;
+            text-align: left;
+            width: 100%;
+            font-size: 16px;
+            font-weight: bold;
+            outline: none;
+        }
+
+        .accordion-toggle.active,
+        .accordion-toggle:hover {
+            background-color: #ddd;
+        }
+
+        .accordion-content {
+            padding: 15px;
+            background-color: white;
+            display: none;
+            border-top: 1px solid #ccc;
+        }
+    </style>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            var accordions = document.querySelectorAll('.accordion-toggle');
+
+            accordions.forEach(function(toggle) {
+                toggle.addEventListener('click', function() {
+                    this.classList.toggle('active');
+                    var content = this.nextElementSibling;
+                    if (content.style.display === 'block') {
+                        content.style.display = 'none';
+                    } else {
+                        content.style.display = 'block';
+                    }
+                });
+            });
+        });
+    </script>
 <?php
 }
