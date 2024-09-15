@@ -141,9 +141,21 @@ function render_api_item_table($item, $parent_key = '$payload')
         $variable_key = $parent_key . "['$key']";
         $php_variable = $variable_key;
 
-        if (is_array($value) || is_object($value)) {
-            render_api_item_table((array) $value, $variable_key);
+        if (is_array($value)) {
+            // If the array is a simple array of strings or numbers, concatenate the values
+            if (array_is_list($value) && (all_items_are_strings_or_numbers($value))) {
+                $concatenated_values = implode(', ', $value); // Join the array values with commas
+                echo '<tr>';
+                echo '<td><code>' . esc_html($variable_key) . '</code></td>';
+                echo '<td>' . esc_html($concatenated_values) . '</td>';
+                echo '<td><code>' . esc_html($php_variable) . '</code></td>';
+                echo '</tr>';
+            } else {
+                // If it's a nested associative array or more complex structure, recurse through it
+                render_api_item_table($value, $variable_key);
+            }
         } else {
+            // For non-array values, display them normally
             echo '<tr>';
             echo '<td><code>' . esc_html($variable_key) . '</code></td>';
             echo '<td>' . esc_html($value) . '</td>';
@@ -152,6 +164,18 @@ function render_api_item_table($item, $parent_key = '$payload')
         }
     }
 }
+
+// Helper function to check if all array items are strings or numbers
+function all_items_are_strings_or_numbers($array)
+{
+    foreach ($array as $item) {
+        if (!is_string($item) && !is_numeric($item)) {
+            return false;
+        }
+    }
+    return true;
+}
+
 
 // Registro de la configuración del endpoint
 add_action('admin_init', 'bricks_api_integrator_settings_init');
