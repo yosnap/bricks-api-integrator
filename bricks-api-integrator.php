@@ -14,8 +14,12 @@ if (!defined('ABSPATH')) {
     exit; // Evita accesos directos
 }
 
+// Incluir el archivo que maneja los dynamic tags
+require_once plugin_dir_path(__FILE__) . 'dynamic-tags.php';
+
 // Añadir menú en el Dashboard de WordPress
 add_action('admin_menu', 'bricks_api_integrator_menu');
+
 
 function bricks_api_integrator_menu()
 {
@@ -47,10 +51,8 @@ function bricks_api_integrator_dashboard()
         <h2><?php esc_html_e('Endpoints Configurados', 'bricks-api-integrator'); ?></h2>
 
         <?php
-        // Obtener los endpoints almacenados como array, o inicializar como un array vacío si no es válido
         $endpoints = get_option('bricks_api_endpoints', []);
 
-        // Asegurarnos de que $endpoints sea un array
         if (!is_array($endpoints)) {
             $endpoints = [];
         }
@@ -59,16 +61,13 @@ function bricks_api_integrator_dashboard()
             foreach ($endpoints as $index => $endpoint) {
                 $endpoint_name = isset($endpoint['name']) ? $endpoint['name'] : 'Endpoint sin nombre';
                 $endpoint_url = isset($endpoint['url']) ? $endpoint['url'] : '';
-                $auth_type = isset($endpoint['auth_type']) ? $endpoint['auth_type'] : 'none'; // Obtener el tipo de autenticación
+                $auth_type = isset($endpoint['auth_type']) ? $endpoint['auth_type'] : 'none';
 
-                // Acordeón para cada endpoint
                 echo '<div class="accordion">';
                 echo '<button class="accordion-toggle" aria-expanded="false">' . esc_html($endpoint_name) . ' <span class="toggle-icon">+</span></button>';
                 echo '<div class="accordion-content">';
-
                 echo '<p><strong>URL:</strong> ' . esc_html($endpoint_url) . '</p>';
 
-                // Mostrar la autenticación seleccionada
                 if ($auth_type === 'basic') {
                     echo '<p><strong>Autenticación:</strong> ' . __('Básica', 'bricks-api-integrator') . '</p>';
                 } elseif ($auth_type === 'token') {
@@ -77,11 +76,9 @@ function bricks_api_integrator_dashboard()
                     echo '<p><strong>Autenticación:</strong> ' . __('Sin autenticación', 'bricks-api-integrator') . '</p>';
                 }
 
-                // Realizar la solicitud a la API del endpoint actual
                 if ($endpoint_url) {
                     $args = [];
 
-                    // Configurar la autenticación según el tipo seleccionado
                     if ($auth_type === 'token') {
                         $token = isset($endpoint['token']) ? $endpoint['token'] : '';
                         $args['headers'] = [
@@ -106,17 +103,14 @@ function bricks_api_integrator_dashboard()
                         if ($data === null) {
                             echo '<p>' . __('La respuesta de la API es nula o inválida.', 'bricks-api-integrator') . '</p>';
                         } elseif (is_array($data) || is_object($data)) {
-                            // Recorrer el objeto o array devuelto por la API
                             echo '<p>' . __('Datos devueltos por la API:', 'bricks-api-integrator') . '</p>';
                             echo '<table class="widefat fixed" cellspacing="0">';
                             echo '<thead><tr><th>' . esc_html__('Variable', 'bricks-api-integrator') . '</th><th>' . esc_html__('Valor', 'bricks-api-integrator') . '</th><th>' . esc_html__('Variable PHP', 'bricks-api-integrator') . '</th></tr></thead>';
                             echo '<tbody>';
 
-                            // Si es un array en la raíz, mostramos solo el primer elemento para la tabla
                             if (is_array($data) && isset($data[0])) {
                                 render_api_item_table($data[0], '$payload[' . $index . ']');
                             } else {
-                                // Si es un objeto o un array sin índice, mostramos todo
                                 render_api_item_table((array) $data, '$payload[' . $index . ']');
                             }
 
@@ -128,8 +122,8 @@ function bricks_api_integrator_dashboard()
                     }
                 }
 
-                echo '</div>'; // Cierre de .accordion-content
-                echo '</div>'; // Cierre de .accordion
+                echo '</div>';
+                echo '</div>';
             }
         } else {
             echo '<p>' . __('No hay endpoints configurados.', 'bricks-api-integrator') . '</p>';
@@ -144,21 +138,16 @@ function bricks_api_integrator_dashboard()
 function render_api_item_table($item, $parent_key = '$payload')
 {
     foreach ($item as $key => $value) {
-        // Generar la clave completa
         $variable_key = $parent_key . "['$key']";
-
-        // Generar la variable PHP que puedes usar para acceder a cualquier ítem dinámicamente
         $php_variable = $variable_key;
 
         if (is_array($value) || is_object($value)) {
-            // Si el valor es un array o un objeto, llamar a la función de nuevo (recursiva)
-            render_api_item_table((array) $value, $variable_key);  // Convertir objeto en array si es necesario
+            render_api_item_table((array) $value, $variable_key);
         } else {
-            // Mostrar la variable, el valor y la variable PHP en una fila
             echo '<tr>';
-            echo '<td><code>' . esc_html($variable_key) . '</code></td>'; // Mostrar clave como "['name']['value']"
+            echo '<td><code>' . esc_html($variable_key) . '</code></td>';
             echo '<td>' . esc_html($value) . '</td>';
-            echo '<td><code>' . esc_html($php_variable) . '</code></td>'; // Mostrar variable PHP como "$payload[0]['name']['value']"
+            echo '<td><code>' . esc_html($php_variable) . '</code></td>';
             echo '</tr>';
         }
     }
@@ -169,7 +158,7 @@ add_action('admin_init', 'bricks_api_integrator_settings_init');
 
 function bricks_api_integrator_settings_init()
 {
-    register_setting('bricks_api_integrator_settings', 'bricks_api_endpoints');  // Guardar los endpoints como un array
+    register_setting('bricks_api_integrator_settings', 'bricks_api_endpoints');
 
     add_settings_section(
         'bricks_api_integrator_section',
@@ -192,12 +181,10 @@ function bricks_api_endpoints_render()
 {
     $endpoints = get_option('bricks_api_endpoints', []);
 
-    // Asegurarnos de que $endpoints sea un array
     if (!is_array($endpoints)) {
         $endpoints = [];
     }
 ?>
-
     <div id="endpoints-wrapper">
         <?php foreach ($endpoints as $index => $endpoint): ?>
             <div class="endpoint-group" data-index="<?php echo esc_attr($index); ?>">
@@ -234,167 +221,16 @@ function bricks_api_endpoints_render()
             </div>
         <?php endforeach; ?>
     </div>
-
 <?php
 }
 
-// Añadir JavaScript para manejar el botón de añadir/eliminar campos dinámicamente y el acordeón
-add_action('admin_footer', 'bricks_api_integrator_scripts');
-
-function bricks_api_integrator_scripts()
+// Enqueue styles and scripts
+add_action('admin_enqueue_scripts', 'bricks_api_integrator_assets');
+function bricks_api_integrator_assets()
 {
-?>
-    <style>
-        .accordion {
-            margin-bottom: 10px;
-        }
+    // Enqueue CSS
+    wp_enqueue_style('bricks-api-integrator-style', plugin_dir_url(__FILE__) . 'assets/bricks-api-integrator.css');
 
-        .accordion-toggle {
-            background-color: #f1f1f1;
-            border: none;
-            cursor: pointer;
-            padding: 10px 15px;
-            text-align: left;
-            width: 100%;
-            font-size: 16px;
-            font-weight: bold;
-            outline: none;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .accordion-toggle.active,
-        .accordion-toggle:hover {
-            background-color: #ddd;
-        }
-
-        .accordion-content {
-            padding: 15px;
-            background-color: white;
-            display: none;
-            border-top: 1px solid #ccc;
-        }
-
-        .toggle-icon {
-            font-size: 18px;
-            margin-left: auto;
-        }
-
-        .toggle-icon.active {
-            transform: rotate(45deg);
-            /* Cambia de + a x */
-        }
-
-        .auth-fields {
-            margin-top: 10px;
-        }
-    </style>
-
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            let endpointWrapper = document.getElementById('endpoints-wrapper');
-            let addEndpointButton = document.getElementById('add-endpoint');
-
-            // Función para añadir un nuevo grupo de campos para un endpoint
-            addEndpointButton.addEventListener('click', function(e) {
-                e.preventDefault();
-                let index = endpointWrapper.children.length;
-                let newGroup = document.createElement('div');
-                newGroup.classList.add('endpoint-group');
-                newGroup.setAttribute('data-index', index);
-                newGroup.innerHTML = `
-                    <h4>Endpoint ${index + 1}</h4>
-                    <label>Nombre del Endpoint:</label>
-                    <input type="text" name="bricks_api_endpoints[${index}][name]" style="width: 100%;" placeholder="Nombre del Endpoint" />
-
-                    <label>URL del Endpoint:</label>
-                    <input type="url" name="bricks_api_endpoints[${index}][url]" style="width: 100%;" placeholder="URL del Endpoint" />
-
-                    <label>Autenticación:</label>
-                    <select name="bricks_api_endpoints[${index}][auth_type]" class="auth-type-select">
-                        <option value="none">Sin Autenticación</option>
-                        <option value="basic">Autenticación Básica</option>
-                        <option value="token">Token</option>
-                    </select>
-
-                    <div class="auth-fields"></div>
-
-                    <button type="button" class="remove-endpoint button">Eliminar Endpoint</button>
-                    <hr>
-                `;
-                endpointWrapper.appendChild(newGroup);
-
-                // Asignar el evento de eliminar a los nuevos botones
-                assignRemoveEvents();
-                handleAuthFields();
-                handleAccordion(); // Para manejar los acordeones nuevos
-            });
-
-            // Función para asignar el evento de eliminar a los botones
-            function assignRemoveEvents() {
-                let removeButtons = document.querySelectorAll('.remove-endpoint');
-                removeButtons.forEach(function(button) {
-                    button.addEventListener('click', function(e) {
-                        e.preventDefault();
-                        let group = button.closest('.endpoint-group');
-                        group.remove();
-                    });
-                });
-            }
-
-            // Función para manejar el acordeón
-            function handleAccordion() {
-                const toggles = document.querySelectorAll('.accordion-toggle');
-                toggles.forEach(toggle => {
-                    toggle.addEventListener('click', function() {
-                        this.classList.toggle('active');
-                        let content = this.nextElementSibling;
-                        let icon = this.querySelector('.toggle-icon');
-                        if (content.style.display === 'block') {
-                            content.style.display = 'none';
-                            icon.classList.remove('active');
-                            icon.textContent = '+';
-                        } else {
-                            content.style.display = 'block';
-                            icon.classList.add('active');
-                            icon.textContent = '-';
-                        }
-                    });
-                });
-            }
-
-            // Función para manejar los campos de autenticación
-            function handleAuthFields() {
-                document.querySelectorAll('.auth-type-select').forEach(function(select) {
-                    select.addEventListener('change', function() {
-                        const authType = this.value;
-                        const authFields = this.closest('.endpoint-group').querySelector('.auth-fields');
-                        authFields.innerHTML = ''; // Vaciar los campos anteriores
-
-                        if (authType === 'basic') {
-                            authFields.innerHTML = `
-                                <label>Usuario:</label>
-                                <input type="text" name="bricks_api_endpoints[${this.closest('.endpoint-group').getAttribute('data-index')}][basic_user]" style="width: 100%;" placeholder="Usuario" />
-
-                                <label>Contraseña:</label>
-                                <input type="password" name="bricks_api_endpoints[${this.closest('.endpoint-group').getAttribute('data-index')}][basic_password]" style="width: 100%;" placeholder="Contraseña" />
-                            `;
-                        } else if (authType === 'token') {
-                            authFields.innerHTML = `
-                                <label>Token:</label>
-                                <input type="text" name="bricks_api_endpoints[${this.closest('.endpoint-group').getAttribute('data-index')}][token]" style="width: 100%;" placeholder="Token" />
-                            `;
-                        }
-                    });
-                });
-            }
-
-            // Asignar los eventos de eliminar, acordeón y autenticación a los botones iniciales
-            assignRemoveEvents();
-            handleAuthFields();
-            handleAccordion(); // Llamar para inicializar los acordeones al cargar
-        });
-    </script>
-<?php
+    // Enqueue JavaScript
+    wp_enqueue_script('bricks-api-integrator-script', plugin_dir_url(__FILE__) . 'assets/bricks-api-integrator.js', ['jquery'], null, true);
 }
