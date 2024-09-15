@@ -112,8 +112,13 @@ function bricks_api_integrator_dashboard()
                             echo '<thead><tr><th>' . esc_html__('Variable', 'bricks-api-integrator') . '</th><th>' . esc_html__('Valor', 'bricks-api-integrator') . '</th><th>' . esc_html__('Variable PHP', 'bricks-api-integrator') . '</th></tr></thead>';
                             echo '<tbody>';
 
-                            // Renderizar los datos del objeto o array
-                            render_api_item_table((array) $data, '$payload[' . $index . ']');
+                            // Si es un array en la raíz, mostramos solo el primer elemento para la tabla
+                            if (is_array($data) && isset($data[0])) {
+                                render_api_item_table($data[0], '$payload[' . $index . ']');
+                            } else {
+                                // Si es un objeto o un array sin índice, mostramos todo
+                                render_api_item_table((array) $data, '$payload[' . $index . ']');
+                            }
 
                             echo '</tbody>';
                             echo '</table>';
@@ -393,4 +398,3 @@ function bricks_api_integrator_scripts()
     </script>
 <?php
 }
-?>
