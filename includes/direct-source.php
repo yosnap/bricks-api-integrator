@@ -1,0 +1,875 @@
+<?php
+/**
+ * Direct API Source Integration for Bricks Query Loop
+ * 
+ * Este archivo proporciona una integración directa con el Query Loop de Bricks
+ * siguiendo el enfoque de Bricksforge
+ */
+
+if (!defined('ABSPATH')) {
+    exit; // Evitar el acceso directo
+}
+
+/**
+ * Clase principal para la integración con el Query Loop de Bricks
+ */
+class Bricks_API_Integrator_Query {
+    
+    /**
+     * Prefijo para nuestros tipos de query
+     */
+    private $query_prefix = 'bai_api_source-';
+    
+    /**
+     * Constructor
+     */
+    public function __construct() {
+        // Registrar filtros para la integración con Bricks
+        add_filter('bricks/query/loop_control_options', [$this, 'add_query_loop_sources']);
+        add_filter('bricks/query/run', [$this, 'run_query'], 10, 2);
+        add_filter('bricks/query/control_groups', [$this, 'add_api_source_control_group']);
+        
+        error_log('Bricks_API_Integrator_Query inicializado');
+    }
+    
+    /**
+     * Agregar nuestros API Sources al selector del Query Loop de Bricks
+     */
+    public function add_query_loop_sources($control_options) {
+        // Obtener los API Sources configurados
+        $api_sources = get_option('bricks_api_sources', []);
+        
+        error_log('Agregando API Sources al selector del Query Loop: ' . print_r($api_sources, true));
+        
+        // Si no hay API Sources configurados, agregar uno de prueba
+        if (empty($api_sources)) {
+            error_log('No hay API Sources configurados, agregando uno de prueba');
+            $api_sources['debug_api_source'] = [
+                'name' => 'API Source de Prueba',
+                'endpoint_id' => '0',
+            ];
+        }
+        
+        // Crear una categoría para nuestros API Sources
+        if (!isset($control_options['queryTypes'])) {
+            $control_options['queryTypes'] = [];
+        }
+        
+        // Agregar cada API Source como un tipo de query
+        foreach ($api_sources as $source_id => $source) {
+            $source_name = isset($source['name']) ? $source['name'] : 'API Source ' . $source_id;
+            $control_options['queryTypes'][$this->query_prefix . $source_id] = 'API: ' . $source_name;
+            error_log('Agregado API Source al selector: ' . $source_id . ' - ' . $source_name);
+        }
+        
+        error_log('Control options finales: ' . print_r($control_options, true));
+        
+        return $control_options;
+    }
+    
+    /**
+     * Procesar las consultas de nuestros API Sources
+     */
+    public function run_query($results, $query_obj) {
+        // Obtener el tipo de query
+        $object_type = isset($query_obj->object_type) ? $query_obj->object_type : '';
+        
+        // Verificar si es uno de nuestros API Sources
+        if (strpos($object_type, $this->query_prefix) !== 0) {
+            return $results;
+        }
+        
+        error_log('Procesando query para API Source: ' . $object_type);
+        error_log('Query settings: ' . print_r($query_obj->settings, true));
+        
+        // Extraer el ID del API Source
+        $source_id = str_replace($this->query_prefix, '', $object_type);
+        
+        // Obtener los API Sources configurados
+        $api_sources = get_option('bricks_api_sources', []);
+        
+        if (!isset($api_sources[$source_id])) {
+            error_log('API Source no encontrado: ' . $source_id);
+            return [
+                'count' => 0,
+                'items' => [],
+                'error' => 'API Source no encontrado: ' . $source_id,
+            ];
+        }
+        
+        $source = $api_sources[$source_id];
+        error_log('Configuración del API Source: ' . print_r($source, true));
+        
+        // Obtener el endpoint
+        $endpoints = get_option('bricks_api_endpoints', []);
+        $endpoint_id = isset($source['endpoint_id']) ? $source['endpoint_id'] : '';
+        
+        if (!isset($endpoints[$endpoint_id])) {
+            error_log('Endpoint no encontrado: ' . $endpoint_id);
+            return [
+                'count' => 0,
+                'items' => [],
+                'error' => 'Endpoint no encontrado: ' . $endpoint_id,
+            ];
+        }
+        
+        $endpoint = $endpoints[$endpoint_id];
+        $endpoint_url = isset($endpoint['url']) ? $endpoint['url'] : '';
+        
+        if (empty($endpoint_url)) {
+            error_log('URL del endpoint vacía');
+            return [
+                'count' => 0,
+                'items' => [],
+                'error' => 'URL del endpoint vacía',
+            ];
+        }
+        
+        // Procesar parámetros dinámicos
+        $dynamic_params = isset($source['dynamic_params']) ? $source['dynamic_params'] : [];
+        $query_params = [];
+        
+        foreach ($dynamic_params as $param) {
+            $param_name = isset($param['name']) ? $param['name'] : '';
+            $param_source = isset($param['source']) ? $param['source'] : 'static';
+            $param_default = isset($param['default']) ? $param['default'] : '';
+            
+            if (empty($param_name)) {
+                continue;
+            }
+            
+            // Por ahora solo soportamos valores estáticos
+            if ($param_source === 'static') {
+                $query_params[$param_name] = $param_default;
+            }
+        }
+        
+        // Construir la URL completa con los parámetros
+        if (!empty($query_params)) {
+            $endpoint_url = add_query_arg($query_params, $endpoint_url);
+        }
+        
+        error_log('URL final del endpoint: ' . $endpoint_url);
+        
+        // Hacer la solicitud a la API
+        $args = [];
+        
+        // Agregar autenticación si está configurada
+        $auth_type = isset($endpoint['auth_type']) ? $endpoint['auth_type'] : 'none';
+        
+        if ($auth_type === 'token') {
+            $token = isset($endpoint['token']) ? $endpoint['token'] : '';
+            if (!empty($token)) {
+                $args['headers'] = [
+                    'Authorization' => 'Bearer ' . $token,
+                ];
+            }
+        } elseif ($auth_type === 'basic') {
+            $username = isset($endpoint['username']) ? $endpoint['username'] : '';
+            $password = isset($endpoint['password']) ? $endpoint['password'] : '';
+            if (!empty($username) && !empty($password)) {
+                $args['headers'] = [
+                    'Authorization' => 'Basic ' . base64_encode($username . ':' . $password),
+                ];
+            }
+        }
+        
+        error_log('Argumentos de la solicitud: ' . print_r($args, true));
+        
+        // Hacer la solicitud
+        $response = wp_remote_get($endpoint_url, $args);
+        
+        if (is_wp_error($response)) {
+            error_log('Error en la solicitud: ' . $response->get_error_message());
+            return [
+                'count' => 0,
+                'items' => [],
+                'error' => 'Error en la solicitud: ' . $response->get_error_message(),
+            ];
+        }
+        
+        $response_code = wp_remote_retrieve_response_code($response);
+        
+        if ($response_code !== 200) {
+            error_log('Código de respuesta no válido: ' . $response_code);
+            return [
+                'count' => 0,
+                'items' => [],
+                'error' => 'Código de respuesta no válido: ' . $response_code,
+            ];
+        }
+        
+        $body = wp_remote_retrieve_body($response);
+        $data = json_decode($body, true);
+        
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            error_log('Error al decodificar JSON: ' . json_last_error_msg());
+            return [
+                'count' => 0,
+                'items' => [],
+                'error' => 'Error al decodificar JSON: ' . json_last_error_msg(),
+            ];
+        }
+        
+        error_log('Datos recibidos de la API: ' . print_r($data, true));
+        
+        // Procesar los datos según la configuración del API Source
+        $items = [];
+        
+        // Extraer los items del resultado
+        $items_path = isset($source['items_path']) ? $source['items_path'] : '';
+        
+        if (!empty($items_path)) {
+            $items_data = $this->extract_data_by_path($data, $items_path);
+            
+            if (is_array($items_data)) {
+                $items = $items_data;
+            } else {
+                error_log('No se pudieron extraer los items del resultado');
+                return [
+                    'count' => 0,
+                    'items' => [],
+                    'error' => 'No se pudieron extraer los items del resultado',
+                ];
+            }
+        } else {
+            // Si no hay path de items, usar el resultado completo como un solo item
+            $items = [$data];
+        }
+        
+        error_log('Items extraídos: ' . print_r($items, true));
+        
+        // Aplicar mapeo de campos
+        $field_mapping = isset($source['field_mapping']) ? $source['field_mapping'] : [];
+        
+        if (!empty($field_mapping)) {
+            foreach ($items as &$item) {
+                $mapped_item = [];
+                
+                foreach ($field_mapping as $source_field => $target_field) {
+                    if (isset($item[$source_field])) {
+                        $mapped_item[$target_field] = $item[$source_field];
+                    }
+                }
+                
+                // Reemplazar el item original con el item mapeado
+                if (!empty($mapped_item)) {
+                    $item = $mapped_item;
+                }
+            }
+        }
+        
+        error_log('Items mapeados: ' . print_r($items, true));
+        
+        // Devolver los resultados
+        return [
+            'count' => count($items),
+            'items' => $items,
+            'source_id' => $source_id,
+            'endpoint_id' => $endpoint_id,
+            'endpoint_url' => $endpoint_url,
+        ];
+    }
+    
+    /**
+     * Extraer datos de un array según un path
+     */
+    private function extract_data_by_path($data, $path) {
+        if (empty($path)) {
+            return $data;
+        }
+        
+        $parts = explode('.', $path);
+        $current = $data;
+        
+        foreach ($parts as $part) {
+            if (!isset($current[$part])) {
+                return null;
+            }
+            
+            $current = $current[$part];
+        }
+        
+        return $current;
+    }
+}
+
+/**
+ * Inicializar la integración con el Query Loop de Bricks
+ */
+function register_direct_api_sources() {
+    // Evitar múltiples registros
+    static $registered = false;
+    if ($registered) {
+        return;
+    }
+    
+    // Verificar si estamos en el administrador o en el frontend
+    $is_admin = is_admin();
+    $is_ajax = defined('DOING_AJAX') && DOING_AJAX;
+    $is_builder = isset($_GET['bricks']) && $_GET['bricks'] === 'run';
+    
+    // Solo continuar si es necesario
+    if (!$is_admin && !$is_ajax && !$is_builder) {
+        return;
+    }
+    
+    // Marcar como registrado
+    $registered = true;
+    
+    error_log('=== INICIO REGISTRO API SOURCES ===');
+    error_log('Contexto: ' . ($is_admin ? 'Admin' : 'Frontend') . ($is_ajax ? ' (AJAX)' : '') . ($is_builder ? ' (Builder)' : ''));
+    
+    // Crear la instancia de la clase
+    $query_integrator = new Bricks_API_Integrator_Query();
+    
+    // Registrar los filtros con prioridad alta para asegurar que se ejecuten
+    add_filter('bricks/query/loop_control_options', [$query_integrator, 'add_query_loop_sources'], 5, 1);
+    add_filter('bricks/query/run', [$query_integrator, 'run_query'], 5, 2);
+    add_filter('bricks/query/control_groups', [$query_integrator, 'add_api_source_control_group'], 5, 1);
+    add_filter('bricks/query/sources', 'add_api_sources_to_bricks_loop', 5, 1);
+    add_filter('bricks/query/loop_results', 'process_api_source_results', 5, 2);
+    
+    error_log('Filtros registrados correctamente');
+    
+    // Debug para verificar los API Sources configurados
+    $api_sources = get_option('bricks_api_sources', []);
+    error_log('API Sources configurados: ' . print_r($api_sources, true));
+    
+    error_log('=== FIN REGISTRO API SOURCES ===');
+}
+
+// Registrar en el hook de Bricks para asegurar que esté disponible cuando se necesite
+add_action('bricks/before_load', 'register_direct_api_sources', 5);
+
+// También registrar en init para asegurar que se ejecute en el frontend
+add_action('init', 'register_direct_api_sources', 5);
+
+/**
+ * Agregar API Sources al selector de Query Loop de Bricks
+ */
+function add_api_sources_to_bricks_loop($sources) {
+    // Inicializar el array de fuentes si no existe
+    if (!is_array($sources)) {
+        $sources = [];
+    }
+    
+    // Obtener los API Sources configurados
+    $api_sources = get_option('bricks_api_sources', []);
+    
+    // Debug detallado
+    error_log('================ INICIO DEBUG API SOURCES ================');
+    error_log('Estructura inicial de sources: ' . print_r($sources, true));
+    error_log('API Sources configurados: ' . print_r($api_sources, true));
+    error_log('Backtrace: ' . print_r(debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 5), true));
+    
+    // Si no hay API Sources configurados, agregar uno de prueba
+    if (empty($api_sources)) {
+        error_log('No hay API Sources configurados, agregando uno de prueba');
+        $api_sources['debug_api_source'] = [
+            'name' => 'API Source de Prueba',
+            'endpoint_id' => '0',
+        ];
+    }
+    
+    // Crear la estructura que Bricks espera para los sources
+    // Bricks espera un array donde las claves son los tipos de source
+    // y los valores son arrays con 'name' y 'sources'
+    
+    // 1. Primero, crear una categoría 'api' que agrupará todos los API Sources
+    $sources['api'] = [
+        'name' => 'API',
+        'sources' => [],
+    ];
+    
+    // 2. Agregar cada API Source como una opción dentro de la categoría 'api'
+    foreach ($api_sources as $source_id => $source) {
+        $source_name = isset($source['name']) ? $source['name'] : 'API Source ' . $source_id;
+        $sources['api']['sources'][$source_id] = $source_name;
+        error_log('Agregado API Source a la categoría API: ' . $source_id . ' => ' . $source_name);
+    }
+    
+    // 3. También agregar cada API Source como un tipo de query independiente
+    // Esto es necesario para que Bricks los muestre en el selector principal
+    foreach ($api_sources as $source_id => $source) {
+        $source_name = isset($source['name']) ? $source['name'] : 'API Source ' . $source_id;
+        
+        $sources[$source_id] = [
+            'name' => $source_name,
+            'sources' => [
+                $source_id => $source_name, // Usar el mismo ID y nombre para simplificar
+            ],
+        ];
+        
+        error_log('Agregado API Source como tipo independiente: ' . $source_id);
+    }
+    
+    error_log('Sources después de modificar: ' . print_r($sources, true));
+    error_log('================ FIN DEBUG API SOURCES ================');
+    
+    // Guardar una copia de los sources en una opción para poder verlos en el debug
+    update_option('bricks_api_debug_sources', $sources, false);
+    
+    // Agregar un mensaje en el admin footer para notificar que se ejecutó el filtro
+    add_action('admin_footer', function() use ($sources) {
+        if (current_user_can('manage_options')) {
+            echo '<div style="position: fixed; bottom: 0; right: 0; background: #fff; border: 1px solid #ccc; padding: 10px; z-index: 9999;">';
+            echo '<h4>API Sources Debug</h4>';
+            echo '<p>El filtro bricks/query/sources se ejecutó a las ' . date('H:i:s') . '</p>';
+            echo '<p>Se registraron ' . count($sources) . ' sources</p>';
+            echo '</div>';
+        }
+    });
+    
+    // Agregar debug para ver la estructura completa en el footer del sitio
+    add_action('wp_footer', function() use ($sources) {
+        if (current_user_can('manage_options') && isset($_GET['debug_api_sources'])) {
+            echo '<div style="position: fixed; bottom: 0; right: 0; background: white; padding: 20px; border: 1px solid #ccc; max-width: 500px; max-height: 400px; overflow: auto; z-index: 9999;">';
+            echo '<h3>API Sources para Query Loop</h3>';
+            echo '<pre>' . print_r($sources, true) . '</pre>';
+            echo '</div>';
+        }
+    });
+    
+    error_log('Sources finales: ' . print_r($sources, true));
+    
+    return $sources;
+}
+
+/**
+ * Procesar los resultados para nuestros API Sources
+ */
+function process_api_source_results($results, $settings) {
+    // Debug inicial
+    error_log('================ INICIO PROCESAMIENTO API SOURCE ================');
+    error_log('Configuración recibida: ' . print_r($settings, true));
+    
+    // Verificar si estamos manejando un API Source
+    if (!isset($settings['source']) || $settings['source'] !== 'api') {
+        error_log('No es una consulta de API, ignorando...');
+        return $results;
+    }
+    
+    // Obtener el ID del API Source seleccionado
+    $source_id = isset($settings['apiSource']) ? sanitize_text_field($settings['apiSource']) : '';
+    
+    if (empty($source_id)) {
+        error_log('Error: No se especificó un API Source');
+        return [
+            'count' => 0,
+            'items' => [],
+            'error' => 'No se especificó un API Source',
+        ];
+    }
+    
+    error_log('Procesando API Source: ' . $source_id);
+    
+    // Obtener los API Sources configurados
+    $api_sources = get_option('bricks_api_sources', []);
+    
+    if (!isset($api_sources[$source_id])) {
+        $error_msg = 'API Source no encontrado: ' . $source_id;
+        error_log($error_msg);
+        return [
+            'count' => 0,
+            'items' => [],
+            'error' => $error_msg,
+        ];
+    }
+    
+    $source = $api_sources[$source_id];
+    error_log('Configuración del API Source: ' . print_r($source, true));
+    
+    // Obtener los parámetros adicionales si existen
+    $params = [];
+    if (!empty($settings['apiSourceParams']) && is_array($settings['apiSourceParams'])) {
+        foreach ($settings['apiSourceParams'] as $param) {
+            if (!empty($param['param']) && isset($param['value'])) {
+                $params[sanitize_text_field($param['param'])] = sanitize_text_field($param['value']);
+            }
+        }
+    }
+    
+    error_log('Parámetros adicionales: ' . print_r($params, true));
+    
+    // Obtener el endpoint configurado
+    $endpoints = get_option('bricks_api_endpoints', []);
+    $endpoint_id = isset($source['endpoint_id']) ? $source['endpoint_id'] : '';
+    
+    if (empty($endpoint_id) || !isset($endpoints[$endpoint_id])) {
+        $error_msg = 'Endpoint no configurado correctamente para este API Source';
+        error_log($error_msg);
+        return [
+            'count' => 0,
+            'items' => [],
+            'error' => $error_msg,
+        ];
+    }
+    
+    $endpoint = $endpoints[$endpoint_id];
+    $endpoint_url = isset($endpoint['url']) ? $endpoint['url'] : '';
+    
+    if (empty($endpoint_url)) {
+        $error_msg = 'URL del endpoint vacía';
+        error_log($error_msg);
+        return [
+            'count' => 0,
+            'items' => [],
+            'error' => $error_msg,
+        ];
+    }
+    
+    // Construir la URL final con los parámetros
+    if (!empty($params)) {
+        $endpoint_url = add_query_arg($params, $endpoint_url);
+    }
+    
+    error_log('Realizando solicitud a: ' . $endpoint_url);
+    
+    // Configurar los argumentos de la solicitud
+    $request_args = [
+        'timeout' => 30,
+        'sslverify' => false, // Para desarrollo, en producción debería ser true
+    ];
+    
+    // Agregar headers si están configurados
+    if (!empty($endpoint['headers']) && is_array($endpoint['headers'])) {
+        $request_args['headers'] = $endpoint['headers'];
+    }
+    
+    // Realizar la solicitud a la API
+    $response = wp_remote_get($endpoint_url, $request_args);
+    
+    if (is_wp_error($response)) {
+        $error_msg = 'Error en la solicitud a la API: ' . $response->get_error_message();
+        error_log($error_msg);
+        return [
+            'count' => 0,
+            'items' => [],
+            'error' => $error_msg,
+        ];
+    }
+    
+    $response_code = wp_remote_retrieve_response_code($response);
+    $response_body = wp_remote_retrieve_body($response);
+    
+    error_log('Código de respuesta: ' . $response_code);
+    error_log('Cuerpo de la respuesta: ' . $response_body);
+    
+    // Verificar si la respuesta es exitosa (código 2xx)
+    if ($response_code < 200 || $response_code >= 300) {
+        $error_msg = 'Error en la respuesta de la API. Código: ' . $response_code;
+        error_log($error_msg);
+        return [
+            'count' => 0,
+            'items' => [],
+            'error' => $error_msg,
+            'response_code' => $response_code,
+        ];
+    }
+    
+    // Decodificar la respuesta JSON
+    $data = json_decode($response_body, true);
+    
+    if (json_last_error() !== JSON_ERROR_NONE) {
+        $error_msg = 'Error al decodificar la respuesta JSON: ' . json_last_error_msg();
+        error_log($error_msg);
+        return [
+            'count' => 0,
+            'items' => [],
+            'error' => $error_msg,
+            'response_body' => $response_body,
+        ];
+    }
+    
+    error_log('Datos recibidos de la API: ' . print_r($data, true));
+    
+    // Procesar los datos según la configuración del API Source
+    $items = [];
+    
+    // Extraer los items del resultado usando el path configurado
+    $items_path = isset($source['items_path']) ? trim($source['items_path']) : '';
+    
+    if (!empty($items_path)) {
+        // Función auxiliar para extraer datos por path
+        $extract_data_by_path = function($data, $path) {
+            $current = $data;
+            $parts = is_array($path) ? $path : explode('.', $path);
+            
+            foreach ($parts as $part) {
+                if (is_array($current) && isset($current[$part])) {
+                    $current = $current[$part];
+                } elseif (is_object($current) && isset($current->$part)) {
+                    $current = $current->$part;
+                } else {
+                    error_log('No se pudo encontrar la parte del path: ' . $part);
+                    return null;
+                }
+            }
+            
+            return $current;
+        };
+        
+        // Extraer los items usando el path configurado
+        $items_data = $extract_data_by_path($data, $items_path);
+        
+        if ($items_data === null || !is_array($items_data)) {
+            $error_msg = 'No se pudieron extraer los items usando el path: ' . $items_path;
+            error_log($error_msg);
+            error_log('Datos disponibles: ' . print_r($data, true));
+            return [
+                'count' => 0,
+                'items' => [],
+                'error' => $error_msg,
+            ];
+        }
+        
+        // Mapear los campos según la configuración del API Source
+        $title_field = !empty($source['title_field']) ? $source['title_field'] : 'title';
+        $content_field = !empty($source['content_field']) ? $source['content_field'] : 'content';
+        $image_field = !empty($source['image_field']) ? $source['image_field'] : 'image';
+        $link_field = !empty($source['link_field']) ? $source['link_field'] : 'url';
+        $date_field = !empty($source['date_field']) ? $source['date_field'] : 'date';
+        
+        // Procesar cada item
+        foreach ($items_data as $item) {
+            // Extraer los campos según la configuración
+            $title = $extract_data_by_path($item, $title_field) ?: 'Sin título';
+            $content = $extract_data_by_path($item, $content_field) ?: '';
+            $image = $extract_data_by_path($item, $image_field) ?: '';
+            $link = $extract_data_by_path($item, $link_field) ?: '';
+            $date = $extract_data_by_path($item, $date_field) ?: current_time('mysql');
+            
+            // Crear un ID único para el item si no tiene uno
+            $item_id = $extract_data_by_path($item, 'id') ?: md5(serialize($item));
+            
+            // Formatear el item según lo que espera Bricks
+            $formatted_item = [
+                'id' => $item_id,
+                'title' => $title,
+                'content' => $content,
+                'excerpt' => wp_trim_words($content, 20, '...'),
+                'date' => $date,
+                'date_gmt' => get_gmt_from_date($date),
+                'modified' => $date,
+                'modified_gmt' => get_gmt_from_date($date),
+                'link' => $link,
+                'type' => 'api_item',
+                'status' => 'publish',
+                'featured_media' => '',
+                'meta' => [
+                    '_bricks_api_source_id' => $source_id,
+                    '_bricks_api_item_data' => $item, // Guardar los datos originales
+                ],
+            ];
+            
+            // Agregar la imagen destacada si está disponible
+            if (!empty($image)) {
+                // Si es una URL, intentar obtener el ID del adjunto o usar la URL directamente
+                if (filter_var($image, FILTER_VALIDATE_URL)) {
+                    $formatted_item['featured_media_url'] = $image;
+                }
+            }
+            
+            $items[] = (object) $formatted_item;
+        }
+    } else {
+        // Si no hay path de items, usar el resultado completo como un solo item
+        $item_id = md5(serialize($data));
+        $items[] = (object) [
+            'id' => $item_id,
+            'title' => 'API Response',
+            'content' => '<pre>' . esc_html(print_r($data, true)) . '</pre>',
+            'excerpt' => 'Datos de la API',
+            'date' => current_time('mysql'),
+            'date_gmt' => current_time('mysql', true),
+            'modified' => current_time('mysql'),
+            'modified_gmt' => current_time('mysql', true),
+            'type' => 'api_item',
+            'status' => 'publish',
+            'meta' => [
+                '_bricks_api_source_id' => $source_id,
+                '_bricks_api_item_data' => $data,
+            ],
+        ];
+    }
+    
+    error_log('Items extraídos: ' . print_r($items, true));
+    
+    // Aplicar paginación si es necesario
+    $paged = isset($settings['paged']) ? absint($settings['paged']) : 1;
+    $per_page = isset($settings['posts_per_page']) ? absint($settings['posts_per_page']) : 10;
+    $total_items = count($items);
+    
+    // Si hay paginación, aplicar el corte de array
+    if ($per_page > 0 && $per_page < $total_items) {
+        $offset = ($paged - 1) * $per_page;
+        $items = array_slice($items, $offset, $per_page);
+    } else {
+        $per_page = $total_items; // Mostrar todos los items si no hay paginación
+    }
+    
+    // Calcular el total de páginas
+    $total_pages = $per_page > 0 ? ceil($total_items / $per_page) : 1;
+    
+    // Asegurarse de que los items sean objetos
+    $formatted_items = [];
+    foreach ($items as $item) {
+        if (is_array($item)) {
+            $formatted_items[] = (object) $item;
+        } else {
+            $formatted_items[] = $item;
+        }
+    }
+    
+    error_log('Items procesados: ' . print_r($formatted_items, true));
+    
+    // Preparar los resultados finales en el formato que espera Bricks
+    $results = [
+        'items' => $formatted_items,
+        'count' => $total_items,
+        'count_pages' => $total_pages,
+        'current_page' => $paged,
+        'per_page' => $per_page,
+        'found_posts' => $total_items,
+        'max_num_pages' => $total_pages,
+        'post_count' => count($formatted_items),
+        'query_vars' => [
+            'paged' => $paged,
+            'posts_per_page' => $per_page,
+        ],
+    ];
+    
+    error_log('Resultados finales: ' . print_r($results, true));
+    error_log('================ FIN PROCESAMIENTO API SOURCE ================');
+    
+    return $results;
+}
+
+/**
+ * Registrar campos personalizados para el Query Loop
+ */
+function register_api_source_query_fields() {
+    // Solo ejecutar si Bricks está activo
+    if (!defined('BRICKS_VERSION')) {
+        return;
+    }
+    
+    add_filter('bricks/query/control_groups', 'add_api_source_control_group');
+}
+add_action('init', 'register_api_source_query_fields', 20);
+
+/**
+ * Agregar grupo de controles para API Sources
+ */
+function add_api_source_control_group($control_groups) {
+    // Debug inicial
+    error_log('================ INICIO DEBUG CONTROL GROUPS ================');
+    error_log('Estructura inicial de control_groups: ' . print_r($control_groups, true));
+    
+    // Obtener los API Sources configurados
+    $api_sources = get_option('bricks_api_sources', []);
+    
+    // Preparar las opciones para el selector de API Sources
+    $api_source_options = [
+        '' => 'Seleccionar API Source', // Opción por defecto
+    ];
+    
+    foreach ($api_sources as $source_id => $source) {
+        $source_name = isset($source['name']) ? $source['name'] : 'API Source ' . $source_id;
+        $api_source_options[$source_id] = $source_name;
+        error_log('Preparando opción de API Source: ' . $source_id . ' - ' . $source_name);
+    }
+    
+    // Si no hay API Sources configurados, agregar uno de prueba
+    if (count($api_source_options) === 1) { // Solo la opción por defecto
+        error_log('No hay API Sources configurados, agregando uno de prueba');
+        $api_source_options['debug_api_source'] = 'API Source de Prueba';
+    }
+    
+    // Asegurarse de que exista el grupo 'query'
+    if (!isset($control_groups['query'])) {
+        $control_groups['query'] = [
+            'title' => 'Query',
+            'tab' => 'content',
+            'controls' => [],
+        ];
+    }
+    
+    // Asegurarse de que exista el control 'source' en el grupo 'query'
+    if (!isset($control_groups['query']['controls']['source'])) {
+        $control_groups['query']['controls']['source'] = [
+            'label' => 'Source',
+            'type' => 'select',
+            'options' => [],
+            'inline' => true,
+            'placeholder' => 'Select source',
+            'clearable' => false,
+        ];
+    }
+    
+    // Agregar 'api' como una opción en el control 'source' si no existe
+    if (!isset($control_groups['query']['controls']['source']['options']['api'])) {
+        $control_groups['query']['controls']['source']['options']['api'] = 'API';
+        error_log('Agregada opción "API" al selector de fuentes');
+    }
+    
+    // Agregar el control para seleccionar el API Source específico
+    // Este control solo se mostrará cuando source=api
+    $control_groups['query']['controls']['apiSource'] = [
+        'label' => 'API Source',
+        'type' => 'select',
+        'options' => $api_source_options,
+        'inline' => true,
+        'placeholder' => 'Select API Source',
+        'required' => [
+            ['source', '=', 'api']
+        ],
+        'description' => 'Selecciona el API Source configurado',
+    ];
+    
+    // Agregar controles adicionales para el API Source seleccionado
+    $control_groups['query']['controls']['apiSourceParams'] = [
+        'label' => 'Parámetros',
+        'type' => 'repeater',
+        'fields' => [
+            'param' => [
+                'label' => 'Parámetro',
+                'type' => 'text',
+                'inline' => true,
+            ],
+            'value' => [
+                'label' => 'Valor',
+                'type' => 'text',
+                'inline' => true,
+            ],
+        ],
+        'required' => [
+            ['source', '=', 'api'],
+            ['apiSource', '!=', '']
+        ],
+        'description' => 'Agrega parámetros adicionales para la consulta',
+    ];
+    
+    // Debug final
+    error_log('Estructura final de control_groups: ' . print_r($control_groups, true));
+    error_log('================ FIN DEBUG CONTROL GROUPS ================');
+    
+    // Mantener compatibilidad con versiones anteriores
+    $control_groups['api'] = [
+        'title' => 'API',
+        'tab' => 'content',
+        'controls' => [
+            'apiSource' => [
+                'label' => 'API Source',
+                'type' => 'select',
+                'options' => $api_source_options,
+                'required' => ['source', '=', 'api'],
+            ],
+        ],
+    ];
+    
+    error_log('Grupo de controles para API Sources agregado: ' . print_r($control_groups['api'], true));
+    
+    return $control_groups;
+}

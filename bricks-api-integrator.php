@@ -3,8 +3,8 @@
     * Plugin Name: Bricks API Integrator
     * Description: Integra el constructor de páginas Bricks con APIs externas.
     * Version: 1.0
-    * Author: Yosn4p Dev
-    * Author URI: https://yosn4p.dev
+    * Author: sn4p Dev
+    * Author URI: https://sn4p.dev
     * License: GPL2
     * License URI: https://www.gnu.org/licenses/gpl-2.0.html
     * Text Domain: bricks-api-integrator
@@ -14,15 +14,212 @@ if (!defined('ABSPATH')) {
     exit; // Evita accesos directos
 }
 
-// Incluir el archivo que maneja los dynamic tags
-require_once plugin_dir_path(__FILE__) . 'dynamic-tags.php';
+// Definir constantes del plugin
+define('BRICKS_API_INTEGRATOR_VERSION', '1.0');
+define('BRICKS_API_INTEGRATOR_PATH', plugin_dir_path(__FILE__));
+define('BRICKS_API_INTEGRATOR_URL', plugin_dir_url(__FILE__));
+
+// Incluir los archivos necesarios
+require_once BRICKS_API_INTEGRATOR_PATH . 'dynamic-tags.php';
+require_once BRICKS_API_INTEGRATOR_PATH . 'includes/endpoints.php';
+require_once BRICKS_API_INTEGRATOR_PATH . 'includes/launcher.php';
+require_once BRICKS_API_INTEGRATOR_PATH . 'includes/sources.php';
+require_once BRICKS_API_INTEGRATOR_PATH . 'includes/templates.php';
+require_once BRICKS_API_INTEGRATOR_PATH . 'includes/debug-source.php'; // Archivo de depuración
+require_once BRICKS_API_INTEGRATOR_PATH . 'includes/direct-source.php'; // Integración directa con Bricks
+
+// Asegurarse de que la función get_api_data esté disponible
+if (!function_exists('get_api_data')) {
+    /**
+     * Get API data from endpoint with authentication support
+     *
+     * @param string $endpoint_url The URL of the API endpoint
+     * @param array $endpoint_config Optional endpoint configuration with authentication details
+     * @return array|null The API data or null on error
+     */
+    function get_api_data($endpoint_url, $endpoint_config = [])
+    {
+        // Prepare request arguments
+        $args = [];
+        
+        // Add authentication if provided in endpoint config
+        if (!empty($endpoint_config)) {
+            $auth_type = isset($endpoint_config['auth_type']) ? $endpoint_config['auth_type'] : 'none';
+            
+            if ($auth_type === 'token') {
+                $token = isset($endpoint_config['token']) ? $endpoint_config['token'] : '';
+                if (!empty($token)) {
+                    $args['headers'] = [
+                        'Authorization' => 'Bearer ' . $token,
+                    ];
+                }
+            } elseif ($auth_type === 'basic') {
+                $user = isset($endpoint_config['basic_user']) ? $endpoint_config['basic_user'] : '';
+                $password = isset($endpoint_config['basic_password']) ? $endpoint_config['basic_password'] : '';
+                if (!empty($user) && !empty($password)) {
+                    $args['headers'] = [
+                        'Authorization' => 'Basic ' . base64_encode("$user:$password"),
+                    ];
+                }
+            }
+        }
+        
+        // Make the API request
+        $response = wp_remote_get($endpoint_url, $args);
+
+        if (is_wp_error($response)) {
+            return null; // Return null on error
+        }
+        
+        // Check for successful response code
+        $status_code = wp_remote_retrieve_response_code($response);
+        if ($status_code !== 200) {
+            return null; // Return null on non-200 response
+        }
+
+        $body = wp_remote_retrieve_body($response);
+        $data = json_decode($body, true);
+
+        // Ensure JSON response is valid
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            return null; // Return null on JSON decode error
+        }
+
+        return $data;
+    }
+}
+
+/**
+ * Register dynamic tags for Bricks Query Loop
+ */
+function bricks_api_register_dynamic_tags_for_query_loop($tags) {
+    // Get API sources and endpoints
+    $api_sources = get_option('bricks_api_sources', []);
+    $endpoints = get_option('bricks_api_endpoints', []);
+    
+    if (empty($api_sources)) {
+        // If no sources configured, add default fields
+        $tags['api_source'] = [
+            'name'  => 'api_source',
+            'label' => esc_html__('API Source', 'bricks-api-integrator'),
+            'fields' => [
+                'id' => esc_html__('ID', 'bricks-api-integrator'),
+                'title' => esc_html__('Title', 'bricks-api-integrator'),
+                'name' => esc_html__('Name', 'bricks-api-integrator'),
+                'description' => esc_html__('Description', 'bricks-api-integrator'),
+                'content' => esc_html__('Content', 'bricks-api-integrator'),
+                'image' => esc_html__('Image', 'bricks-api-integrator'),
+                'url' => esc_html__('URL', 'bricks-api-integrator'),
+                'api_url' => esc_html__('API URL', 'bricks-api-integrator'),
+                'api_id' => esc_html__('API ID', 'bricks-api-integrator'),
+            ],
+        ];
+        
+        return $tags;
+    }
+    
+    // Add common fields that should always be available
+    $common_fields = [
+        'api_url' => esc_html__('API URL', 'bricks-api-integrator'),
+        'api_id' => esc_html__('API ID', 'bricks-api-integrator'),
+    ];
+    
+    // Process each source to get its fields
+    foreach ($api_sources as $source_id => $source) {
+        // Skip if no endpoint configured
+        $endpoint_id = isset($source['endpoint_id']) ? $source['endpoint_id'] : '';
+        if (empty($endpoint_id) || !isset($endpoints[$endpoint_id])) {
+            continue;
+        }
+        
+        $endpoint = $endpoints[$endpoint_id];
+        $endpoint_url = isset($endpoint['url']) ? $endpoint['url'] : '';
+        
+        if (empty($endpoint_url)) {
+            continue;
+        }
+        
+        // Get sample data from API
+        $data = get_api_data($endpoint_url, $endpoint);
+        
+        // Skip if no data
+        if (empty($data) || !is_array($data)) {
+            continue;
+        }
+        
+        // Extract items based on items path
+        $items_path = isset($source['items_path']) ? $source['items_path'] : '';
+        $items = $data;
+        
+        if (!empty($items_path)) {
+            $path_parts = explode('.', $items_path);
+            
+            foreach ($path_parts as $part) {
+                if (isset($items[$part])) {
+                    $items = $items[$part];
+                } else {
+                    // Path not found
+                    $items = [];
+                    break;
+                }
+            }
+        }
+        
+        // Ensure items is an array and get first item for fields
+        if (!is_array($items)) {
+            $items = [$items];
+        }
+        
+        // Get fields from first item
+        $fields = $common_fields;
+        
+        if (!empty($items) && isset($items[0]) && is_array($items[0])) {
+            $sample_item = $items[0];
+            
+            // Add field prefix if specified
+            $field_prefix = isset($source['field_prefix']) ? $source['field_prefix'] : '';
+            
+            // Extract fields from sample item
+            foreach ($sample_item as $key => $value) {
+                $display_key = !empty($field_prefix) ? $field_prefix . $key : $key;
+                $fields[$display_key] = ucfirst(str_replace('_', ' ', $key));
+                
+                // If value is an array or object, add nested fields
+                if (is_array($value) || is_object($value)) {
+                    foreach ($value as $sub_key => $sub_value) {
+                        $nested_key = $display_key . '.' . $sub_key;
+                        $fields[$nested_key] = ucfirst(str_replace('_', ' ', $key)) . ' > ' . ucfirst(str_replace('_', ' ', $sub_key));
+                    }
+                }
+            }
+        }
+        
+        // Add source to tags
+        $tags[$source_id] = [
+            'name'  => $source_id,
+            'label' => isset($source['name']) ? $source['name'] : esc_html__('API Source', 'bricks-api-integrator'),
+            'fields' => $fields,
+        ];
+    }
+    
+    // Add generic API source tag if no specific sources were added
+    if (!isset($tags['api_source'])) {
+        $tags['api_source'] = [
+            'name'  => 'api_source',
+            'label' => esc_html__('API Source', 'bricks-api-integrator'),
+            'fields' => $common_fields,
+        ];
+    }
+    
+    return $tags;
+}
+add_filter('bricks/query/dynamic_tags', 'bricks_api_register_dynamic_tags_for_query_loop');
 
 // Añadir menú en el Dashboard de WordPress
 add_action('admin_menu', 'bricks_api_integrator_menu');
 
-
-function bricks_api_integrator_menu()
-{
+function bricks_api_integrator_menu() {
+    // Menú principal
     add_menu_page(
         'Bricks API Integrator',
         'API Integrator',
@@ -31,6 +228,34 @@ function bricks_api_integrator_menu()
         'bricks_api_integrator_dashboard',
         'dashicons-admin-generic', // Icono del menú
         20
+    );
+    
+    // Submenús
+    add_submenu_page(
+        'bricks-api-integrator',
+        __('API Sources', 'bricks-api-integrator'),
+        __('API Sources', 'bricks-api-integrator'),
+        'manage_options',
+        'bricks-api-integrator-sources',
+        'render_api_sources_page'
+    );
+    
+    add_submenu_page(
+        'bricks-api-integrator',
+        __('API Launcher', 'bricks-api-integrator'),
+        __('API Launcher', 'bricks-api-integrator'),
+        'manage_options',
+        'bricks-api-integrator-launcher',
+        'render_api_launcher_page'
+    );
+    
+    add_submenu_page(
+        'bricks-api-integrator',
+        __('API Templates', 'bricks-api-integrator'),
+        __('API Templates', 'bricks-api-integrator'),
+        'manage_options',
+        'bricks-api-templates',
+        'render_api_templates_page'
     );
 }
 
@@ -210,9 +435,14 @@ function bricks_api_endpoints_render()
     }
 ?>
     <div id="endpoints-wrapper">
-        <?php foreach ($endpoints as $index => $endpoint): ?>
+        <?php 
+        $counter = 1;
+        foreach ($endpoints as $index => $endpoint): 
+            // Asegurarse de que el índice sea numérico
+            $display_index = is_numeric($index) ? intval($index) : $counter;
+        ?>
             <div class="endpoint-group" data-index="<?php echo esc_attr($index); ?>">
-                <h4><?php esc_html_e('Endpoint', 'bricks-api-integrator'); ?> <?php echo esc_html($index + 1); ?></h4>
+                <h4><?php esc_html_e('Endpoint', 'bricks-api-integrator'); ?> <?php echo esc_html($counter); ?></h4>
 
                 <label><?php esc_html_e('Nombre del Endpoint:', 'bricks-api-integrator'); ?></label>
                 <input type="text" name="bricks_api_endpoints[<?php echo esc_attr($index); ?>][name]" value="<?php echo esc_attr($endpoint['name']); ?>" style="width: 100%;" placeholder="Nombre del Endpoint" />
@@ -224,8 +454,9 @@ function bricks_api_endpoints_render()
                 <select name="bricks_api_endpoints[<?php echo esc_attr($index); ?>][auth_type]" class="auth-type-select">
                     <option value="none" <?php selected($endpoint['auth_type'], 'none'); ?>><?php esc_html_e('Sin Autenticación', 'bricks-api-integrator'); ?></option>
                     <option value="basic" <?php selected($endpoint['auth_type'], 'basic'); ?>><?php esc_html_e('Autenticación Básica', 'bricks-api-integrator'); ?></option>
-                    <option value="token" <?php selected($endpoint['auth_type'], 'token'); ?>><?php esc_html_e('Token', 'bricks-api-integrator'); ?></option>
+                    <option value="api_key" <?php selected($endpoint['auth_type'], 'api_key'); ?>><?php esc_html_e('API Key', 'bricks-api-integrator'); ?></option>
                 </select>
+                <?php $counter++; ?>
 
                 <div class="auth-fields">
                     <?php if ($endpoint['auth_type'] === 'basic') : ?>
