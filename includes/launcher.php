@@ -1,6 +1,6 @@
 <?php
 /**
- * API Launcher for Bricks Builder
+ * Tags Dinámicos para Bricks Builder
  * 
  * Este archivo maneja la creación y gestión del launcher para los API sources
  */
@@ -10,7 +10,7 @@ if (!defined('ABSPATH')) {
 }
 
 /**
- * Render the API Launcher admin page
+ * Render the Tags Dinámicos admin page
  */
 function render_api_launcher_page() {
     // Manejar acciones de eliminación directamente desde la URL
@@ -69,7 +69,7 @@ function render_api_launcher_page() {
             add_settings_error(
                 'bricks_api_launcher',
                 'launcher_not_found',
-                __('Error: El launcher que intentas editar no existe.', 'bricks-api-integrator'),
+                __('Error: Los tags dinámicos que intentas editar no existen.', 'bricks-api-integrator'),
                 'error'
             );
             $editing = false;
@@ -81,7 +81,7 @@ function render_api_launcher_page() {
     
     ?>
     <div class="wrap">
-        <h1><?php esc_html_e('API Launcher para Bricks Builder', 'bricks-api-integrator'); ?></h1>
+        <h1><?php esc_html_e('Tags Dinámicos para Bricks Builder', 'bricks-api-integrator'); ?></h1>
         
         <?php if (empty($endpoints)): ?>
             <div class="notice notice-warning">
@@ -91,7 +91,7 @@ function render_api_launcher_page() {
         <?php else: ?>
             <!-- Formulario para añadir nuevo launcher -->
             <div class="api-launcher-form-container">
-                <h2><?php echo $editing ? esc_html__('Editar API Launcher', 'bricks-api-integrator') : esc_html__('Añadir Nuevo API Launcher', 'bricks-api-integrator'); ?></h2>
+                <h2><?php echo $editing ? esc_html__('Editar Tags Dinámicos', 'bricks-api-integrator') : esc_html__('Añadir Nuevos Tags Dinámicos', 'bricks-api-integrator'); ?></h2>
                 <form method="post" action="">
                     <?php wp_nonce_field('bricks_api_launcher_nonce'); ?>
                     <?php if ($editing): ?>
@@ -108,7 +108,7 @@ function render_api_launcher_page() {
                     <table class="form-table">
                         <tr>
                             <th scope="row">
-                                <label for="launcher_name"><?php esc_html_e('Nombre del Launcher', 'bricks-api-integrator'); ?></label>
+                                <label for="launcher_name"><?php esc_html_e('Nombre de los Tags Dinámicos', 'bricks-api-integrator'); ?></label>
                             </th>
                             <td>
                                 <input type="text" id="launcher_name" name="launcher_name" class="regular-text" value="<?php echo $editing && isset($current_launcher['name']) ? esc_attr($current_launcher['name']) : ''; ?>" required="required">
@@ -136,7 +136,7 @@ function render_api_launcher_page() {
                                 <label for="field_prefix"><?php esc_html_e('Prefijo de Campo', 'bricks-api-integrator'); ?></label>
                             </th>
                             <td>
-                                <input type="text" id="field_prefix" name="field_prefix" class="regular-text" value="<?php echo $editing && isset($current_launcher['field_prefix']) ? esc_attr($current_launcher['field_prefix']) : 'snap_'; ?>">
+                                <input type="text" id="field_prefix" name="field_prefix" class="regular-text" value="<?php echo $editing && isset($current_launcher['field_prefix']) ? esc_attr($current_launcher['field_prefix']) : 'snap_'; ?>" placeholder="snap_">
                                 <p class="description"><?php esc_html_e('Prefijo opcional para los nombres de campo en Bricks. Dejar vacío para no usar prefijo.', 'bricks-api-integrator'); ?></p>
                             </td>
                         </tr>
@@ -145,14 +145,14 @@ function render_api_launcher_page() {
                                 <label for="dynamic_tag_group"><?php esc_html_e('Grupo de Dynamic Tags', 'bricks-api-integrator'); ?></label>
                             </th>
                             <td>
-                                <input type="text" id="dynamic_tag_group" name="dynamic_tag_group" class="regular-text" value="<?php echo $editing && isset($current_launcher['dynamic_tag_group']) ? esc_attr($current_launcher['dynamic_tag_group']) : 'Lista Clínicas'; ?>">
+                                <input type="text" id="dynamic_tag_group" name="dynamic_tag_group" class="regular-text" value="<?php echo $editing && isset($current_launcher['dynamic_tag_group']) ? esc_attr($current_launcher['dynamic_tag_group']) : 'API Data'; ?>">
                                 <p class="description"><?php esc_html_e('Nombre del grupo para los dynamic tags en Bricks.', 'bricks-api-integrator'); ?></p>
                             </td>
                         </tr>
                     </table>
                     
                     <p class="submit">
-                        <input type="submit" name="submit_api_launcher" class="button button-primary" value="<?php echo $editing ? esc_attr__('Actualizar Launcher', 'bricks-api-integrator') : esc_attr__('Guardar API Launcher', 'bricks-api-integrator'); ?>">
+                        <input type="submit" name="submit_api_launcher" class="button button-primary" value="<?php echo $editing ? esc_attr__('Actualizar Tags Dinámicos', 'bricks-api-integrator') : esc_attr__('Guardar Tags Dinámicos', 'bricks-api-integrator'); ?>">
                         <?php if ($editing): ?>
                             <a href="<?php echo esc_url(admin_url('admin.php?page=bricks-api-integrator-launcher')); ?>" class="button"><?php esc_html_e('Cancelar', 'bricks-api-integrator'); ?></a>
                         <?php endif; ?>
@@ -162,15 +162,15 @@ function render_api_launcher_page() {
             
             <!-- Lista de launchers existentes -->
             <div class="api-launchers-list">
-                <h2><?php esc_html_e('Launchers API Configurados', 'bricks-api-integrator'); ?></h2>
+                <h2><?php esc_html_e('Tags Dinámicos Configurados', 'bricks-api-integrator'); ?></h2>
                 
                 <?php if (empty($api_launchers)): ?>
-                    <p><?php esc_html_e('No hay launchers API configurados todavía.', 'bricks-api-integrator'); ?></p>
+                    <p><?php esc_html_e('No hay configuraciones de tags dinámicos todavía.', 'bricks-api-integrator'); ?></p>
                 <?php else: ?>
                     <table class="wp-list-table widefat fixed striped">
                         <thead>
                             <tr>
-                                <th><?php esc_html_e('Nombre del Launcher', 'bricks-api-integrator'); ?></th>
+                                <th><?php esc_html_e('Nombre de Tags Dinámicos', 'bricks-api-integrator'); ?></th>
                                 <th><?php esc_html_e('Endpoint', 'bricks-api-integrator'); ?></th>
                                 <th><?php esc_html_e('Prefijo de Campo', 'bricks-api-integrator'); ?></th>
                                 <th><?php esc_html_e('Grupo de Dynamic Tags', 'bricks-api-integrator'); ?></th>
@@ -191,7 +191,7 @@ function render_api_launcher_page() {
                                     <td><?php echo esc_html($launcher['dynamic_tag_group'] ?? ''); ?></td>
                                     <td>
                                         <a href="<?php echo esc_url(admin_url('admin.php?page=bricks-api-integrator-launcher&action=edit&launcher_id=' . $launcher_id)); ?>" class="button button-small"><?php esc_html_e('Editar', 'bricks-api-integrator'); ?></a>
-                                        <a href="<?php echo esc_url(wp_nonce_url(admin_url('admin.php?page=bricks-api-integrator-launcher&action=delete&launcher_id=' . $launcher_id), 'delete_api_launcher_' . $launcher_id)); ?>" class="button button-small button-link-delete" onclick="return confirm('<?php esc_attr_e('¿Estás seguro de que quieres eliminar este launcher?', 'bricks-api-integrator'); ?>')"><?php esc_html_e('Eliminar', 'bricks-api-integrator'); ?></a>
+                                        <a href="<?php echo esc_url(wp_nonce_url(admin_url('admin.php?page=bricks-api-integrator-launcher&action=delete&launcher_id=' . $launcher_id), 'delete_api_launcher_' . $launcher_id)); ?>" class="button button-small button-link-delete" onclick="return confirm('<?php esc_attr_e('¿Estás seguro de que quieres eliminar estos tags dinámicos?', 'bricks-api-integrator'); ?>')"><?php esc_html_e('Eliminar', 'bricks-api-integrator'); ?></a>
                                     </td>
                                 </tr>
                             <?php endforeach; ?>
@@ -205,7 +205,7 @@ function render_api_launcher_page() {
 }
 
 /**
- * Guardar API Launcher
+ * Guardar Tags Dinámicos
  */
 function save_api_launcher() {
     error_log('Iniciando save_api_launcher');
@@ -222,8 +222,8 @@ function save_api_launcher() {
     // Obtener y validar datos del formulario
     $launcher_name = isset($_POST['launcher_name']) ? trim($_POST['launcher_name']) : '';
     $endpoint_id = isset($_POST['endpoint_id']) ? trim($_POST['endpoint_id']) : '';
-    $field_prefix = isset($_POST['field_prefix']) ? trim($_POST['field_prefix']) : '';
-    $dynamic_tag_group = isset($_POST['dynamic_tag_group']) ? trim($_POST['dynamic_tag_group']) : '';
+    $field_prefix = isset($_POST['field_prefix']) ? trim($_POST['field_prefix']) : 'snap_';
+    $dynamic_tag_group = isset($_POST['dynamic_tag_group']) ? trim($_POST['dynamic_tag_group']) : 'API Data';
     
     // Sanitizar los datos
     $launcher_name = sanitize_text_field($launcher_name);
@@ -242,11 +242,11 @@ function save_api_launcher() {
     $has_errors = false;
     
     if (empty($launcher_name)) {
-        error_log('Error: Nombre del launcher vacío');
+        error_log('Error: Nombre de tags dinámicos vacío');
         add_settings_error(
             'bricks_api_launcher',
             'missing_launcher_name',
-            __('Error: El nombre del launcher es obligatorio.', 'bricks-api-integrator'),
+            __('Error: El nombre de los tags dinámicos es obligatorio.', 'bricks-api-integrator'),
             'error'
         );
         $has_errors = true;
@@ -275,15 +275,15 @@ function save_api_launcher() {
     
     // Si el campo dynamic_tag_group está vacío, asignarle un valor predeterminado
     if (empty($dynamic_tag_group)) {
-        $dynamic_tag_group = $launcher_name;
-        error_log('Dynamic tag group vacío, usando nombre del launcher: ' . $dynamic_tag_group);
+        $dynamic_tag_group = !empty($launcher_name) ? $launcher_name : 'API Data';
+        error_log('Dynamic tag group vacío, usando: ' . $dynamic_tag_group);
     }
     
     // Determinar si es una edición o un nuevo launcher
     $is_edit = isset($_POST['launcher_id']) && !empty($_POST['launcher_id']);
-    $launcher_id = $is_edit ? sanitize_text_field($_POST['launcher_id']) : 'launcher_' . time() . '_' . wp_rand(100, 999);
+    $launcher_id = $is_edit ? sanitize_text_field($_POST['launcher_id']) : 'tags_dinamicos_' . time() . '_' . wp_rand(100, 999);
     
-    error_log('Modo: ' . ($is_edit ? 'Edición (ID: ' . $launcher_id . ')' : 'Nuevo launcher'));
+    error_log('Modo: ' . ($is_edit ? 'Edición (ID: ' . $launcher_id . ')' : 'Nuevos tags dinámicos'));
     
     // Preparar datos del launcher
     $launcher_data = [
@@ -315,7 +315,7 @@ function save_api_launcher() {
         add_settings_error(
             'bricks_api_launcher',
             'launcher_saved',
-            $is_edit ? __('API Launcher actualizado correctamente.', 'bricks-api-integrator') : __('API Launcher añadido correctamente.', 'bricks-api-integrator'),
+            $is_edit ? __('Tags Dinámicos actualizados correctamente.', 'bricks-api-integrator') : __('Tags Dinámicos añadidos correctamente.', 'bricks-api-integrator'),
             'success'
         );
         return true;
@@ -331,7 +331,7 @@ function save_api_launcher() {
         add_settings_error(
             'bricks_api_launcher',
             'launcher_saved',
-            $is_edit ? __('API Launcher actualizado correctamente (método alternativo).', 'bricks-api-integrator') : __('API Launcher añadido correctamente (método alternativo).', 'bricks-api-integrator'),
+            $is_edit ? __('Tags Dinámicos actualizados correctamente (método alternativo).', 'bricks-api-integrator') : __('Tags Dinámicos añadidos correctamente (método alternativo).', 'bricks-api-integrator'),
             'success'
         );
         return true;
@@ -356,7 +356,7 @@ function save_api_launcher() {
         add_settings_error(
             'bricks_api_launcher',
             'launcher_saved',
-            $is_edit ? __('API Launcher actualizado correctamente (método directo).', 'bricks-api-integrator') : __('API Launcher añadido correctamente (método directo).', 'bricks-api-integrator'),
+            $is_edit ? __('Tags Dinámicos actualizados correctamente (método directo).', 'bricks-api-integrator') : __('Tags Dinámicos añadidos correctamente (método directo).', 'bricks-api-integrator'),
             'success'
         );
         return true;
@@ -367,14 +367,14 @@ function save_api_launcher() {
     add_settings_error(
         'bricks_api_launcher',
         'save_failed',
-        __('Error: No se pudo guardar el launcher. Por favor, inténtalo de nuevo.', 'bricks-api-integrator'),
+        __('Error: No se pudieron guardar los tags dinámicos. Por favor, inténtalo de nuevo.', 'bricks-api-integrator'),
         'error'
     );
     return false;
 }
 
 /**
- * Manejar acciones del launcher
+ * Manejar acciones de tags dinámicos
  */
 function handle_api_launcher_actions() {
     if (!isset($_GET['page']) || $_GET['page'] !== 'bricks-api-integrator-launcher') {
@@ -406,7 +406,7 @@ function handle_api_launcher_actions() {
                 add_settings_error(
                     'bricks_api_launcher',
                     'launcher_deleted',
-                    __('API Launcher eliminado correctamente.', 'bricks-api-integrator'),
+                    __('Tags Dinámicos eliminados correctamente.', 'bricks-api-integrator'),
                     'success'
                 );
             } else {
@@ -414,7 +414,7 @@ function handle_api_launcher_actions() {
                 add_settings_error(
                     'bricks_api_launcher',
                     'delete_error',
-                    __('Error: No se pudo eliminar el launcher. Por favor, inténtalo de nuevo.', 'bricks-api-integrator'),
+                    __('Error: No se pudieron eliminar los tags dinámicos. Por favor, inténtalo de nuevo.', 'bricks-api-integrator'),
                     'error'
                 );
             }
@@ -423,7 +423,7 @@ function handle_api_launcher_actions() {
             add_settings_error(
                 'bricks_api_launcher',
                 'launcher_not_found',
-                __('Error: El launcher que intentas eliminar no existe.', 'bricks-api-integrator'),
+                __('Error: Los tags dinámicos que intentas eliminar no existen.', 'bricks-api-integrator'),
                 'error'
             );
         }
@@ -436,10 +436,10 @@ function handle_api_launcher_actions() {
 add_action('admin_init', 'handle_api_launcher_actions');
 
 /**
- * Registrar API Launchers con Bricks
+ * Registrar Tags Dinámicos con Bricks
  */
 function register_api_launchers_with_bricks() {
-    // Obtener launchers API configurados
+    // Obtener configuraciones de tags dinámicos
     $api_launchers = get_option('bricks_api_launchers', []);
     
     if (empty($api_launchers)) {
@@ -464,8 +464,9 @@ function register_api_launchers_with_bricks() {
             continue;
         }
         
-        // Registrar el launcher con Bricks
+        // Registrar los tags dinámicos con Bricks
         // Aquí se implementará la integración con Bricks
     }
 }
-add_action('init', 'register_api_launchers_with_bricks');
+// TEMPORALMENTE DESACTIVADO PARA EVITAR DUPLICACIÓN - EL SISTEMA PRINCIPAL SE ENCARGA DE ESTO
+// add_action('init', 'register_api_launchers_with_bricks');

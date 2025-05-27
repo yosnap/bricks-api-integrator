@@ -46,8 +46,8 @@ function render_api_templates_page() {
         }
     }
     
-    // Get available sources for dropdown
-    $api_sources = get_option('bricks_api_sources', []);
+    // Get available endpoints for dropdown (UPDATED FOR ENDPOINT SYSTEM)
+    $endpoints = get_option('bricks_api_endpoints', []);
     
     // Get available pages for template selection
     $pages = get_pages([
@@ -70,6 +70,25 @@ function render_api_templates_page() {
             <a href="?page=bricks-api-templates" class="nav-tab nav-tab-active"><?php _e('API Templates', 'bricks-api-integrator'); ?></a>
         </div>
         
+        <?php if (!$editing): ?>
+        <div class="notice notice-info">
+            <h3>📝 ¿Cómo funcionan las Templates?</h3>
+            <p><strong>Las templates crean URLs automáticas para tus datos de API:</strong></p>
+            <ul style="margin-left: 20px;">
+                <li><strong>Archive (Lista):</strong> Crea URLs como <code>/clinicas/</code> que muestran listados</li>
+                <li><strong>Single (Detalle):</strong> Crea URLs como <code>/clinicas/123/</code> que muestran un elemento específico</li>
+            </ul>
+            <p><strong>Pasos:</strong></p>
+            <ol style="margin-left: 20px;">
+                <li>Crea una página en WordPress con Bricks Builder</li>
+                <li>Diseña tu layout usando elementos de Bricks</li>
+                <li>Usa Dynamic Tags con prefijo <code>snap_</code> para mostrar datos de la API</li>
+                <li>Configura la template aquí para activar las URLs automáticas</li>
+            </ol>
+            <p>💡 <strong>Ejemplo:</strong> Si configuras URL base "clinicas" tipo "Single", se creará automáticamente <code>/clinicas/[id]/</code></p>
+        </div>
+        <?php endif; ?>
+        
         <div class="api-template-container">
             <div class="api-template-form">
                 <form method="post" action="">
@@ -90,18 +109,18 @@ function render_api_templates_page() {
                         </tr>
                         <tr>
                             <th scope="row">
-                                <label for="source_id"><?php _e('API Source', 'bricks-api-integrator'); ?></label>
+                                <label for="endpoint_id"><?php _e('API Endpoint', 'bricks-api-integrator'); ?></label>
                             </th>
                             <td>
-                                <select id="source_id" name="source_id" required>
-                                    <option value=""><?php _e('Select an API source', 'bricks-api-integrator'); ?></option>
-                                    <?php foreach ($api_sources as $id => $source): ?>
-                                        <option value="<?php echo esc_attr($id); ?>" <?php selected($editing && isset($current_template['source_id']) ? $current_template['source_id'] : '', $id); ?>>
-                                            <?php echo esc_html($source['name']); ?>
+                                <select id="endpoint_id" name="endpoint_id" required>
+                                    <option value=""><?php _e('Select an API endpoint', 'bricks-api-integrator'); ?></option>
+                                    <?php foreach ($endpoints as $index => $endpoint): ?>
+                                        <option value="<?php echo esc_attr($index); ?>" <?php selected($editing && isset($current_template['endpoint_id']) ? $current_template['endpoint_id'] : '', $index); ?>>
+                                            <?php echo esc_html($endpoint['name']); ?>
                                         </option>
                                     <?php endforeach; ?>
                                 </select>
-                                <p class="description"><?php _e('Select the API source to use for this template.', 'bricks-api-integrator'); ?></p>
+                                <p class="description"><?php _e('Select the API endpoint to use for this template.', 'bricks-api-integrator'); ?></p>
                             </td>
                         </tr>
                         <tr>
@@ -171,7 +190,7 @@ function render_api_templates_page() {
                         <thead>
                             <tr>
                                 <th><?php _e('Name', 'bricks-api-integrator'); ?></th>
-                                <th><?php _e('Source', 'bricks-api-integrator'); ?></th>
+                                <th><?php _e('Endpoint', 'bricks-api-integrator'); ?></th>
                                 <th><?php _e('Type', 'bricks-api-integrator'); ?></th>
                                 <th><?php _e('Page', 'bricks-api-integrator'); ?></th>
                                 <th><?php _e('URL Base', 'bricks-api-integrator'); ?></th>
@@ -184,10 +203,10 @@ function render_api_templates_page() {
                                     <td><?php echo esc_html($template['name']); ?></td>
                                     <td>
                                         <?php 
-                                        if (isset($template['source_id']) && isset($api_sources[$template['source_id']])) {
-                                            echo esc_html($api_sources[$template['source_id']]['name']);
+                                        if (isset($template['endpoint_id']) && isset($endpoints[$template['endpoint_id']])) {
+                                            echo esc_html($endpoints[$template['endpoint_id']]['name']);
                                         } else {
-                                            echo '<em>' . __('Source not found', 'bricks-api-integrator') . '</em>';
+                                            echo '<em>' . __('Endpoint not found', 'bricks-api-integrator') . '</em>';
                                         }
                                         ?>
                                     </td>
@@ -264,15 +283,22 @@ function render_api_templates_page() {
 function save_api_template() {
     // Validate and sanitize inputs
     $template_name = isset($_POST['template_name']) ? sanitize_text_field($_POST['template_name']) : '';
-    $source_id = isset($_POST['source_id']) ? sanitize_text_field($_POST['source_id']) : '';
+    $endpoint_id = isset($_POST['endpoint_id']) ? intval($_POST['endpoint_id']) : '';
     $template_type = isset($_POST['template_type']) ? sanitize_text_field($_POST['template_type']) : 'archive';
     $page_id = isset($_POST['page_id']) ? intval($_POST['page_id']) : 0;
     $url_base = isset($_POST['url_base']) ? sanitize_title($_POST['url_base']) : '';
     $id_param = isset($_POST['id_param']) ? sanitize_text_field($_POST['id_param']) : 'id';
     
     // Check required fields
-    if (empty($template_name) || empty($source_id) || empty($page_id) || empty($url_base)) {
+    if (empty($template_name) || empty($endpoint_id) || empty($page_id) || empty($url_base)) {
         add_settings_error('bricks_api_templates', 'missing_fields', __('All fields are required.', 'bricks-api-integrator'), 'error');
+        return;
+    }
+    
+    // Validate that the endpoint exists
+    $endpoints = get_option('bricks_api_endpoints', []);
+    if (!isset($endpoints[$endpoint_id])) {
+        add_settings_error('bricks_api_templates', 'invalid_endpoint', __('Selected endpoint does not exist.', 'bricks-api-integrator'), 'error');
         return;
     }
     
@@ -290,7 +316,7 @@ function save_api_template() {
     // Prepare template data
     $template_data = [
         'name' => $template_name,
-        'source_id' => $source_id,
+        'endpoint_id' => $endpoint_id,
         'template_type' => $template_type,
         'page_id' => $page_id,
         'url_base' => $url_base,
@@ -307,11 +333,14 @@ function save_api_template() {
     // Save to database
     update_option('bricks_api_templates', $api_templates);
     
+    // Set flag to flush rewrite rules
+    update_option('bricks_api_flush_rewrite_rules', true);
+    
     // Add success message
     if (isset($_POST['template_id'])) {
-        add_settings_error('bricks_api_templates', 'template_updated', __('API Template updated successfully.', 'bricks-api-integrator'), 'success');
+        add_settings_error('bricks_api_templates', 'template_updated', __('API Template updated successfully. Rewrite rules will be refreshed.', 'bricks-api-integrator'), 'success');
     } else {
-        add_settings_error('bricks_api_templates', 'template_added', __('API Template added successfully.', 'bricks-api-integrator'), 'success');
+        add_settings_error('bricks_api_templates', 'template_added', __('API Template added successfully. Rewrite rules will be refreshed.', 'bricks-api-integrator'), 'success');
     }
 }
 
@@ -383,10 +412,95 @@ function add_api_template_query_vars($query_vars) {
 add_filter('query_vars', 'add_api_template_query_vars');
 
 /**
- * Load API template content
+ * Suppress WordPress warnings for API template pages
+ */
+function suppress_api_template_warnings() {
+    global $wp_query;
+    
+    // Only suppress warnings on API template pages
+    if (isset($wp_query->query_vars['api_template'])) {
+        
+        // Create a custom error handler for API template pages
+        set_error_handler(function($errno, $errstr, $errfile, $errline) {
+            // Suppress specific WordPress warnings related to null post objects
+            if (strpos($errstr, 'Attempt to read property') !== false && 
+                (strpos($errstr, 'comment_count') !== false || 
+                 strpos($errstr, 'post_title') !== false ||
+                 strpos($errstr, 'post_content') !== false ||
+                 strpos($errfile, 'general-template.php') !== false)) {
+                return true; // Suppress this warning
+            }
+            
+            // For other errors, use the default handler
+            return false;
+        }, E_WARNING | E_NOTICE);
+    }
+}
+/**
+ * Initialize API template with proper WordPress context
+ */
+function init_api_template_context() {
+    global $wp_query, $post;
+    
+    // Check if this is an API template request
+    if (!isset($wp_query->query_vars['api_template'])) {
+        return;
+    }
+    
+    $template_id = $wp_query->query_vars['api_template'];
+    $api_templates = get_option('bricks_api_templates', []);
+    
+    if (!isset($api_templates[$template_id])) {
+        return;
+    }
+    
+    $api_template = $api_templates[$template_id];
+    $page_id = isset($api_template['page_id']) ? $api_template['page_id'] : 0;
+    
+    if (empty($page_id)) {
+        return;
+    }
+    
+    // Get the page object
+    $page_object = get_post($page_id);
+    
+    if (!$page_object) {
+        return;
+    }
+    
+    // Ensure the page object has all required properties
+    if (!isset($page_object->comment_count)) {
+        $page_object->comment_count = 0;
+    }
+    
+    if (!isset($page_object->comment_status)) {
+        $page_object->comment_status = 'closed';
+    }
+    
+    if (!isset($page_object->ping_status)) {
+        $page_object->ping_status = 'closed';
+    }
+    
+    // Set up globals properly
+    $post = $page_object;
+    $wp_query->post = $page_object;
+    $wp_query->posts = [$page_object];
+    
+    // Set up the loop
+    $wp_query->current_post = 0;
+    $wp_query->post_count = 1;
+    $wp_query->in_the_loop = false; // Will be set to true when the_post() is called
+    
+    // Set up postdata
+    setup_postdata($post);
+}
+add_action('template_redirect', 'init_api_template_context', 1);
+
+/**
+ * Load API template content (FIXED FOR POST OBJECT ISSUES)
  */
 function load_api_template_content($template) {
-    global $wp_query;
+    global $wp_query, $post;
     
     // Check if this is an API template request
     if (!isset($wp_query->query_vars['api_template'])) {
@@ -407,26 +521,65 @@ function load_api_template_content($template) {
         return $template;
     }
     
-    // Set the page ID for the template
+    // Get the actual page object
+    $page_object = get_post($page_id);
+    
+    if (!$page_object) {
+        return $template;
+    }
+    
+    // Set up the global post object properly
+    $post = $page_object;
+    setup_postdata($post);
+    
+    // Configure WordPress query
     $wp_query->queried_object_id = $page_id;
-    $wp_query->queried_object = get_post($page_id);
+    $wp_query->queried_object = $page_object;
     $wp_query->is_page = true;
     $wp_query->is_singular = true;
     $wp_query->is_archive = false;
+    $wp_query->is_home = false;
+    $wp_query->is_front_page = false;
+    $wp_query->post = $page_object;
+    $wp_query->posts = [$page_object];
+    $wp_query->post_count = 1;
+    $wp_query->found_posts = 1;
+    
+    // Set the current post ID for WordPress functions
+    global $wp_query;
+    $wp_query->in_the_loop = true;
     
     // Load the page template
     $page_template = get_page_template_slug($page_id);
     
     if ($page_template) {
-        return get_theme_file_path($page_template);
-    } else {
-        return get_page_template();
+        $template_file = get_theme_file_path($page_template);
+        if (file_exists($template_file)) {
+            return $template_file;
+        }
     }
+    
+    // Fallback to default page template
+    return get_page_template();
 }
 add_filter('template_include', 'load_api_template_content');
 
 /**
- * Set API source for Bricks Query Loop
+ * Clean up global state after template rendering
+ */
+function cleanup_api_template_globals() {
+    global $wp_query;
+    
+    // Check if this was an API template request
+    if (isset($wp_query->query_vars['api_template'])) {
+        // Reset post data to prevent issues with other parts of the site
+        wp_reset_postdata();
+    }
+}
+add_action('wp_footer', 'cleanup_api_template_globals');
+
+/**
+ * Set API endpoint for Bricks Query Loop (UPDATED FOR ENDPOINT SYSTEM)
  */
 function set_api_template_source($query_obj) {
     global $wp_query;
@@ -444,35 +597,47 @@ function set_api_template_source($query_obj) {
     }
     
     $api_template = $api_templates[$template_id];
-    $source_id = isset($api_template['source_id']) ? $api_template['source_id'] : '';
+    $endpoint_id = isset($api_template['endpoint_id']) ? $api_template['endpoint_id'] : '';
     
-    if (empty($source_id)) {
+    if (empty($endpoint_id)) {
         return $query_obj;
     }
     
-    // Set the source ID for the Query Loop
-    $query_obj->settings['source'] = 'api_source';
-    $query_obj->settings['source_id'] = $source_id;
+    // Get the endpoint configuration
+    $endpoints = get_option('bricks_api_endpoints', []);
+    if (!isset($endpoints[$endpoint_id])) {
+        return $query_obj;
+    }
+    
+    $endpoint = $endpoints[$endpoint_id];
+    $endpoint_name = $endpoint['name'];
+    
+    // Set the query type based on endpoint name (this matches our dynamic system)
+    $query_type_key = 'api_' . sanitize_key($endpoint_name);
+    $query_obj->object_type = $query_type_key;
     
     // Set pagination
-    $query_obj->settings['pagination'] = true;
+    if (!isset($query_obj->settings['posts_per_page'])) {
+        $query_obj->settings['posts_per_page'] = 10;
+    }
     
-    // For single templates, add the ID parameter
+    // For single templates, add the ID parameter to the global context
     if (isset($api_template['template_type']) && $api_template['template_type'] === 'single' && isset($api_template['id_param'])) {
         $id_param = $api_template['id_param'];
         
         if (isset($wp_query->query_vars[$id_param])) {
             $id_value = $wp_query->query_vars[$id_param];
             
-            // Add dynamic parameter
-            if (!isset($query_obj->settings['dynamic_params'])) {
-                $query_obj->settings['dynamic_params'] = [];
-            }
-            
-            $query_obj->settings['dynamic_params'][] = [
-                'param_name' => $id_param,
-                'param_value' => $id_value,
+            // Store the ID value globally for our dynamic tag system to use
+            global $bricks_api_current_item_id;
+            $bricks_api_current_item_id = [
+                'param' => $id_param,
+                'value' => $id_value,
+                'endpoint_id' => $endpoint_id
             ];
+            
+            // Also set it in $_GET so our dynamic parameter system can pick it up
+            $_GET[$id_param] = $id_value;
         }
     }
     

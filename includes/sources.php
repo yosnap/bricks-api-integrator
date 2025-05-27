@@ -1,8 +1,12 @@
 <?php
 /**
- * API Sources Manager for Bricks Builder
+ * Query Types Manager for Bricks Builder
  * 
- * This file handles the creation and management of API sources for Bricks Query Loop
+ * Este archivo maneja la creación y gestión de query types para Bricks Query Loop
+ * 
+ * IMPORTANTE: Los Query Types NO generan dynamic tags para evitar duplicación.
+ * Los dynamic tags se generan automáticamente SOLO desde los endpoints configurados.
+ * Los Query Types son únicamente para usar en Bricks Query Loop.
  */
 
 if (!defined('ABSPATH')) {
@@ -10,11 +14,11 @@ if (!defined('ABSPATH')) {
 }
 
 /**
- * API Sources para Bricks Builder
+ * Query Types para Bricks Builder
  */
 
 /**
- * Render the API Sources admin page
+ * Render the Query Types admin page
  */
 function render_api_sources_page() {
     // Check if form was submitted
@@ -48,7 +52,7 @@ function render_api_sources_page() {
     
     ?>
     <div class="wrap">
-        <h1><?php esc_html_e('API Sources for Bricks Query Loop', 'bricks-api-integrator'); ?></h1>
+        <h1><?php esc_html_e('Query Types para Bricks Builder', 'bricks-api-integrator'); ?></h1>
         
         <?php if (empty($endpoints)): ?>
             <div class="notice notice-warning">
@@ -56,23 +60,23 @@ function render_api_sources_page() {
                 <p><a href="<?php echo admin_url('admin.php?page=bricks-api-integrator'); ?>" class="button"><?php esc_html_e('Configure Endpoints', 'bricks-api-integrator'); ?></a></p>
             </div>
         <?php else: ?>
-            <!-- Add New Source Form -->
+            <!-- Add New Query Type Form -->
             <div class="api-source-form-container">
-                <h2><?php echo $editing ? esc_html__('Edit API Source', 'bricks-api-integrator') : esc_html__('Add New API Source', 'bricks-api-integrator'); ?></h2>
+                <h2><?php echo $editing ? esc_html__('Editar Query Type', 'bricks-api-integrator') : esc_html__('Añadir Nuevo Query Type', 'bricks-api-integrator'); ?></h2>
                 <form method="post" action="">
                     <?php wp_nonce_field('bricks_api_source_nonce'); ?>
                     
                     <table class="form-table">
                         <tr>
                             <th scope="row">
-                                <label for="source_name"><?php esc_html_e('Source Name', 'bricks-api-integrator'); ?></label>
+                                <label for="source_name"><?php esc_html_e('Nombre del Query Type', 'bricks-api-integrator'); ?></label>
                             </th>
                             <td>
                                 <input type="text" id="source_name" name="source_name" class="regular-text" value="<?php echo $editing ? esc_attr($source_to_edit['name']) : ''; ?>" required>
                                 <?php if ($editing): ?>
                                     <input type="hidden" name="source_id" value="<?php echo esc_attr($source_id_to_edit); ?>">
                                 <?php endif; ?>
-                                <p class="description"><?php esc_html_e('This will be displayed in the Bricks Query Loop source selector.', 'bricks-api-integrator'); ?></p>
+                                <p class="description"><?php esc_html_e('Este nombre aparecerá en el selector de Query Loop de Bricks.', 'bricks-api-integrator'); ?></p>
                             </td>
                         </tr>
                         <tr>
@@ -91,69 +95,57 @@ function render_api_sources_page() {
                         </tr>
                         <tr>
                             <th scope="row">
-                                <label for="field_prefix"><?php esc_html_e('Field Prefix', 'bricks-api-integrator'); ?></label>
+                                <label for="field_prefix"><?php esc_html_e('Prefijo de Campo', 'bricks-api-integrator'); ?></label>
                             </th>
                             <td>
-                                <input type="text" id="field_prefix" name="field_prefix" class="regular-text" value="<?php echo $editing ? esc_attr($source_to_edit['field_prefix']) : ''; ?>">
-                                <p class="description"><?php esc_html_e('Optional prefix for field names in Bricks. Leave empty for no prefix.', 'bricks-api-integrator'); ?></p>
+                                <input type="text" id="field_prefix" name="field_prefix" class="regular-text" value="<?php echo $editing ? esc_attr($source_to_edit['field_prefix']) : ''; ?>" placeholder="snap_">
+                                <p class="description"><?php esc_html_e('Prefijo opcional para nombres de campo en Bricks. Dejar vacío para no usar prefijo.', 'bricks-api-integrator'); ?></p>
                             </td>
                         </tr>
                         <tr>
                             <th scope="row">
-                                <label for="items_path"><?php esc_html_e('Items Path', 'bricks-api-integrator'); ?></label>
+                                <label for="items_path"><?php esc_html_e('Ruta de Elementos', 'bricks-api-integrator'); ?></label>
                             </th>
                             <td>
                                 <input type="text" id="items_path" name="items_path" class="regular-text" value="<?php echo $editing ? esc_attr($source_to_edit['items_path']) : ''; ?>">
-                                <p class="description"><?php esc_html_e('Path to the array of items in the API response (e.g., "data" or "results"). Leave empty if items are at the root level.', 'bricks-api-integrator'); ?></p>
+                                <p class="description"><?php esc_html_e('Ruta al array de elementos en la respuesta de la API (ej. "data" o "results"). Dejar vacío si los elementos están en el nivel raíz.', 'bricks-api-integrator'); ?></p>
                             </td>
                         </tr>
                         <tr>
                             <th scope="row">
-                                <label for="dynamic_params"><?php esc_html_e('Dynamic Parameters', 'bricks-api-integrator'); ?></label>
+                                <label for="dynamic_params"><?php esc_html_e('Parámetros Dinámicos', 'bricks-api-integrator'); ?></label>
                             </th>
                             <td>
                                 <div id="dynamic-params-container">
                                     <?php if ($editing && !empty($source_to_edit['dynamic_params'])): ?>
                                         <?php foreach ($source_to_edit['dynamic_params'] as $param): ?>
                                             <div class="dynamic-param-row">
-                                                <input type="text" name="param_names[]" placeholder="<?php esc_attr_e('Parameter Name (e.g., id)', 'bricks-api-integrator'); ?>" class="regular-text" value="<?php echo esc_attr($param['name']); ?>">
+                                                <input type="text" name="param_names[]" placeholder="<?php esc_attr_e('Nombre del Parámetro (ej. id)', 'bricks-api-integrator'); ?>" class="regular-text" value="<?php echo esc_attr($param['name']); ?>">
                                                 <select name="param_sources[]">
-                                                    <option value="url" <?php selected($param['source'], 'url'); ?>><?php esc_html_e('URL Parameter', 'bricks-api-integrator'); ?></option>
-                                                    <option value="post" <?php selected($param['source'], 'post'); ?>><?php esc_html_e('Post ID', 'bricks-api-integrator'); ?></option>
-                                                    <option value="user" <?php selected($param['source'], 'user'); ?>><?php esc_html_e('User ID', 'bricks-api-integrator'); ?></option>
-                                                    <option value="static" <?php selected($param['source'], 'static'); ?>><?php esc_html_e('Static Value', 'bricks-api-integrator'); ?></option>
+                                                    <option value="url" <?php selected($param['source'], 'url'); ?>><?php esc_html_e('Parámetro URL', 'bricks-api-integrator'); ?></option>
+                                                    <option value="post" <?php selected($param['source'], 'post'); ?>><?php esc_html_e('ID del Post', 'bricks-api-integrator'); ?></option>
+                                                    <option value="user" <?php selected($param['source'], 'user'); ?>><?php esc_html_e('ID del Usuario', 'bricks-api-integrator'); ?></option>
+                                                    <option value="static" <?php selected($param['source'], 'static'); ?>><?php esc_html_e('Valor Estático', 'bricks-api-integrator'); ?></option>
                                                 </select>
-                                                <input type="text" name="param_defaults[]" placeholder="<?php esc_attr_e('Default Value (optional)', 'bricks-api-integrator'); ?>" class="regular-text" value="<?php echo esc_attr($param['default']); ?>">
-                                                <button type="button" class="button remove-param"><?php esc_html_e('Remove', 'bricks-api-integrator'); ?></button>
+                                                <input type="text" name="param_defaults[]" placeholder="<?php esc_attr_e('Valor por Defecto (opcional)', 'bricks-api-integrator'); ?>" class="regular-text" value="<?php echo esc_attr($param['default']); ?>">
+                                                <button type="button" class="button remove-param"><?php esc_html_e('Eliminar', 'bricks-api-integrator'); ?></button>
                                             </div>
                                         <?php endforeach; ?>
-                                    <?php else: ?>
-                                        <div class="dynamic-param-row">
-                                            <input type="text" name="param_names[]" placeholder="<?php esc_attr_e('Parameter Name (e.g., id)', 'bricks-api-integrator'); ?>" class="regular-text">
-                                            <select name="param_sources[]">
-                                                <option value="url"><?php esc_html_e('URL Parameter', 'bricks-api-integrator'); ?></option>
-                                                <option value="post"><?php esc_html_e('Post ID', 'bricks-api-integrator'); ?></option>
-                                                <option value="user"><?php esc_html_e('User ID', 'bricks-api-integrator'); ?></option>
-                                                <option value="static"><?php esc_html_e('Static Value', 'bricks-api-integrator'); ?></option>
-                                            </select>
-                                            <input type="text" name="param_defaults[]" placeholder="<?php esc_attr_e('Default Value (optional)', 'bricks-api-integrator'); ?>" class="regular-text">
-                                            <button type="button" class="button remove-param"><?php esc_html_e('Remove', 'bricks-api-integrator'); ?></button>
-                                        </div>
                                     <?php endif; ?>
                                 </div>
-                                <button type="button" id="add-param" class="button"><?php esc_html_e('Add Parameter', 'bricks-api-integrator'); ?></button>
-                                <p class="description"><?php esc_html_e('Define parameters to pass to the API. For URL parameters, the value will be taken from the current URL query string.', 'bricks-api-integrator'); ?></p>
+                                <button type="button" id="add-param" class="button"><?php esc_html_e('Añadir Parámetro', 'bricks-api-integrator'); ?></button>
+                                <p class="description"><?php esc_html_e('Define parámetros para pasar a la API. Para parámetros URL, el valor se tomará de la cadena de consulta de la URL actual.', 'bricks-api-integrator'); ?></p>
                             </td>
                         </tr>
                         <tr>
                             <th scope="row">
-                                <label for="pagination_type"><?php esc_html_e('Pagination Type', 'bricks-api-integrator'); ?></label>
+                                <label for="pagination_type"><?php esc_html_e('Tipo de Paginación', 'bricks-api-integrator'); ?></label>
                             </th>
                             <td>
                                 <select id="pagination_type" name="pagination_type">
-                                    <option value="none" <?php selected($editing && $source_to_edit['pagination_type'] == 'none'); ?>><?php esc_html_e('None', 'bricks-api-integrator'); ?></option>
-                                    <option value="page_param" <?php selected($editing && $source_to_edit['pagination_type'] == 'page_param'); ?>><?php esc_html_e('Page Parameter', 'bricks-api-integrator'); ?></option>
-                                    <option value="offset_param" <?php selected($editing && $source_to_edit['pagination_type'] == 'offset_param'); ?>><?php esc_html_e('Offset Parameter', 'bricks-api-integrator'); ?></option>
+                                    <option value="none" <?php selected($editing && $source_to_edit['pagination_type'] == 'none'); ?>><?php esc_html_e('Ninguno', 'bricks-api-integrator'); ?></option>
+                                    <option value="page_param" <?php selected($editing && $source_to_edit['pagination_type'] == 'page_param'); ?>><?php esc_html_e('Parámetro de Página', 'bricks-api-integrator'); ?></option>
+                                    <option value="offset_param" <?php selected($editing && $source_to_edit['pagination_type'] == 'offset_param'); ?>><?php esc_html_e('Parámetro de Desplazamiento', 'bricks-api-integrator'); ?></option>
                                 </select>
                             </td>
                         </tr>
@@ -178,27 +170,27 @@ function render_api_sources_page() {
                     </table>
                     
                     <p class="submit">
-                        <input type="submit" name="submit_api_source" class="button button-primary" value="<?php echo $editing ? esc_attr__('Update API Source', 'bricks-api-integrator') : esc_attr__('Save API Source', 'bricks-api-integrator'); ?>">
+                        <input type="submit" name="submit_api_source" class="button button-primary" value="<?php echo $editing ? esc_attr__('Actualizar Query Type', 'bricks-api-integrator') : esc_attr__('Guardar Query Type', 'bricks-api-integrator'); ?>">
                     </p>
                 </form>
             </div>
             
-            <!-- Existing Sources List -->
+            <!-- Existing Query Types List -->
             <div class="api-sources-list">
-                <h2><?php esc_html_e('Configured API Sources', 'bricks-api-integrator'); ?></h2>
+                <h2><?php esc_html_e('Query Types Configurados', 'bricks-api-integrator'); ?></h2>
                 
                 <?php if (empty($api_sources)): ?>
-                    <p><?php esc_html_e('No API sources configured yet.', 'bricks-api-integrator'); ?></p>
+                    <p><?php esc_html_e('No hay query types configurados todavía.', 'bricks-api-integrator'); ?></p>
                 <?php else: ?>
                     <table class="wp-list-table widefat fixed striped">
                         <thead>
                             <tr>
-                                <th><?php esc_html_e('Source Name', 'bricks-api-integrator'); ?></th>
+                                <th><?php esc_html_e('Nombre del Query Type', 'bricks-api-integrator'); ?></th>
                                 <th><?php esc_html_e('Endpoint', 'bricks-api-integrator'); ?></th>
-                                <th><?php esc_html_e('Field Prefix', 'bricks-api-integrator'); ?></th>
-                                <th><?php esc_html_e('Items Path', 'bricks-api-integrator'); ?></th>
-                                <th><?php esc_html_e('Pagination', 'bricks-api-integrator'); ?></th>
-                                <th><?php esc_html_e('Actions', 'bricks-api-integrator'); ?></th>
+                                <th><?php esc_html_e('Prefijo de Campo', 'bricks-api-integrator'); ?></th>
+                                <th><?php esc_html_e('Ruta de Elementos', 'bricks-api-integrator'); ?></th>
+                                <th><?php esc_html_e('Paginación', 'bricks-api-integrator'); ?></th>
+                                <th><?php esc_html_e('Acciones', 'bricks-api-integrator'); ?></th>
                             </tr>
                         </thead>
                         <tbody>
@@ -208,7 +200,7 @@ function render_api_sources_page() {
                                     <td>
                                         <?php 
                                         $endpoint_index = isset($source['endpoint_id']) ? $source['endpoint_id'] : '';
-                                        echo isset($endpoints[$endpoint_index]['name']) ? esc_html($endpoints[$endpoint_index]['name']) : esc_html__('Unknown Endpoint', 'bricks-api-integrator');
+                                        echo isset($endpoints[$endpoint_index]['name']) ? esc_html($endpoints[$endpoint_index]['name']) : esc_html__('Endpoint Desconocido', 'bricks-api-integrator');
                                         ?>
                                     </td>
                                     <td><?php echo esc_html($source['field_prefix'] ?? ''); ?></td>
@@ -217,7 +209,7 @@ function render_api_sources_page() {
                                         <?php 
                                         $pagination_type = isset($source['pagination_type']) ? $source['pagination_type'] : 'none';
                                         if ($pagination_type === 'none') {
-                                            esc_html_e('None', 'bricks-api-integrator');
+                                            esc_html_e('Ninguno', 'bricks-api-integrator');
                                         } else {
                                             echo esc_html($pagination_type) . ': ' . esc_html($source['pagination_param'] ?? '');
                                         }
@@ -225,7 +217,7 @@ function render_api_sources_page() {
                                     </td>
                                     <td>
                                         <a href="<?php echo esc_url(admin_url('admin.php?page=bricks-api-integrator-sources&action=edit&source_id=' . $source_id)); ?>" class="button button-small"><?php esc_html_e('Edit', 'bricks-api-integrator'); ?></a>
-                                        <a href="<?php echo esc_url(wp_nonce_url(admin_url('admin.php?page=bricks-api-integrator-sources&action=delete&source_id=' . $source_id), 'delete_api_source_' . $source_id)); ?>" class="button button-small button-link-delete" onclick="return confirm('<?php esc_attr_e('Are you sure you want to delete this source?', 'bricks-api-integrator'); ?>')"><?php esc_html_e('Delete', 'bricks-api-integrator'); ?></a>
+                                        <a href="<?php echo esc_url(wp_nonce_url(admin_url('admin.php?page=bricks-api-integrator-sources&action=delete&source_id=' . $source_id), 'delete_api_source_' . $source_id)); ?>" class="button button-small button-link-delete" onclick="return confirm('<?php esc_attr_e('¿Estás seguro de que quieres eliminar este query type?', 'bricks-api-integrator'); ?>')"><?php esc_html_e('Eliminar', 'bricks-api-integrator'); ?></a>
                                     </td>
                                 </tr>
                             <?php endforeach; ?>
@@ -252,15 +244,15 @@ function render_api_sources_page() {
         $('#add-param').on('click', function() {
             var newRow = $('<div class="dynamic-param-row"></div>');
             newRow.html(
-                '<input type="text" name="param_names[]" placeholder="Parameter Name (e.g., id)" class="regular-text">' +
+                '<input type="text" name="param_names[]" placeholder="Nombre del Parámetro (ej. id)" class="regular-text">' +
                 '<select name="param_sources[]">' +
-                '  <option value="url">URL Parameter</option>' +
-                '  <option value="post">Post ID</option>' +
-                '  <option value="user">User ID</option>' +
-                '  <option value="static">Static Value</option>' +
+                '  <option value="url">Parámetro URL</option>' +
+                '  <option value="post">ID del Post</option>' +
+                '  <option value="user">ID del Usuario</option>' +
+                '  <option value="static">Valor Estático</option>' +
                 '</select>' +
-                '<input type="text" name="param_defaults[]" placeholder="Default Value (optional)" class="regular-text">' +
-                '<button type="button" class="button remove-param">Remove</button>'
+                '<input type="text" name="param_defaults[]" placeholder="Valor por Defecto (opcional)" class="regular-text">' +
+                '<button type="button" class="button remove-param">Eliminar</button>'
             );
             $('#dynamic-params-container').append(newRow);
         });
@@ -285,7 +277,7 @@ function render_api_sources_page() {
 }
 
 /**
- * Save API Source
+ * Save Query Type
  */
 function save_api_source() {
     // Validate and sanitize inputs
@@ -318,11 +310,11 @@ function save_api_source() {
     // Get existing sources
     $api_sources = get_option('bricks_api_sources', []);
     
-    // Check if we're editing an existing source
+    // Check if we're editing an existing query type
     $editing = isset($_POST['source_id']) && !empty($_POST['source_id']);
-    $source_id = $editing ? sanitize_text_field($_POST['source_id']) : 'api_source_' . time();
+    $source_id = $editing ? sanitize_text_field($_POST['source_id']) : 'query_type_' . time();
     
-    // Prepare source data
+    // Prepare query type data
     $source_data = [
         'name' => $source_name,
         'endpoint_id' => $endpoint_id,
@@ -331,20 +323,21 @@ function save_api_source() {
         'pagination_type' => $pagination_type,
         'pagination_param' => $pagination_param,
         'per_page_param' => $per_page_param,
-        'dynamic_params' => $dynamic_params
+        'dynamic_params' => $dynamic_params,
+        'query_type_name' => !empty($field_prefix) ? $field_prefix . $source_name : $source_name // Aplicar prefijo al nombre del query type
     ];
     
-    // Add or update source
+    // Add or update query type
     $api_sources[$source_id] = $source_data;
     
-    // Save updated sources
+    // Save updated query types
     update_option('bricks_api_sources', $api_sources);
     
     // Add success message
     add_settings_error(
         'bricks_api_sources',
         $editing ? 'source_updated' : 'source_added',
-        $editing ? __('API Source updated successfully.', 'bricks-api-integrator') : __('API Source added successfully.', 'bricks-api-integrator'),
+        $editing ? __('Query Type actualizado correctamente.', 'bricks-api-integrator') : __('Query Type añadido correctamente.', 'bricks-api-integrator'),
         'updated'
     );
     
@@ -356,7 +349,7 @@ function save_api_source() {
 }
 
 /**
- * Handle delete action
+ * Handle delete action for query types
  */
 function handle_api_source_actions() {
     if (!isset($_GET['page']) || $_GET['page'] !== 'bricks-api-integrator-sources') {
@@ -372,10 +365,10 @@ function handle_api_source_actions() {
             wp_die(__('Security check failed.', 'bricks-api-integrator'));
         }
         
-        // Get existing sources
+        // Get existing query types
         $api_sources = get_option('bricks_api_sources', []);
         
-        // Remove the source
+        // Remove the query type
         if (isset($api_sources[$source_id])) {
             unset($api_sources[$source_id]);
             update_option('bricks_api_sources', $api_sources);
@@ -384,7 +377,7 @@ function handle_api_source_actions() {
             add_settings_error(
                 'bricks_api_sources',
                 'source_deleted',
-                __('API Source deleted successfully.', 'bricks-api-integrator'),
+                __('Query Type eliminado correctamente.', 'bricks-api-integrator'),
                 'updated'
             );
         }
@@ -397,28 +390,30 @@ function handle_api_source_actions() {
 add_action('admin_init', 'handle_api_source_actions');
 
 /**
- * Register API Sources with Bricks Query Loop
+ * Register Query Types with Bricks Query Loop
  */
 function register_api_sources_with_bricks($sources) {
-    // Get configured API sources
+    // Get configured Query Types
     $api_sources = get_option('bricks_api_sources', []);
     
     // Log para depuración
-    error_log('Registrando API Sources con Bricks:');
-    error_log('API Sources disponibles: ' . print_r($api_sources, true));
+    error_log('Registrando Query Types con Bricks:');
+    error_log('Query Types disponibles: ' . print_r($api_sources, true));
     
     if (empty($api_sources)) {
-        error_log('No hay API Sources configurados');
+        error_log('No hay Query Types configurados');
         return $sources;
     }
     
-    // Add each API source to Bricks sources
+    // Add each Query Type to Bricks sources
     foreach ($api_sources as $source_id => $source) {
+        $display_name = isset($source['query_type_name']) ? $source['query_type_name'] : $source['name'];
+        
         $sources[$source_id] = [
-            'name'  => $source['name'],
+            'name'  => $display_name,
             'class' => 'Bricks_API_Source_Query', // Custom query class we'll create
         ];
-        error_log('Registrando API Source: ' . $source_id . ' - ' . $source['name']);
+        error_log('Registrando Query Type: ' . $source_id . ' - ' . $display_name);
     }
     
     // Log para depuración
@@ -426,10 +421,11 @@ function register_api_sources_with_bricks($sources) {
     
     return $sources;
 }
-add_filter('bricks/query/sources', 'register_api_sources_with_bricks');
+// TEMPORALMENTE DESACTIVADO PARA EVITAR DUPLICACIÓN
+// add_filter('bricks/query/sources', 'register_api_sources_with_bricks');
 
 /**
- * Create custom query class for API sources
+ * Create custom query class for Query Types
  */
 function register_api_source_query_class() {
     // Verificar si Bricks está activo
@@ -449,15 +445,15 @@ function register_api_source_query_class() {
     class Bricks_API_Source_Query extends Bricks_Query_Provider {
         public function __construct() {
             $this->name = 'api_source';
-            $this->label = esc_html__('API Source', 'bricks-api-integrator');
+            $this->label = esc_html__('Query Type API', 'bricks-api-integrator');
             
             // Set controls (pagination, etc.)
             $this->controls = [
                 'source_id' => [
                     'type'        => 'select',
-                    'label'       => esc_html__('API Source', 'bricks-api-integrator'),
+                    'label'       => esc_html__('Query Type', 'bricks-api-integrator'),
                     'options'     => $this->get_api_sources_options(),
-                    'description' => esc_html__('Select an API source configured in API Integrator.', 'bricks-api-integrator'),
+                    'description' => esc_html__('Selecciona un Query Type configurado en API Integrator.', 'bricks-api-integrator'),
                     'required'    => true,
                 ],
                 'pagination' => [
@@ -508,7 +504,7 @@ function register_api_source_query_class() {
         }
         
         /**
-         * Get API sources as options for the select control
+         * Get Query Types as options for the select control
          */
         private function get_api_sources_options() {
             $options = [];
@@ -516,10 +512,11 @@ function register_api_source_query_class() {
             
             if (!empty($api_sources)) {
                 foreach ($api_sources as $source_id => $source) {
-                    $options[$source_id] = $source['name'];
+                    $display_name = isset($source['query_type_name']) ? $source['query_type_name'] : $source['name'];
+                    $options[$source_id] = $display_name;
                 }
             } else {
-                $options['no_sources'] = esc_html__('No API sources configured', 'bricks-api-integrator');
+                $options['no_sources'] = esc_html__('No hay Query Types configurados', 'bricks-api-integrator');
             }
             
             return $options;
@@ -536,18 +533,18 @@ function register_api_source_query_class() {
                 return [
                     'count' => 0,
                     'items' => [],
-                    'error' => esc_html__('No API source selected or no sources available.', 'bricks-api-integrator'),
+                    'error' => esc_html__('No se ha seleccionado ningún Query Type o no hay Query Types disponibles.', 'bricks-api-integrator'),
                 ];
             }
             
-            // Get API sources
+            // Get Query Types
             $api_sources = get_option('bricks_api_sources', []);
             
             if (!isset($api_sources[$source_id])) {
                 return [
                     'count' => 0,
                     'items' => [],
-                    'error' => esc_html__('Selected API source not found.', 'bricks-api-integrator'),
+                    'error' => esc_html__('El Query Type seleccionado no se encontró.', 'bricks-api-integrator'),
                 ];
             }
             
@@ -906,7 +903,8 @@ function register_api_source_query_class() {
         }
     }
 }
-add_action('init', 'register_api_source_query_class');
+// TEMPORALMENTE DESACTIVADO PARA EVITAR DUPLICACIÓN
+// add_action('init', 'register_api_source_query_class');
 
 /**
  * Register sample data for Bricks Query Loop preview
@@ -917,9 +915,11 @@ function register_api_source_sample_data() {
         return;
     }
     
-    add_filter('bricks/query/sample_results', 'get_api_source_sample_data', 10, 2);
+    // TEMPORALMENTE DESACTIVADO PARA EVITAR DUPLICACIÓN
+    // add_filter('bricks/query/sample_results', 'get_api_source_sample_data', 10, 2);
 }
-add_action('init', 'register_api_source_sample_data');
+// TEMPORALMENTE DESACTIVADO PARA EVITAR DUPLICACIÓN
+// add_action('init', 'register_api_source_sample_data');
 
 /**
  * Get sample data for API sources in Bricks builder
