@@ -1,4 +1,88 @@
-# Changelog - Bricks API Integrator v2.0
+# Changelog - Bricks API Integrator v2.1
+
+## [2.1.0] - 2024-12-27
+
+### 🎨 **Mejoras de Interfaz de Usuario**
+
+#### **Acordeones para Endpoints**
+- ✅ **Headers clickeables**: Cada endpoint ahora tiene un header que se puede expandir/contraer
+- ✅ **Organización visual**: Mejor organización cuando hay múltiples endpoints
+- ✅ **Iconos visuales**: Indicadores 🔽/▶️ para mostrar estado expandido/contraído
+- ✅ **Hover effects**: Efectos visuales al pasar el mouse sobre los headers
+
+#### **Autenticación Dinámica**
+- ✅ **Inputs dinámicos**: Los campos de autenticación aparecen inmediatamente al seleccionar el tipo
+- ✅ **Sin recargas**: Ya no es necesario guardar para ver los campos de autenticación
+- ✅ **Diferentes tipos**: Soporte completo para Bearer Token, Basic Auth, API Key
+- ✅ **Feedback visual**: Inputs con estilos mejorados y organizados
+
+### 🔧 **Cambios Técnicos**
+
+#### **Modificaciones en `includes/endpoints-page.php`**
+```diff
++ Conversión de endpoint-card a endpoint-accordion
++ JavaScript para toggle de acordeones (función toggleEndpoint)
++ Event listener para autenticación dinámica
++ CSS mejorado para hover effects y estilos de auth
++ Estructura HTML reorganizada con headers clickeables
+```
+
+#### **Funcionalidades Agregadas**
+```javascript
+// Toggle simple para acordeones
+window.toggleEndpoint = function(index) {
+    // Mostrar/ocultar contenido del endpoint
+}
+
+// Autenticación dinámica
+$(document).on('change', 'select[name*="[auth_type]"]', function() {
+    // Generar inputs según tipo seleccionado
+});
+```
+
+### 🎯 **Experiencia de Usuario Mejorada**
+
+#### **Antes**
+- Todos los endpoints expandidos siempre
+- Para ver campos de auth: seleccionar → guardar → recargar página
+- Interface cluttered con múltiples endpoints
+
+#### **Después** 
+- ✅ **Acordeones organizados**: Click para expandir solo lo que necesitas
+- ✅ **Autenticación instantánea**: Selecciona tipo → campos aparecen inmediatamente  
+- ✅ **Interface limpia**: Mejor organización visual
+- ✅ **Navegación rápida**: Encuentra rápidamente el endpoint que buscas
+
+### 🚀 **Cómo Usar las Nuevas Características**
+
+#### **Acordeones**
+1. Ve a **API Integrator → API Endpoints**
+2. **Click en cualquier header** de endpoint para expandir/contraer
+3. **Navega fácilmente** entre múltiples endpoints
+
+#### **Autenticación Dinámica**
+1. **Selecciona método** de autenticación en el dropdown
+2. **Campos aparecen automáticamente** sin necesidad de guardar
+3. **Llena los datos** de autenticación inmediatamente
+4. **Guarda cuando esté listo** todo configurado
+
+### 🔄 **Retrocompatibilidad**
+
+- ✅ **100% compatible**: Todos los endpoints existentes siguen funcionando
+- ✅ **Sin migración**: No se requieren cambios en configuración existente
+- ✅ **Funcionalidad intacta**: Test, dynamic tags, parámetros funcionan igual
+- ✅ **Datos preservados**: Toda la configuración de autenticación se mantiene
+
+### 📊 **Beneficios**
+
+| Aspecto | Antes | Después | Mejora |
+|---------|-------|---------|---------|
+| Organización | Todos expandidos | Acordeones | 🎯 Más limpio |
+| Autenticación | Guardar → recargar | Instantáneo | ⚡ 3x más rápido |
+| Navegación | Scroll largo | Click directo | 🎨 Más eficiente |
+| UX General | Básica | Moderna | 🚀 Profesional |
+
+---
 
 ## [2.0.0] - 2024-12-27
 

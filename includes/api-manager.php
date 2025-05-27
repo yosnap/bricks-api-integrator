@@ -81,8 +81,9 @@ trait APIManager {
             return self::$api_cache[$cache_key];
         }
         
-        // Cache de WordPress
-        if (!$force_refresh) {
+        // Cache de WordPress (solo si no está deshabilitado)
+        $cache_duration = get_option('bricks_api_cache_duration', 300);
+        if (!$force_refresh && $cache_duration > 0) {
             $cached_data = get_transient($cache_key);
             if ($cached_data !== false) {
                 self::$api_cache[$cache_key] = $cached_data;
@@ -123,8 +124,15 @@ trait APIManager {
             $data = [$data];
         }
         
-        // Guardar en cache (1 hora por defecto)
-        set_transient($cache_key, $data, HOUR_IN_SECONDS);
+        // Guardar en cache (configurable, por defecto 5 minutos)
+        $cache_duration = get_option('bricks_api_cache_duration', 300); // 5 minutos por defecto
+        
+        // Si el caché está deshabilitado (0), no guardar en caché
+        if ($cache_duration > 0) {
+            set_transient($cache_key, $data, $cache_duration);
+        }
+        
+        // Siempre guardar en caché estático para esta petición
         self::$api_cache[$cache_key] = $data;
         
         return $data;

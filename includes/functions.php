@@ -67,6 +67,29 @@ if (!function_exists('bricks_api_integrator_assets')) {
         
         // Enqueue JavaScript
         wp_enqueue_script('bricks-api-integrator-script', BRICKS_API_INTEGRATOR_URL . 'assets/bricks-api-integrator.js', ['jquery'], null, true);
+        
+        // Debug script solo si WP_DEBUG está activo
+        if (defined('WP_DEBUG') && WP_DEBUG) {
+            if (file_exists(BRICKS_API_INTEGRATOR_PATH . 'debug-dynamic-tags.js')) {
+                wp_enqueue_script('bricks-api-integrator-debug', BRICKS_API_INTEGRATOR_URL . 'debug-dynamic-tags.js', ['jquery'], null, true);
+            }
+            
+            if (file_exists(BRICKS_API_INTEGRATOR_PATH . 'analyze-json-structure.js')) {
+                wp_enqueue_script('bricks-api-integrator-analyze', BRICKS_API_INTEGRATOR_URL . 'analyze-json-structure.js', ['jquery'], null, true);
+            }
+            
+            if (file_exists(BRICKS_API_INTEGRATOR_PATH . 'test-field-extractor.js')) {
+                wp_enqueue_script('bricks-api-integrator-test', BRICKS_API_INTEGRATOR_URL . 'test-field-extractor.js', ['jquery'], null, true);
+            }
+            
+            if (file_exists(BRICKS_API_INTEGRATOR_PATH . 'verificar-tags.js')) {
+                wp_enqueue_script('bricks-api-integrator-verificar', BRICKS_API_INTEGRATOR_URL . 'verificar-tags.js', ['jquery'], null, true);
+            }
+            
+            if (file_exists(BRICKS_API_INTEGRATOR_PATH . 'test-especialidades.js')) {
+                wp_enqueue_script('bricks-api-integrator-especialidades', BRICKS_API_INTEGRATOR_URL . 'test-especialidades.js', ['jquery'], null, true);
+            }
+        }
     }
 }
 
@@ -129,17 +152,33 @@ if (!function_exists('bricks_api_integrator_dashboard')) {
                 </div>
             </div>
             
-            <!-- Botón de regeneración -->
+            <!-- Botones de gestión simplificados -->
             <div style="background: #fff; padding: 15px; border: 1px solid #ddd; border-radius: 5px; margin: 20px 0;">
-                <h3 style="margin-top: 0;">🔄 Sincronización con Bricks</h3>
-                <p>Si los datos no se corresponden en Bricks Builder, regenera la configuración:</p>
-                <button type="button" id="regenerate-bricks-data" class="button button-primary">🔄 Regenerar Dynamic Tags y Query Types</button>
-                <button type="button" id="clear-cache-data" class="button" style="margin-left: 10px;">🗑️ Limpiar Cache</button>
-                <button type="button" id="clean-duplicates-data" class="button" style="margin-left: 10px; background: #f39c12; color: white;">🧹 Limpiar Duplicados</button>
-                <button type="button" id="clean-query-types-data" class="button" style="margin-left: 10px; background: #8e44ad; color: white;">🔧 Limpiar Query Types</button>
-                <button type="button" id="aggressive-cleanup-data" class="button" style="margin-left: 10px; background: #e74c3c; color: white;">💣 Limpieza TOTAL</button>
-                <button type="button" id="reset-plugin-data" class="button button-secondary" style="margin-left: 10px; background: #dc3232; color: white;">⚠️ Reset Completo</button>
-                <div id="regenerate-result" style="margin-top: 10px;"></div>
+                <h3 style="margin-top: 0;">🔧 Gestión del Plugin</h3>
+                <p>Herramientas para el mantenimiento y configuración del plugin:</p>
+                
+                <!-- Configuración de caché -->
+                <div style="background: #f8f9fa; padding: 12px; border-radius: 5px; margin-bottom: 15px;">
+                    <h4 style="margin: 0 0 8px 0;">⚡ Configuración de Caché</h4>
+                    <label style="display: inline-block; margin-right: 15px;">
+                        <strong>Duración del caché:</strong>
+                        <select id="cache-duration" style="margin-left: 8px;">
+                            <option value="0">Sin caché (siempre actualizado)</option>
+                            <option value="60">1 minuto</option>
+                            <option value="300" selected>5 minutos (recomendado)</option>
+                            <option value="900">15 minutos</option>
+                            <option value="3600">1 hora</option>
+                        </select>
+                    </label>
+                    <button type="button" id="update-cache-duration" class="button" style="margin-left: 10px;">💾 Aplicar</button>
+                    <p style="margin: 8px 0 0 0; font-size: 13px; color: #666;">
+                        <strong>💡 Nota:</strong> Durante desarrollo usa "Sin caché" o "1 minuto". Para producción usa "5 minutos" o más.
+                    </p>
+                </div>
+                
+                <button type="button" id="clear-cache-data" class="button button-primary">🗑️ Limpiar Caché Ahora</button>
+                <button type="button" id="reset-plugin-data" class="button" style="margin-left: 10px; background: #dc3232; color: white;">⚠️ Reset</button>
+                <div id="management-result" style="margin-top: 10px;"></div>
             </div>
             
             <h2>🚀 Primeros Pasos</h2>
@@ -153,125 +192,95 @@ if (!function_exists('bricks_api_integrator_dashboard')) {
             
             <script>
             jQuery(document).ready(function($) {
-                // Regenerar datos de Bricks
-                $('#regenerate-bricks-data').click(function() {
+                // Cargar configuración de caché actual
+                loadCacheSettings();
+                
+                // Actualizar duración de caché
+                $('#update-cache-duration').click(function() {
+                    var duration = $('#cache-duration').val();
                     var $button = $(this);
-                    var $result = $('#regenerate-result');
+                    var $result = $('#management-result');
                     
-                    $button.prop('disabled', true).text('🔄 Regenerando...');
-                    $result.html('<p style="color: orange;">Regenerando configuración...</p>');
+                    $button.prop('disabled', true).text('💾 Aplicando...');
                     
                     $.post(ajaxurl, {
-                        action: 'regenerate_bricks_integration',
-                        nonce: '<?php echo wp_create_nonce('regenerate_bricks_integration'); ?>'
+                        action: 'update_cache_duration',
+                        duration: duration,
+                        nonce: '<?php echo wp_create_nonce('update_cache_duration'); ?>'
                     }, function(response) {
                         if (response.success) {
-                            $result.html('<p style="color: green;">✅ ' + response.data.message + '</p>');
-                            setTimeout(function() {
-                                location.reload();
-                            }, 2000);
+                            $result.html('<p style="color: green;">✅ Configuración de caché actualizada</p>');
+                            // Limpiar caché automáticamente después de cambiar configuración
+                            clearApiCache();
                         } else {
-                            $result.html('<p style="color: red;">❌ Error: ' + response.data.message + '</p>');
+                            $result.html('<p style="color: red;">❌ Error al actualizar configuración</p>');
                         }
                     }).always(function() {
-                        $button.prop('disabled', false).text('🔄 Regenerar Dynamic Tags y Query Types');
+                        $button.prop('disabled', false).text('💾 Aplicar');
+                        setTimeout(function() {
+                            $result.html('');
+                        }, 3000);
                     });
-                });
-                
-                // Limpiar duplicados
-                $('#clean-duplicates-data').click(function() {
-                    var $button = $(this);
-                    var $result = $('#regenerate-result');
-                    
-                    $button.prop('disabled', true).text('🧹 Limpiando...');
-                    $result.html('<p style="color: orange;">Eliminando duplicados...</p>');
-                    
-                    // Hacer petición AJAX
-                    $.post(ajaxurl, {
-                        action: 'clean_duplicates',
-                        nonce: '<?php echo wp_create_nonce('clean_duplicates'); ?>'
-                    }, function(response) {
-                        if (response.success) {
-                            $result.html('<p style="color: green;">✅ ' + response.data.message + '</p>');
-                            setTimeout(function() {
-                                location.reload();
-                            }, 2000);
-                        } else {
-                            $result.html('<p style="color: red;">❌ Error: ' + response.data.message + '</p>');
-                        }
-                    }).always(function() {
-                        $button.prop('disabled', false).text('🧹 Limpiar Duplicados');
-                    });
-                });
-                
-                // Limpieza TOTAL - AGRESIVA
-                $('#aggressive-cleanup-data').click(function() {
-                    if (!confirm('⚠️ PELIGRO: Esto eliminará TODO el contenido del plugin y empezará desde cero. ¿Estás SEGURO?')) {
-                        return;
-                    }
-                    
-                    var $button = $(this);
-                    var $result = $('#regenerate-result');
-                    
-                    $button.prop('disabled', true).text('💣 Eliminando TODO...');
-                    $result.html('<p style="color: red;">⚠️ Eliminando TODA la configuración del plugin...</p>');
-                    
-                    // Realizar limpieza agresiva
-                    window.location.href = window.location.href + '&aggressive_cleanup=1';
                 });
                 
                 // Limpiar cache
                 $('#clear-cache-data').click(function() {
-                    var $button = $(this);
+                    clearApiCache();
+                });
+                
+                // Función para limpiar caché
+                function clearApiCache() {
+                    var $button = $('#clear-cache-data');
+                    var $result = $('#management-result');
                     
                     $button.prop('disabled', true).text('🔄 Limpiando...');
+                    $result.html('<p style="color: orange;">🔄 Limpiando caché...</p>');
                     
                     $.post(ajaxurl, {
                         action: 'clear_api_cache',
                         nonce: '<?php echo wp_create_nonce('clear_api_cache'); ?>'
                     }, function(response) {
-                        alert('✅ Cache limpiado correctamente');
-                    }).always(function() {
-                        $button.prop('disabled', false).text('🗑️ Limpiar Cache');
-                    });
-                });
-                
-                // Limpiar Query Types específicamente
-                $('#clean-query-types-data').click(function() {
-                    var $button = $(this);
-                    var $result = $('#regenerate-result');
-                    
-                    $button.prop('disabled', true).text('🔧 Limpiando Query Types...');
-                    $result.html('<p style="color: orange;">Eliminando Query Types duplicados...</p>');
-                    
-                    $.post(ajaxurl, {
-                        action: 'clean_query_types',
-                        nonce: '<?php echo wp_create_nonce('clean_query_types'); ?>'
-                    }, function(response) {
                         if (response.success) {
-                            $result.html('<p style="color: green;">✅ ' + response.data.message + '</p>');
-                            setTimeout(function() {
-                                location.reload();
-                            }, 2000);
+                            $result.html('<p style="color: green;">✅ Caché limpiado correctamente</p>');
                         } else {
-                            $result.html('<p style="color: red;">❌ Error: ' + response.data.message + '</p>');
+                            $result.html('<p style="color: red;">❌ Error al limpiar caché</p>');
                         }
                     }).always(function() {
-                        $button.prop('disabled', false).text('🔧 Limpiar Query Types');
+                        $button.prop('disabled', false).text('🗑️ Limpiar Caché Ahora');
+                        setTimeout(function() {
+                            $result.html('');
+                        }, 3000);
                     });
-                });
+                }
                 
-                // Reset completo
+                // Cargar configuración actual
+                function loadCacheSettings() {
+                    $.post(ajaxurl, {
+                        action: 'get_cache_duration',
+                        nonce: '<?php echo wp_create_nonce('get_cache_duration'); ?>'
+                    }, function(response) {
+                        if (response.success && response.data.duration) {
+                            $('#cache-duration').val(response.data.duration);
+                        }
+                    });
+                }
+                
+                // Reset completo con alerta de advertencia
                 $('#reset-plugin-data').click(function() {
-                    if (!confirm('⚠️ ADVERTENCIA: Esto eliminará TODOS los datos del plugin. ¿Estás seguro?')) {
+                    if (!confirm('⚠️ ADVERTENCIA: Esta acción eliminará TODOS los datos de las APIs configuradas.\n\n• Se perderán todos los endpoints configurados\n• Se eliminarán todos los query types\n• Se borrarán todas las configuraciones\n\n¿Estás completamente seguro de que quieres continuar?')) {
+                        return;
+                    }
+                    
+                    // Segunda confirmación
+                    if (!confirm('🚨 ÚLTIMA ADVERTENCIA\n\nEsta acción NO se puede deshacer.\nTodos los datos del plugin se perderán permanentemente.\n\n¿Proceder con el reset completo?')) {
                         return;
                     }
                     
                     var $button = $(this);
-                    var $result = $('#regenerate-result');
+                    var $result = $('#management-result');
                     
                     $button.prop('disabled', true).text('⚠️ Reseteando...');
-                    $result.html('<p style="color: orange;">Eliminando todos los datos...</p>');
+                    $result.html('<p style="color: red;">⚠️ Eliminando todos los datos del plugin...</p>');
                     
                     $.post(ajaxurl, {
                         action: 'reset_plugin_data',
@@ -286,7 +295,7 @@ if (!function_exists('bricks_api_integrator_dashboard')) {
                             $result.html('<p style="color: red;">❌ Error: ' + response.data.message + '</p>');
                         }
                     }).always(function() {
-                        $button.prop('disabled', false).text('⚠️ Reset Completo');
+                        $button.prop('disabled', false).text('⚠️ Reset');
                     });
                 });
             });
@@ -298,7 +307,7 @@ if (!function_exists('bricks_api_integrator_dashboard')) {
 
 
 /**
- * Incluir página de endpoints
+ * Incluir páginas de administración
  */
 require_once BRICKS_API_INTEGRATOR_PATH . 'includes/endpoints-page.php';
 

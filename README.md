@@ -1,6 +1,6 @@
-# Bricks API Integrator v2.0
+# Bricks API Integrator v2.1
 
-> Sistema completo para integrar APIs externas con Bricks Builder - Crea sitios web dinámicos con páginas de detalle automáticas y URLs limpias.
+> Sistema completo para integrar APIs externas con Bricks Builder - Crea sitios web dinámicos con páginas de detalle automáticas, URLs limpias y una interfaz moderna con acordeones.
 
 [![WordPress](https://img.shields.io/badge/WordPress-5.0+-blue.svg)]()
 [![Bricks Builder](https://img.shields.io/badge/Bricks%20Builder-1.5+-green.svg)]()
@@ -12,10 +12,25 @@
 **Transforma cualquier API en un sitio web completo** con WordPress y Bricks Builder. Crea automáticamente:
 
 - ✅ **Dynamic Tags** para mostrar datos de API en Bricks
-- ✅ **Query Types** para Query Loop de listados
+- ✅ **Query Types** para Query Loop de listados  
 - ✅ **URLs limpias** como `/productos/123/` para páginas de detalle
 - ✅ **Parámetros dinámicos** que se adaptan al contexto actual
 - ✅ **Templates automáticas** con rewrite rules de WordPress
+- ✅ **Interfaz moderna** con acordeones y autenticación dinámica
+
+## 🆕 **Novedades v2.1**
+
+### **🎨 Interfaz Mejorada**
+- **Acordeones organizados**: Cada endpoint en su propio acordeón expandible
+- **Autenticación dinámica**: Campos de auth aparecen instantáneamente al seleccionar tipo
+- **Headers clickeables**: Navegación rápida entre endpoints múltiples
+- **Experiencia fluida**: Sin recargas de página innecesarias
+
+### **⚡ Configuración Más Rápida**
+```
+ANTES: Seleccionar auth → Guardar → Recargar → Ver campos
+DESPUÉS: Seleccionar auth → ¡Campos aparecen inmediatamente!
+```
 
 ## 🚀 Características Principales
 

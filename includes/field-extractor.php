@@ -16,9 +16,9 @@ if (!defined('ABSPATH')) {
 trait FieldExtractor {
     
     /**
-     * Extraer campos dinámicamente
+     * Extraer campos dinámicamente - VERSIÓN MEJORADA PARA DATOS COMPLEJOS
      */
-    public function extract_fields_from_data($data, $prefix = '', $max_depth = 2) {
+    public function extract_fields_from_data($data, $prefix = '', $max_depth = 3) {
         $fields = [];
         
         if (!is_array($data) && !is_object($data)) {
@@ -29,21 +29,126 @@ trait FieldExtractor {
             $field_key = $prefix ? $prefix . '_' . $key : $key;
             $field_key = $this->sanitize_field_key($field_key);
             
-            if ((is_array($value) || is_object($value)) && $max_depth > 0) {
-                // Campo principal
-                $fields[$field_key] = $this->format_field_label($key);
+            if (is_array($value)) {
+                // Detectar tipo de array
+                $array_type = $this->detect_array_type($value);
                 
-                // Campos anidados (limitados)
-                if (is_array($value) && !empty($value) && !is_numeric(array_keys($value)[0])) {
-                    $nested_fields = $this->extract_fields_from_data($value, $field_key, $max_depth - 1);
-                    $fields = array_merge($fields, array_slice($nested_fields, 0, 3)); // Limitar a 3 campos anidados
+                switch ($array_type) {
+                    case 'simple_list':
+                        // Array simple: ["valor1", "valor2", "valor3"]
+                        $fields[$field_key] = $this->format_field_label($key) . ' (Lista)';
+                        $fields[$field_key . '_first'] = $this->format_field_label($key) . ' (Primero)';
+                        $fields[$field_key . '_count'] = $this->format_field_label($key) . ' (Cantidad)';
+                        $fields[$field_key . '_join'] = $this->format_field_label($key) . ' (Unido)';
+                        break;
+                        
+                    case 'object_list':
+                        // Array de objetos: [{"nombre": "Juan", "edad": 30}, {...}]
+                        $fields[$field_key] = $this->format_field_label($key) . ' (Lista de Objetos)';
+                        $fields[$field_key . '_count'] = $this->format_field_label($key) . ' (Cantidad)';
+                        $fields[$field_key . '_join'] = $this->format_field_label($key) . ' (Unidos)';
+                        
+                        // Extraer TODOS los campos del primer objeto (no solo algunos)
+                        if (!empty($value[0]) && (is_array($value[0]) || is_object($value[0]))) {
+                            foreach ((array)$value[0] as $sub_key => $sub_value) {
+                                $sub_field_key = $field_key . '_first_' . $this->sanitize_field_key($sub_key);
+                                $fields[$sub_field_key] = $this->format_field_label($key) . ' > ' . $this->format_field_label($sub_key) . ' (Primero)';
+                            }
+                        }
+                        
+                        // NUEVO: Generar tags para acceder a elementos específicos por índice
+                        if (count($value) > 1) {
+                            // Tags para acceder a elementos específicos (útil para bucles)
+                            foreach ((array)$value[0] as $sub_key => $sub_value) {
+                                // Tag para acceder a cualquier elemento: {tag_item_campo}
+                                $item_field_key = $field_key . '_item_' . $this->sanitize_field_key($sub_key);
+                                $fields[$item_field_key] = $this->format_field_label($key) . ' > ' . $this->format_field_label($sub_key) . ' (Por Índice)';
+                            }
+                            
+                            // Tags especiales para navegación
+                            $fields[$field_key . '_last'] = $this->format_field_label($key) . ' (Último)';
+                            foreach ((array)$value[0] as $sub_key => $sub_value) {
+                                $last_field_key = $field_key . '_last_' . $this->sanitize_field_key($sub_key);
+                                $fields[$last_field_key] = $this->format_field_label($key) . ' > ' . $this->format_field_label($sub_key) . ' (Último)';
+                            }
+                        }
+                        break;
+                        
+                    case 'associative':
+                        // Array asociativo: {"propiedad1": "valor1", "propiedad2": "valor2"}
+                        $fields[$field_key] = $this->format_field_label($key) . ' (Objeto)';
+                        
+                        // Extraer TODOS los campos anidados (aumentado el límite)
+                        if ($max_depth > 0) {
+                            $nested_fields = $this->extract_fields_from_data($value, $field_key, $max_depth - 1);
+                            $fields = array_merge($fields, $nested_fields); // Sin límite artificial
+                        }
+                        break;
+                        
+                    case 'mixed':
+                        // Array mixto
+                        $fields[$field_key] = $this->format_field_label($key) . ' (Datos Mixtos)';
+                        $fields[$field_key . '_json'] = $this->format_field_label($key) . ' (JSON)';
+                        break;
                 }
+                
+            } elseif (is_object($value)) {
+                // Objeto simple
+                $fields[$field_key] = $this->format_field_label($key) . ' (Objeto)';
+                
+                if ($max_depth > 0) {
+                    $nested_fields = $this->extract_fields_from_data($value, $field_key, $max_depth - 1);
+                    $fields = array_merge($fields, $nested_fields); // Sin límite artificial
+                }
+                
             } else {
+                // Campo simple (string, number, boolean)
                 $fields[$field_key] = $this->format_field_label($key);
             }
         }
         
         return $fields;
+    }
+    
+    /**
+     * Detectar tipo de array para manejo específico
+     */
+    private function detect_array_type($array) {
+        if (empty($array)) {
+            return 'empty';
+        }
+        
+        // Verificar si es array indexado vs asociativo
+        $keys = array_keys($array);
+        $is_indexed = ($keys === array_keys($keys));
+        
+        if (!$is_indexed) {
+            return 'associative'; // Array asociativo: {"key": "value"}
+        }
+        
+        // Es array indexado, verificar contenido
+        $first_element = reset($array);
+        $types = array_map('gettype', array_slice($array, 0, 3)); // Revisar primeros 3 elementos
+        $unique_types = array_unique($types);
+        
+        if (count($unique_types) > 1) {
+            return 'mixed'; // Tipos mixtos
+        }
+        
+        $dominant_type = $unique_types[0];
+        
+        switch ($dominant_type) {
+            case 'array':
+            case 'object':
+                return 'object_list'; // Array de objetos/arrays
+            case 'string':
+            case 'integer':
+            case 'double':
+            case 'boolean':
+                return 'simple_list'; // Lista simple de valores
+            default:
+                return 'mixed';
+        }
     }
     
     /**

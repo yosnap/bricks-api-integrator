@@ -2,7 +2,7 @@
 /*
     * Plugin Name: Bricks API Integrator
     * Description: Integra el constructor de páginas Bricks con APIs externas de forma dinámica.
-    * Version: 2.0
+    * Version: 2.1.0
     * Author: sn4p Dev
     * Author URI: https://sn4p.dev
     * License: GPL2
@@ -15,7 +15,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Definir constantes del plugin
-define('BRICKS_API_INTEGRATOR_VERSION', '2.0');
+define('BRICKS_API_INTEGRATOR_VERSION', '2.1.0');
 define('BRICKS_API_INTEGRATOR_PATH', plugin_dir_path(__FILE__));
 define('BRICKS_API_INTEGRATOR_URL', plugin_dir_url(__FILE__));
 
@@ -164,12 +164,16 @@ class BricksAPIIntegrator {
         // AJAX hooks
         add_action('wp_ajax_test_api_endpoint', [$this, 'ajax_test_api_endpoint']);
         add_action('wp_ajax_test_advanced_api_endpoint', [$this, 'ajax_test_advanced_api_endpoint']);
+        add_action('wp_ajax_get_dynamic_tags_for_endpoint', [$this, 'ajax_get_dynamic_tags_for_endpoint']);
         add_action('wp_ajax_clear_api_cache', [$this, 'ajax_clear_api_cache']);
         add_action('wp_ajax_regenerate_bricks_integration', [$this, 'ajax_regenerate_bricks_integration']);
         add_action('wp_ajax_reset_plugin_data', [$this, 'ajax_reset_plugin_data']);
         add_action('wp_ajax_clean_duplicates', [$this, 'ajax_clean_duplicates']);
         add_action('wp_ajax_clean_query_types', [$this, 'ajax_clean_query_types']);
         add_action('wp_ajax_clean_debug_sources', [$this, 'ajax_clean_debug_sources']);
+        add_action('wp_ajax_update_cache_duration', [$this, 'ajax_update_cache_duration']);
+        add_action('wp_ajax_get_cache_duration', [$this, 'ajax_get_cache_duration']);
+        add_action('wp_ajax_refresh_endpoint_data', [$this, 'ajax_refresh_endpoint_data']);
         
         // Shortcode para debug
         if (defined('WP_DEBUG') && WP_DEBUG) {
@@ -540,14 +544,14 @@ class BricksAPIIntegrator {
     }
     
     /**
-     * RENDERIZADO DINÁMICO - Con Soporte para Parámetros Dinámicos
+     * RENDERIZADO DINÁMICO - Con Soporte para Arrays Complejos
      */
     public function render_dynamic_tags_dynamic($content, $post, $context) {
         if (strpos($content, '{snap_') === false) {
             return $content;
         }
         
-        // Procesar tags con prefijo fijo "snap_" - SISTEMA OPTIMIZADO CON PARÁMETROS
+        // Procesar tags con prefijo fijo "snap_" - SISTEMA MEJORADO PARA ARRAYS
         $content = preg_replace_callback(
             '/\{snap_([a-zA-Z0-9_]+)_([a-zA-Z0-9_]+)\}/',
             function($matches) use ($post, $context) {
@@ -563,15 +567,22 @@ class BricksAPIIntegrator {
                     if (is_array($api_data) || is_object($api_data)) {
                         $data_array = (array) $api_data;
                         
+                        // Manejar campos especiales de arrays
+                        if (strpos($field, '_item_') !== false) {
+                            return $this->handle_array_item_field($data_array, $field, $context);
+                        } elseif (strpos($field, '_last_') !== false) {
+                            return $this->handle_array_last_field($data_array, $field);
+                        }
+                        
                         // Buscar el campo exacto
                         if (isset($data_array[$field])) {
-                            return $this->format_field_output($data_array[$field]);
+                            return $this->format_field_output($data_array[$field], $field);
                         }
                         
                         // Buscar variaciones del campo
                         foreach ($data_array as $key => $value) {
                             if (sanitize_key($key) === $field) {
-                                return $this->format_field_output($value);
+                                return $this->format_field_output($value, $field);
                             }
                         }
                     }
@@ -585,6 +596,82 @@ class BricksAPIIntegrator {
         );
         
         return $content;
+    }
+    
+    /**
+     * Manejar campos de array por índice
+     */
+    private function handle_array_item_field($data_array, $field, $context) {
+        // Formato: especialidades_item_nombre
+        $parts = explode('_item_', $field);
+        if (count($parts) !== 2) {
+            return '';
+        }
+        
+        $array_name = $parts[0];
+        $item_field = $parts[1];
+        
+        if (!isset($data_array[$array_name]) || !is_array($data_array[$array_name])) {
+            return '';
+        }
+        
+        // Obtener índice del contexto o usar 0 por defecto
+        $index = $this->get_array_index_from_context($context) ?: 0;
+        $array_data = $data_array[$array_name];
+        
+        if (isset($array_data[$index]) && is_array($array_data[$index])) {
+            $item_data = $array_data[$index];
+            if (isset($item_data[$item_field])) {
+                return $this->format_field_output($item_data[$item_field], $item_field);
+            }
+        }
+        
+        return '';
+    }
+    
+    /**
+     * Manejar campos del último elemento del array
+     */
+    private function handle_array_last_field($data_array, $field) {
+        // Formato: especialidades_last_nombre
+        $parts = explode('_last_', $field);
+        if (count($parts) !== 2) {
+            return '';
+        }
+        
+        $array_name = $parts[0];
+        $item_field = $parts[1];
+        
+        if (!isset($data_array[$array_name]) || !is_array($data_array[$array_name])) {
+            return '';
+        }
+        
+        $array_data = $data_array[$array_name];
+        $last_item = end($array_data);
+        
+        if (is_array($last_item) && isset($last_item[$item_field])) {
+            return $this->format_field_output($last_item[$item_field], $item_field);
+        }
+        
+        return '';
+    }
+    
+    /**
+     * Obtener índice de array del contexto (para bucles)
+     */
+    private function get_array_index_from_context($context) {
+        // En contexto de loop, Bricks puede proporcionar índice
+        if (isset($context['loop_index'])) {
+            return $context['loop_index'];
+        }
+        
+        // Obtener de variable global de Bricks si existe
+        global $bricks_loop_index;
+        if (isset($bricks_loop_index)) {
+            return $bricks_loop_index;
+        }
+        
+        return 0; // Por defecto, primer elemento
     }
     
     /**
@@ -629,13 +716,13 @@ class BricksAPIIntegrator {
             
             // Buscar el campo exacto
             if (isset($data_array[$field])) {
-                return $this->format_field_output($data_array[$field]);
+                return $this->format_field_output($data_array[$field], $field);
             }
             
             // Buscar variaciones del campo
             foreach ($data_array as $key => $value) {
                 if (sanitize_key($key) === $field) {
-                    return $this->format_field_output($value);
+                    return $this->format_field_output($value, $field);
                 }
             }
             
@@ -649,11 +736,16 @@ class BricksAPIIntegrator {
     }
     
     /**
-     * Construir URL dinámica con parámetros del contexto actual
+     * Construir URL dinámica con parámetros del contexto actual - MEJORADO PARA PLACEHOLDERS
      */
     private function build_dynamic_url($endpoint, $post = null, $context = null) {
         $url = $endpoint['url'];
         $dynamic_params = $endpoint['dynamic_params'] ?? [];
+        
+        // NUEVO: Manejar placeholders en la URL (como {id})
+        if (strpos($url, '{') !== false) {
+            $url = $this->replace_url_placeholders($url, $endpoint, $post, $context);
+        }
         
         if (empty($dynamic_params)) {
             return $url;
@@ -741,18 +833,244 @@ class BricksAPIIntegrator {
     }
     
     /**
-     * Formatear salida de campo
+     * NUEVO: Reemplazar placeholders en URLs (como {id})
      */
-    private function format_field_output($value) {
-        if (is_array($value)) {
-            return implode(', ', array_filter(array_slice($value, 0, 5)));
-        } elseif (is_object($value)) {
-            return json_encode($value);
-        } elseif (is_bool($value)) {
-            return $value ? 'Sí' : 'No';
+    private function replace_url_placeholders($url, $endpoint, $post = null, $context = null) {
+        // Patrón para encontrar placeholders: {variable}
+        preg_match_all('/\{([^}]+)\}/', $url, $matches);
+        
+        if (empty($matches[1])) {
+            return $url;
         }
         
-        return sanitize_text_field((string) $value);
+        foreach ($matches[1] as $placeholder) {
+            $replacement_value = $this->get_placeholder_value($placeholder, $endpoint, $post, $context);
+            $url = str_replace('{' . $placeholder . '}', $replacement_value, $url);
+            
+            if (defined('WP_DEBUG') && WP_DEBUG) {
+                error_log("Placeholder {$placeholder} reemplazado con: {$replacement_value}");
+            }
+        }
+        
+        return $url;
+    }
+    
+    /**
+     * NUEVO: Obtener valor para un placeholder
+     */
+    private function get_placeholder_value($placeholder, $endpoint, $post = null, $context = null) {
+        // Buscar en parámetros dinámicos si hay uno que corresponda
+        $dynamic_params = $endpoint['dynamic_params'] ?? [];
+        
+        foreach ($dynamic_params as $param) {
+            if ($param['name'] === $placeholder) {
+                return $this->get_param_value_by_source($param, $post, $context);
+            }
+        }
+        
+        // Valores por defecto según el nombre del placeholder
+        switch ($placeholder) {
+            case 'id':
+                // ID del post actual
+                if ($post && isset($post->ID)) {
+                    return $post->ID;
+                } elseif (is_singular()) {
+                    return get_the_ID();
+                }
+                return '12'; // Valor por defecto para testing
+                
+            case 'slug':
+                // Slug del post actual
+                if ($post && isset($post->post_name)) {
+                    return $post->post_name;
+                } elseif (is_singular()) {
+                    $current_post = get_post();
+                    return $current_post ? $current_post->post_name : '';
+                }
+                return 'sample-slug';
+                
+            case 'user_id':
+                // ID del usuario actual
+                $current_user = wp_get_current_user();
+                return $current_user->exists() ? $current_user->ID : '1';
+                
+            default:
+                return $placeholder; // Si no se puede resolver, devolver el placeholder
+        }
+    }
+    
+    /**
+     * NUEVO: Obtener valor de parámetro según su fuente
+     */
+    private function get_param_value_by_source($param, $post = null, $context = null) {
+        $param_source = $param['source'] ?? 'url';
+        $param_default = $param['default'] ?? '';
+        $param_name = $param['name'] ?? '';
+        
+        switch ($param_source) {
+            case 'post':
+                if ($post && isset($post->ID)) {
+                    return $post->ID;
+                } elseif (is_singular()) {
+                    return get_the_ID();
+                }
+                return $param_default;
+                
+            case 'post_slug':
+                if ($post && isset($post->post_name)) {
+                    return $post->post_name;
+                } elseif (is_singular()) {
+                    $current_post = get_post();
+                    return $current_post ? $current_post->post_name : $param_default;
+                }
+                return $param_default;
+                
+            case 'url':
+                if (isset($_GET[$param_name])) {
+                    return sanitize_text_field($_GET[$param_name]);
+                } elseif (get_query_var($param_name)) {
+                    return get_query_var($param_name);
+                }
+                return $param_default;
+                
+            case 'meta':
+                if ($post && isset($post->ID)) {
+                    $meta_value = get_post_meta($post->ID, $param_name, true);
+                    return !empty($meta_value) ? $meta_value : $param_default;
+                }
+                return $param_default;
+                
+            case 'user':
+                $current_user = wp_get_current_user();
+                return $current_user->exists() ? $current_user->ID : $param_default;
+                
+            case 'static':
+            default:
+                return $param_default;
+        }
+    }
+    
+    /**
+     * Formatear salida de campo - MEJORADO PARA ARRAYS
+     */
+    private function format_field_output($value, $field_name = '') {
+        if (is_array($value)) {
+            // Detectar tipo de array y formatearlo apropiadamente
+            $array_type = $this->detect_array_type_for_output($value);
+            
+            switch ($array_type) {
+                case 'simple_list':
+                    // Lista simple: ["item1", "item2", "item3"]
+                    if (strpos($field_name, '_first') !== false) {
+                        return isset($value[0]) ? sanitize_text_field((string) $value[0]) : '';
+                    } elseif (strpos($field_name, '_count') !== false) {
+                        return count($value);
+                    } elseif (strpos($field_name, '_join') !== false) {
+                        return implode(', ', array_map('sanitize_text_field', array_slice($value, 0, 5)));
+                    } else {
+                        // Default: mostrar primeros elementos separados por coma
+                        return implode(', ', array_map('sanitize_text_field', array_slice($value, 0, 3)));
+                    }
+                    
+                case 'object_list':
+                    // Array de objetos: [{"nombre": "Juan"}, {"nombre": "María"}]
+                    if (strpos($field_name, '_count') !== false) {
+                        return count($value);
+                    } elseif (strpos($field_name, '_first_') !== false) {
+                        // Extraer campo específico del primer objeto
+                        $field_parts = explode('_first_', $field_name);
+                        if (count($field_parts) > 1) {
+                            $sub_field = end($field_parts);
+                            if (isset($value[0][$sub_field])) {
+                                return $this->format_field_output($value[0][$sub_field]);
+                            }
+                        }
+                        return '';
+                    } else {
+                        // Mostrar cantidad de elementos
+                        return count($value) . ' elementos';
+                    }
+                    
+                case 'associative':
+                    // Array asociativo - mostrar como JSON limpio
+                    if (strpos($field_name, '_json') !== false) {
+                        return json_encode($value, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+                    } else {
+                        // Mostrar primeros pares clave-valor
+                        $pairs = [];
+                        $count = 0;
+                        foreach ($value as $k => $v) {
+                            if ($count >= 3) break;
+                            $pairs[] = $k . ': ' . (is_scalar($v) ? $v : 'objeto');
+                            $count++;
+                        }
+                        return implode(', ', $pairs);
+                    }
+                    
+                case 'mixed':
+                default:
+                    // Array mixto o complejo - mostrar como JSON
+                    if (strpos($field_name, '_json') !== false) {
+                        return json_encode($value, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+                    } else {
+                        return count($value) . ' elementos (mixtos)';
+                    }
+            }
+            
+        } elseif (is_object($value)) {
+            // Objeto - convertir a array y procesar
+            return $this->format_field_output((array) $value, $field_name);
+            
+        } elseif (is_bool($value)) {
+            return $value ? 'Sí' : 'No';
+            
+        } elseif (is_null($value)) {
+            return '';
+            
+        } else {
+            // Valor escalar (string, number)
+            return sanitize_text_field((string) $value);
+        }
+    }
+    
+    /**
+     * Detectar tipo de array para output (similar al field extractor)
+     */
+    private function detect_array_type_for_output($array) {
+        if (empty($array)) {
+            return 'empty';
+        }
+        
+        // Verificar si es array indexado vs asociativo
+        $keys = array_keys($array);
+        $is_indexed = ($keys === array_keys($keys));
+        
+        if (!$is_indexed) {
+            return 'associative';
+        }
+        
+        // Es array indexado, verificar contenido
+        $types = array_map('gettype', array_slice($array, 0, 3));
+        $unique_types = array_unique($types);
+        
+        if (count($unique_types) > 1) {
+            return 'mixed';
+        }
+        
+        $dominant_type = $unique_types[0];
+        
+        switch ($dominant_type) {
+            case 'array':
+            case 'object':
+                return 'object_list';
+            case 'string':
+            case 'integer':
+            case 'double':
+            case 'boolean':
+                return 'simple_list';
+            default:
+                return 'mixed';
+        }
     }
     
     /**
@@ -934,6 +1252,113 @@ class BricksAPIIntegrator {
         }
     }
     
+    public function ajax_get_dynamic_tags_for_endpoint() {
+        // Debug logging
+        if (defined('WP_DEBUG') && WP_DEBUG) {
+            error_log('AJAX: ajax_get_dynamic_tags_for_endpoint called');
+            error_log('POST data: ' . print_r($_POST, true));
+        }
+        
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(['message' => 'Sin permisos de administrador']);
+            return;
+        }
+        
+        if (!wp_verify_nonce($_POST['nonce'], 'get_dynamic_tags')) {
+            wp_send_json_error(['message' => 'Nonce inválido', 'nonce_received' => $_POST['nonce']]);
+            return;
+        }
+        
+        $index = intval($_POST['index']);
+        $endpoints = get_option('bricks_api_endpoints', []);
+        
+        if (!isset($endpoints[$index])) {
+            wp_send_json_error(['message' => 'Endpoint no encontrado', 'index' => $index, 'total_endpoints' => count($endpoints)]);
+            return;
+        }
+        
+        $endpoint = $endpoints[$index];
+        
+        // Log para debug
+        if (defined('WP_DEBUG') && WP_DEBUG) {
+            error_log('AJAX: Obteniendo dynamic tags para endpoint: ' . $endpoint['name']);
+        }
+        
+        try {
+            // Primero intentar obtener datos con parámetros dinámicos
+            $sample_data = $this->get_api_data_with_dynamic_params($endpoint);
+            
+            // Si no hay datos, intentar sin parámetros dinámicos
+            if (empty($sample_data)) {
+                if (defined('WP_DEBUG') && WP_DEBUG) {
+                    error_log('AJAX: No hay datos con parámetros, intentando sin parámetros');
+                }
+                $sample_data = $this->get_api_data_with_cache($endpoint['url'], $endpoint, true);
+            }
+            
+            if (empty($sample_data)) {
+                wp_send_json_error([
+                    'message' => 'No se pudieron obtener datos del endpoint. Verifica la configuración.',
+                    'debug_info' => [
+                        'endpoint_name' => $endpoint['name'],
+                        'endpoint_url' => $endpoint['url'],
+                        'has_params' => !empty($endpoint['dynamic_params'])
+                    ]
+                ]);
+                return;
+            }
+            
+            // Extraer campos dinámicamente
+            $sample_item = is_array($sample_data) && isset($sample_data[0]) ? $sample_data[0] : $sample_data;
+            $fields = $this->extract_fields_from_data($sample_item);
+            
+            if (empty($fields)) {
+                wp_send_json_error([
+                    'message' => 'No se encontraron campos válidos en los datos del endpoint.',
+                    'sample_data_preview' => is_array($sample_data) ? array_keys($sample_data) : gettype($sample_data)
+                ]);
+                return;
+            }
+            
+            // Generar dynamic tags con el prefijo correcto
+            $endpoint_slug = sanitize_key($endpoint['name']);
+            $dynamic_tags = [];
+            
+            foreach ($fields as $field => $label) {
+                $tag = '{snap_' . $endpoint_slug . '_' . $field . '}';
+                $dynamic_tags[] = $tag;
+            }
+            
+            // Ordenar tags para mejor visualización
+            sort($dynamic_tags);
+            
+            if (defined('WP_DEBUG') && WP_DEBUG) {
+                error_log('AJAX: Generados ' . count($dynamic_tags) . ' dynamic tags para ' . $endpoint['name']);
+            }
+            
+            wp_send_json_success([
+                'tags' => $dynamic_tags,
+                'count' => count($dynamic_tags),
+                'endpoint_name' => $endpoint['name'],
+                'fields_info' => $fields,
+                'sample_data' => $sample_item, // Añadir datos de ejemplo para mostrar valores
+                'has_dynamic_params' => !empty($endpoint['dynamic_params']),
+                'data_type' => is_array($sample_data) ? 'array' : 'object',
+                'data_count' => is_array($sample_data) ? count($sample_data) : 1
+            ]);
+            
+        } catch (Exception $e) {
+            if (defined('WP_DEBUG') && WP_DEBUG) {
+                error_log('AJAX: Error al generar dynamic tags: ' . $e->getMessage());
+            }
+            
+            wp_send_json_error([
+                'message' => 'Error al generar dynamic tags: ' . $e->getMessage(),
+                'endpoint_name' => $endpoint['name'] ?? 'Desconocido'
+            ]);
+        }
+    }
+    
     public function ajax_clear_api_cache() {
         if (!current_user_can('manage_options') || !wp_verify_nonce($_POST['nonce'], 'clear_api_cache')) {
             wp_die('Sin permisos');
@@ -1089,6 +1514,124 @@ class BricksAPIIntegrator {
             
         } catch (Exception $e) {
             wp_send_json_error(['message' => 'Error durante el reset: ' . $e->getMessage()]);
+        }
+    }
+    
+    /**
+     * AJAX handler para actualizar duración de caché
+     */
+    public function ajax_update_cache_duration() {
+        if (!current_user_can('manage_options') || !wp_verify_nonce($_POST['nonce'], 'update_cache_duration')) {
+            wp_die('Sin permisos');
+        }
+        
+        $duration = intval($_POST['duration']);
+        
+        // Validar duración
+        $valid_durations = [0, 60, 300, 900, 3600]; // 0 = sin caché, 1min, 5min, 15min, 1hora
+        if (!in_array($duration, $valid_durations)) {
+            wp_send_json_error(['message' => 'Duración de caché inválida']);
+            return;
+        }
+        
+        // Guardar configuración
+        update_option('bricks_api_cache_duration', $duration);
+        
+        // Limpiar caché existente para aplicar la nueva configuración
+        $this->clear_all_cache();
+        
+        $duration_text = '';
+        switch ($duration) {
+            case 0: $duration_text = 'Sin caché (siempre actualizado)'; break;
+            case 60: $duration_text = '1 minuto'; break;
+            case 300: $duration_text = '5 minutos'; break;
+            case 900: $duration_text = '15 minutos'; break;
+            case 3600: $duration_text = '1 hora'; break;
+        }
+        
+        wp_send_json_success([
+            'message' => "Duración de caché actualizada a: {$duration_text}",
+            'duration' => $duration
+        ]);
+    }
+    
+    /**
+     * AJAX handler para obtener duración actual de caché
+     */
+    public function ajax_get_cache_duration() {
+        if (!current_user_can('manage_options') || !wp_verify_nonce($_POST['nonce'], 'get_cache_duration')) {
+            wp_die('Sin permisos');
+        }
+        
+        $duration = get_option('bricks_api_cache_duration', 300); // 5 minutos por defecto
+        
+        wp_send_json_success([
+            'duration' => $duration
+        ]);
+    }
+    
+    /**
+     * AJAX handler para refrescar datos de un endpoint específico
+     */
+    public function ajax_refresh_endpoint_data() {
+        if (!current_user_can('manage_options') || !wp_verify_nonce($_POST['nonce'], 'refresh_endpoint_data')) {
+            wp_die('Sin permisos');
+        }
+        
+        $index = intval($_POST['index']);
+        $endpoints = get_option('bricks_api_endpoints', []);
+        
+        if (!isset($endpoints[$index])) {
+            wp_send_json_error(['message' => 'Endpoint no encontrado']);
+        }
+        
+        $endpoint = $endpoints[$index];
+        
+        try {
+            // Limpiar caché específico de este endpoint primero
+            $cache_key = 'api_data_' . md5($endpoint['url'] . serialize($endpoint));
+            delete_transient($cache_key);
+            
+            // Forzar actualización de datos
+            $data = $this->get_api_data_with_cache($endpoint['url'], $endpoint, true);
+            
+            if (empty($data)) {
+                wp_send_json_error([
+                    'message' => 'No se obtuvieron datos de la API. Verifica la URL y configuración.',
+                    'endpoint_url' => $endpoint['url']
+                ]);
+            }
+            
+            // Analizar estructura de datos
+            $sample_fields = [];
+            $sample_data = null;
+            $count = 0;
+            
+            if (is_array($data)) {
+                $count = count($data);
+                if (isset($data[0])) {
+                    $sample_data = $data[0];
+                    $fields = $this->extract_fields_from_data($data[0]);
+                    $sample_fields = array_slice(array_keys($fields), 0, 8);
+                }
+            } else {
+                $count = 1;
+                $sample_data = $data;
+                $fields = $this->extract_fields_from_data($data);
+                $sample_fields = array_slice(array_keys($fields), 0, 8);
+            }
+            
+            wp_send_json_success([
+                'count' => $count,
+                'sample_fields' => $sample_fields,
+                'sample_data' => $sample_data,
+                'message' => 'Datos actualizados correctamente desde la API',
+                'cache_cleared' => true,
+                'endpoint_name' => $endpoint['name']
+            ]);
+            
+        } catch (Exception $e) {
+            wp_send_json_error(['message' => 'Error al actualizar datos: ' . $e->getMessage()]);
         }
     }
     
