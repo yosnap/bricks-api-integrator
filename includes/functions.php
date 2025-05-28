@@ -117,38 +117,70 @@ if (!function_exists('bricks_api_integrator_dashboard')) {
         }
         ?>
         <div class="wrap">
-            <h1>🔌 Bricks API Integrator v2.0</h1>
+            <h1>🔌 Bricks API Integrator v2.1.0</h1>
             <p>Plugin que integra APIs externas con Bricks Builder de forma dinámica.</p>
             
             <div class="dashboard-stats" style="display: flex; gap: 20px; margin: 20px 0; flex-wrap: wrap;">
                 <div class="stat-card" style="background: #fff; padding: 20px; border: 1px solid #ddd; border-radius: 5px; text-align: center; min-width: 150px;">
                     <h3 style="margin: 0; font-size: 2em; color: #0073aa;"><?php echo count($endpoints); ?></h3>
                     <p style="margin: 10px 0 0 0;">Endpoints Configurados</p>
+                    <small style="color: #666;">Generan Query Types (Auto)</small>
                 </div>
                 
                 <div class="stat-card" style="background: #fff; padding: 20px; border: 1px solid #ddd; border-radius: 5px; text-align: center; min-width: 150px;">
                     <h3 style="margin: 0; font-size: 2em; color: #0073aa;"><?php echo count($sources); ?></h3>
-                    <p style="margin: 10px 0 0 0;">Query Types Configurados</p>
+                    <p style="margin: 10px 0 0 0;">Query Types Manuales</p>
+                    <small style="color: #666;">Para ítems anidados</small>
                 </div>
                 
                 <div class="stat-card" style="background: #fff; padding: 20px; border: 1px solid #ddd; border-radius: 5px; text-align: center; min-width: 150px;">
                     <h3 style="margin: 0; font-size: 2em; color: #0073aa;"><?php echo count($templates); ?></h3>
                     <p style="margin: 10px 0 0 0;">Templates Configurados</p>
+                    <small style="color: #666;">Plantillas reutilizables</small>
                 </div>
                 
                 <div class="stat-card" style="background: #fff; padding: 20px; border: 1px solid #ddd; border-radius: 5px; text-align: center; min-width: 150px;">
-                    <h3 style="margin: 0; font-size: 2em; color: #0073aa;"><?php echo $total_query_types; ?></h3>
-                    <p style="margin: 10px 0 0 0;">Query Types Generados</p>
+                    <h3 style="margin: 0; font-size: 2em; color: #0073aa;"><?php echo count($endpoints) + count($sources); ?></h3>
+                    <p style="margin: 10px 0 0 0;">Query Types Total</p>
+                    <small style="color: #666;">Auto + Manual</small>
                 </div>
                 
                 <div class="stat-card" style="background: #fff; padding: 20px; border: 1px solid #ddd; border-radius: 5px; text-align: center; min-width: 150px;">
-                    <h3 style="margin: 0; font-size: 2em; color: #0073aa;"><?php echo $total_dynamic_tags; ?></h3>
-                    <p style="margin: 10px 0 0 0;">Dynamic Tags Generados</p>
+                    <h3 style="margin: 0; font-size: 2em; color: #0073aa;"><?php echo (count($endpoints) * 8) + (count($sources) * 6); ?></h3>
+                    <p style="margin: 10px 0 0 0;">Dynamic Tags</p>
+                    <small style="color: #666;">Prefijo: snap_</small>
                 </div>
                 
                 <div class="stat-card" style="background: #fff; padding: 20px; border: 1px solid #ddd; border-radius: 5px; text-align: center; min-width: 150px;">
                     <h3 style="margin: 0; font-size: 2em; color: #0073aa;"><?php echo function_exists('bricks_is_builder') ? '✅' : '❌'; ?></h3>
                     <p style="margin: 10px 0 0 0;">Bricks Builder</p>
+                    <small style="color: #666;">Compatibilidad</small>
+                </div>
+            </div>
+            
+            <!-- Sistema diferenciado AUTO/MANUAL -->
+            <div style="background: #fff; padding: 15px; border: 1px solid #ddd; border-radius: 5px; margin: 20px 0;">
+                <h3 style="margin-top: 0;">🎯 Sistema Diferenciado</h3>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin: 15px 0;">
+                    <div style="background: #e7f3ff; padding: 15px; border-radius: 5px; border-left: 4px solid #0073aa;">
+                        <h4 style="margin: 0 0 10px 0; color: #0073aa;">🤖 Query Types Automáticos</h4>
+                        <p style="margin: 0 0 8px 0; font-size: 14px;">Se crean automáticamente al configurar un <strong>Endpoint</strong></p>
+                        <ul style="margin: 8px 0; padding-left: 20px; font-size: 13px;">
+                            <li>Aparecen como: <code>Nombre (Auto)</code></li>
+                            <li>Tags: <code>{snap_auto_endpoint_campo}</code></li>
+                            <li>Perfectos para APIs simples</li>
+                        </ul>
+                    </div>
+                    
+                    <div style="background: #fff3e0; padding: 15px; border-radius: 5px; border-left: 4px solid #ff9800;">
+                        <h4 style="margin: 0 0 10px 0; color: #ff9800;">⚙️ Query Types Manuales</h4>
+                        <p style="margin: 0 0 8px 0; font-size: 14px;">Se crean manualmente en <strong>Query Types</strong> para ítems anidados</p>
+                        <ul style="margin: 8px 0; padding-left: 20px; font-size: 13px;">
+                            <li>Aparecen como: <code>Nombre (Manual)</code></li>
+                            <li>Tags: <code>{snap_source_campo}</code></li>
+                            <li>Ideales para arrays anidados</li>
+                        </ul>
+                    </div>
                 </div>
             </div>
             
@@ -182,13 +214,59 @@ if (!function_exists('bricks_api_integrator_dashboard')) {
             </div>
             
             <h2>🚀 Primeros Pasos</h2>
-            <ol>
-                <li><strong>Configurar Endpoints:</strong> Ve a <a href="<?php echo admin_url('admin.php?page=bricks-api-integrator-endpoints'); ?>">API Endpoints</a> para gestionar tus APIs</li>
-                <li><strong>Configurar Query Types:</strong> Ve a <a href="<?php echo admin_url('admin.php?page=bricks-api-integrator-sources'); ?>">Query Types</a> para configurar query types</li>
-                <li><strong>Configurar Templates:</strong> Ve a <a href="<?php echo admin_url('admin.php?page=bricks-api-templates'); ?>">API Templates</a></li>
-                <li><strong>Usar en Bricks:</strong> Los Query Types aparecerán automáticamente en el Query Loop de Bricks</li>
-                <li><strong>Dynamic Tags:</strong> Los tags se generan automáticamente desde las respuestas de API</li>
-            </ol>
+            <div style="background: #f8f9fa; padding: 20px; border-radius: 5px; margin: 20px 0;">
+                <h3 style="margin-top: 0;">📋 Flujo de Trabajo Recomendado</h3>
+                
+                <div style="margin: 15px 0;">
+                    <h4 style="color: #0073aa;">1️⃣ Para APIs Simples (Query Types Automáticos)</h4>
+                    <ol style="margin-left: 20px;">
+                        <li><strong>Configurar Endpoint:</strong> Ve a <a href="<?php echo admin_url('admin.php?page=bricks-api-integrator-endpoints'); ?>">API Endpoints</a></li>
+                        <li><strong>Se crea automáticamente:</strong> Query Type con sufijo <code>(Auto)</code></li>
+                        <li><strong>Dynamic Tags:</strong> Prefijo <code>{snap_auto_nombre_campo}</code></li>
+                        <li><strong>Usar en Bricks:</strong> Query Loop → Seleccionar el Query Type automático</li>
+                    </ol>
+                </div>
+                
+                <div style="margin: 15px 0;">
+                    <h4 style="color: #ff9800;">2️⃣ Para APIs con Ítems Anidados (Query Types Manuales)</h4>
+                    <ol style="margin-left: 20px;">
+                        <li><strong>Primero:</strong> Configurar el Endpoint base (paso 1)</li>
+                        <li><strong>Crear Query Type Manual:</strong> Ve a <a href="<?php echo admin_url('admin.php?page=bricks-api-integrator-sources'); ?>">Query Types</a></li>
+                        <li><strong>Configurar Items Path:</strong> Ejemplo: <code>data.productos</code> para acceder a arrays anidados</li>
+                        <li><strong>Dynamic Tags:</strong> Prefijo <code>{snap_nombre_campo}</code></li>
+                        <li><strong>Usar en Bricks:</strong> Query Loop → Seleccionar el Query Type manual <code>(Manual)</code></li>
+                    </ol>
+                </div>
+                
+                <div style="margin: 15px 0;">
+                    <h4 style="color: #28a745;">3️⃣ Templates y Reutilización</h4>
+                    <ol style="margin-left: 20px;">
+                        <li><strong>Crear Templates:</strong> Ve a <a href="<?php echo admin_url('admin.php?page=bricks-api-templates'); ?>">API Templates</a></li>
+                        <li><strong>Reutilizar configuraciones:</strong> Para endpoints similares</li>
+                    </ol>
+                </div>
+            </div>
+            
+            <div style="background: #fff; padding: 15px; border: 1px solid #ddd; border-radius: 5px; margin: 20px 0;">
+                <h3 style="margin-top: 0;">💡 Ejemplo Práctico</h3>
+                <div style="background: #f1f1f1; padding: 15px; border-radius: 5px; font-family: monospace; margin: 10px 0;">
+                    <strong>API Response:</strong><br>
+                    {<br>
+                    &nbsp;&nbsp;"data": {<br>
+                    &nbsp;&nbsp;&nbsp;&nbsp;"productos": [<br>
+                    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{"nombre": "Producto 1", "precio": 100},<br>
+                    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{"nombre": "Producto 2", "precio": 200}<br>
+                    &nbsp;&nbsp;&nbsp;&nbsp;]<br>
+                    &nbsp;&nbsp;}<br>
+                    }
+                </div>
+                <p style="margin: 10px 0;"><strong>Solución:</strong></p>
+                <ul style="margin-left: 20px;">
+                    <li><strong>Endpoint:</strong> Crea query type automático para acceder a los datos generales</li>
+                    <li><strong>Query Type Manual:</strong> Con Items Path <code>data.productos</code> para iterar sobre los productos</li>
+                    <li><strong>Tags disponibles:</strong> <code>{snap_productos_nombre}</code>, <code>{snap_productos_precio}</code></li>
+                </ul>
+            </div>
             
             <script>
             jQuery(document).ready(function($) {

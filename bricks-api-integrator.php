@@ -186,7 +186,7 @@ class BricksAPIIntegrator {
     }
     
     /**
-     * NUEVA FUNCIONALIDAD DINÁMICA - Query Types
+     * Query Types dinámicos con diferenciación AUTO/MANUAL
      */
     public function add_query_types_dynamic($control_options) {
         $endpoints = get_option('bricks_api_endpoints', []);
@@ -209,7 +209,9 @@ class BricksAPIIntegrator {
                 strpos($key, 'listado_') === 0 || 
                 strpos($key, 'launcher_') === 0 ||
                 strpos($key, 'bai_api_source') === 0 ||
-                strpos($name, 'API:') === 0) {
+                strpos($name, 'API:') === 0 ||
+                strpos($name, '(Auto)') !== false || 
+                strpos($name, '(Manual)') !== false) {
                 unset($control_options['queryTypes'][$key]);
                 $removed_count++;
             }
@@ -220,16 +222,31 @@ class BricksAPIIntegrator {
             error_log("Bricks API Integrator - Eliminados {$removed_count} query types duplicados");
         }
         
-        // Solo registrar query types basándose en endpoints configurados - SIMPLIFICADO
         $registered_keys = [];
         $added_count = 0;
+        
+        // 1. Query Types AUTOMÁTICOS desde ENDPOINTS
         foreach ($endpoints as $endpoint_id => $endpoint) {
             if (!empty($endpoint['name']) && !empty($endpoint['url'])) {
                 $query_type_key = 'api_' . sanitize_key($endpoint['name']);
                 
                 // Evitar duplicación
                 if (!isset($registered_keys[$query_type_key])) {
-                    $control_options['queryTypes'][$query_type_key] = $endpoint['name'];
+                    $control_options['queryTypes'][$query_type_key] = $endpoint['name'] . ' (Auto)';
+                    $registered_keys[$query_type_key] = true;
+                    $added_count++;
+                }
+            }
+        }
+        
+        // 2. Query Types MANUALES desde SOURCES
+        foreach ($sources as $source_id => $source) {
+            if (!empty($source['name'])) {
+                $query_type_key = 'source_' . sanitize_key($source['name']);
+                
+                // Evitar duplicación
+                if (!isset($registered_keys[$query_type_key])) {
+                    $control_options['queryTypes'][$query_type_key] = $source['name'] . ' (Manual)';
                     $registered_keys[$query_type_key] = true;
                     $added_count++;
                 }
@@ -245,7 +262,7 @@ class BricksAPIIntegrator {
     }
     
     /**
-     * NUEVA FUNCIONALIDAD DINÁMICA - Ejecutar Query
+     * Ejecutar Query con diferenciación AUTO/MANUAL
      */
     public function run_custom_query_dynamic($results, $query_object) {
         $object_type = $query_object->object_type ?? '';
@@ -255,28 +272,61 @@ class BricksAPIIntegrator {
             error_log('Bricks API Integrator - Query ejecutado: ' . $object_type);
         }
         
-        // Verificar si es uno de nuestros query types - SIMPLIFICADO
-        if (strpos($object_type, 'api_') !== 0) {
+        // Verificar si es uno de nuestros query types
+        if (strpos($object_type, 'api_') !== 0 && strpos($object_type, 'source_') !== 0) {
             return $results;
         }
         
+        $api_data = [];
+        
         try {
-            // Query basado en endpoint - SIMPLIFICADO
-            $endpoint_key = str_replace('api_', '', $object_type);
-            
-            // Buscar endpoint por clave sanitizada
-            $endpoints = get_option('bricks_api_endpoints', []);
-            $api_data = [];
-            
-            foreach ($endpoints as $endpoint) {
-                if (!empty($endpoint['name'])) {
-                    $sanitized_name = sanitize_key($endpoint['name']);
-                    if ($sanitized_name === $endpoint_key) {
-                        $api_data = $this->get_api_data_with_cache($endpoint['url'], $endpoint);
-                        if (defined('WP_DEBUG') && WP_DEBUG) {
-                            error_log('Bricks API Integrator - Datos encontrados: ' . count($api_data) . ' elementos');
+            // Query Type AUTOMÁTICO desde endpoint
+            if (strpos($object_type, 'api_') === 0) {
+                $endpoint_key = str_replace('api_', '', $object_type);
+                $endpoints = get_option('bricks_api_endpoints', []);
+                
+                foreach ($endpoints as $endpoint) {
+                    if (!empty($endpoint['name'])) {
+                        $sanitized_name = sanitize_key($endpoint['name']);
+                        if ($sanitized_name === $endpoint_key) {
+                            $api_data = $this->get_api_data_with_cache($endpoint['url'], $endpoint);
+                            if (defined('WP_DEBUG') && WP_DEBUG) {
+                                error_log('Bricks API Integrator - Datos AUTO encontrados: ' . count($api_data) . ' elementos');
+                            }
+                            break;
                         }
-                        break;
+                    }
+                }
+            }
+            
+            // Query Type MANUAL desde source
+            if (strpos($object_type, 'source_') === 0) {
+                $source_key = str_replace('source_', '', $object_type);
+                $sources = get_option('bricks_api_sources', []);
+                $endpoints = get_option('bricks_api_endpoints', []);
+                
+                foreach ($sources as $source_id => $source) {
+                    if (!empty($source['name'])) {
+                        $sanitized_name = sanitize_key($source['name']);
+                        if ($sanitized_name === $source_key) {
+                            $endpoint_id = $source['endpoint_id'] ?? '';
+                            if (isset($endpoints[$endpoint_id])) {
+                                $endpoint = $endpoints[$endpoint_id];
+                                $raw_data = $this->get_api_data_with_cache($endpoint['url'], $endpoint);
+                                
+                                // Aplicar items_path si está configurado
+                                if (!empty($source['items_path']) && !empty($raw_data)) {
+                                    $api_data = $this->extract_nested_items($raw_data, $source['items_path']);
+                                } else {
+                                    $api_data = $raw_data;
+                                }
+                                
+                                if (defined('WP_DEBUG') && WP_DEBUG) {
+                                    error_log('Bricks API Integrator - Datos MANUAL encontrados: ' . count($api_data) . ' elementos');
+                                }
+                            }
+                            break;
+                        }
                     }
                 }
             }
@@ -292,6 +342,32 @@ class BricksAPIIntegrator {
             }
             return $results;
         }
+        
+        return $results;
+    }
+    
+    /**
+     * Extraer ítems anidados usando items_path
+     */
+    private function extract_nested_items($data, $items_path) {
+        if (empty($items_path) || empty($data)) {
+            return $data;
+        }
+        
+        $path_parts = explode('.', $items_path);
+        $current_data = $data;
+        
+        foreach ($path_parts as $part) {
+            if (is_array($current_data) && isset($current_data[$part])) {
+                $current_data = $current_data[$part];
+            } elseif (is_object($current_data) && isset($current_data->$part)) {
+                $current_data = $current_data->$part;
+            } else {
+                return [];
+            }
+        }
+        
+        return is_array($current_data) ? $current_data : [$current_data];
     }
     
     /**
@@ -343,50 +419,46 @@ class BricksAPIIntegrator {
     }
     
     /**
-     * SISTEMA ÚNICO OPTIMIZADO - Dynamic Tags (Solo desde Endpoints con Parámetros Dinámicos)
+     * Dynamic Tags diferenciados para AUTO/MANUAL
      */
     public function add_dynamic_tags_dynamic($tags) {
         $endpoints = get_option('bricks_api_endpoints', []);
-        
-        // Si no hay endpoints, no generar tags
-        if (empty($endpoints)) {
-            return $tags;
-        }
+        $sources = get_option('bricks_api_sources', []);
         
         // DEBUG: Log del proceso
         if (defined('WP_DEBUG') && WP_DEBUG) {
-            error_log('Generando Dynamic Tags SOLO desde endpoints (sistema único con parámetros)...');
+            error_log('Generando Dynamic Tags diferenciados AUTO/MANUAL');
         }
         
         // Prefijo fijo para todos los tags
         $fixed_prefix = 'snap_';
         $tags_generated = 0;
         
-        // Generar tags ÚNICAMENTE desde endpoints
+        // 1. Tags AUTOMÁTICOS desde ENDPOINTS
         foreach ($endpoints as $endpoint_id => $endpoint) {
             if (empty($endpoint['name']) || empty($endpoint['url'])) {
                 continue;
             }
             
-            // Obtener datos de muestra del endpoint CON PARÁMETROS DINÁMICOS
+            // Obtener datos de muestra del endpoint
             $sample_data = $this->get_api_data_with_dynamic_params($endpoint);
+            $endpoint_slug = sanitize_key($endpoint['name']);
             
             if (empty($sample_data)) {
                 // Si no hay datos, crear tags básicos por defecto
                 $basic_fields = ['id', 'title', 'name', 'description', 'url', 'slug', 'content', 'image'];
-                $endpoint_slug = sanitize_key($endpoint['name']);
                 
                 foreach ($basic_fields as $field) {
                     $tags[] = [
-                        'name' => '{' . $fixed_prefix . $endpoint_slug . '_' . $field . '}',
-                        'label' => ucfirst($field) . ' (Básico)',
-                        'group' => $endpoint['name']
+                        'name' => '{' . $fixed_prefix . 'auto_' . $endpoint_slug . '_' . $field . '}',
+                        'label' => ucfirst($field) . ' (Auto)',
+                        'group' => $endpoint['name'] . ' (Auto)'
                     ];
                     $tags_generated++;
                 }
                 
                 if (defined('WP_DEBUG') && WP_DEBUG) {
-                    error_log('Tags básicos generados para endpoint "' . $endpoint['name'] . '": ' . count($basic_fields));
+                    error_log('Tags AUTO básicos generados para endpoint "' . $endpoint['name'] . '": ' . count($basic_fields));
                 }
                 continue;
             }
@@ -395,24 +467,75 @@ class BricksAPIIntegrator {
             $fields = $this->extract_fields_from_data($sample_data[0] ?? $sample_data);
             
             if (!empty($fields)) {
-                $endpoint_slug = sanitize_key($endpoint['name']);
                 foreach ($fields as $field => $label) {
                     $tags[] = [
-                        'name' => '{' . $fixed_prefix . $endpoint_slug . '_' . $field . '}',
+                        'name' => '{' . $fixed_prefix . 'auto_' . $endpoint_slug . '_' . $field . '}',
                         'label' => $label,
-                        'group' => $endpoint['name']
+                        'group' => $endpoint['name'] . ' (Auto)'
                     ];
                     $tags_generated++;
                 }
                 
                 if (defined('WP_DEBUG') && WP_DEBUG) {
-                    error_log('Tags generados para endpoint "' . $endpoint['name'] . '": ' . count($fields));
+                    error_log('Tags AUTO generados para endpoint "' . $endpoint['name'] . '": ' . count($fields));
+                }
+            }
+        }
+        
+        // 2. Tags MANUALES desde SOURCES (para ítems anidados)
+        foreach ($sources as $source_id => $source) {
+            if (empty($source['name'])) {
+                continue;
+            }
+            
+            $source_slug = sanitize_key($source['name']);
+            
+            // Obtener datos de muestra para el source
+            $endpoint_id = $source['endpoint_id'] ?? '';
+            if (isset($endpoints[$endpoint_id])) {
+                $endpoint = $endpoints[$endpoint_id];
+                $raw_data = $this->get_api_data_with_cache($endpoint['url'], $endpoint);
+                
+                // Aplicar items_path si está configurado
+                if (!empty($source['items_path']) && !empty($raw_data)) {
+                    $sample_data = $this->extract_nested_items($raw_data, $source['items_path']);
+                } else {
+                    $sample_data = $raw_data;
+                }
+                
+                if (!empty($sample_data)) {
+                    $fields = $this->extract_fields_from_data($sample_data[0] ?? $sample_data);
+                    
+                    foreach ($fields as $field => $label) {
+                        $tags[] = [
+                            'name' => '{' . $fixed_prefix . $source_slug . '_' . $field . '}',
+                            'label' => $label,
+                            'group' => $source['name'] . ' (Manual)'
+                        ];
+                        $tags_generated++;
+                    }
+                    
+                    if (defined('WP_DEBUG') && WP_DEBUG) {
+                        error_log('Tags MANUAL generados para source "' . $source['name'] . '": ' . count($fields));
+                    }
+                } else {
+                    // Tags básicos si no hay datos
+                    $basic_fields = ['id', 'title', 'name', 'description'];
+                    
+                    foreach ($basic_fields as $field) {
+                        $tags[] = [
+                            'name' => '{' . $fixed_prefix . $source_slug . '_' . $field . '}',
+                            'label' => ucfirst($field),
+                            'group' => $source['name'] . ' (Manual)'
+                        ];
+                        $tags_generated++;
+                    }
                 }
             }
         }
         
         if (defined('WP_DEBUG') && WP_DEBUG) {
-            error_log("SISTEMA ÚNICO: {$tags_generated} Dynamic Tags generados SOLO desde endpoints");
+            error_log("Dynamic Tags generados: {$tags_generated} (AUTO + MANUAL)");
         }
         
         return $tags;
@@ -551,51 +674,37 @@ class BricksAPIIntegrator {
             return $content;
         }
         
-        // Procesar tags con prefijo fijo "snap_" - SISTEMA MEJORADO PARA ARRAYS
-        $content = preg_replace_callback(
-            '/\{snap_([a-zA-Z0-9_]+)_([a-zA-Z0-9_]+)\}/',
-            function($matches) use ($post, $context) {
-                $identifier = $matches[1]; // nombre del endpoint
-                $field = $matches[2]; // campo
-                
-                // Primero verificar si estamos en un loop de Bricks
-                $loop_object = \Bricks\Query::get_loop_object();
-                
-                if (!empty($loop_object) && isset($loop_object->api_data)) {
-                    $api_data = $loop_object->api_data;
-                    
-                    if (is_array($api_data) || is_object($api_data)) {
-                        $data_array = (array) $api_data;
-                        
-                        // Manejar campos especiales de arrays
-                        if (strpos($field, '_item_') !== false) {
-                            return $this->handle_array_item_field($data_array, $field, $context);
-                        } elseif (strpos($field, '_last_') !== false) {
-                            return $this->handle_array_last_field($data_array, $field);
-                        }
-                        
-                        // Buscar el campo exacto
-                        if (isset($data_array[$field])) {
-                            return $this->format_field_output($data_array[$field], $field);
-                        }
-                        
-                        // Buscar variaciones del campo
-                        foreach ($data_array as $key => $value) {
-                            if (sanitize_key($key) === $field) {
-                                return $this->format_field_output($value, $field);
-                            }
-                        }
-                    }
+                $api_data = $this->extract_nested_items($raw_data, $target_source['items_path']);
+            } else {
+                $api_data = $raw_data;
+            }
+            
+            // Si es un array, tomar el primer elemento
+            if (is_array($api_data) && isset($api_data[0])) {
+                $api_data = $api_data[0];
+            }
+            
+            $data_array = (array) $api_data;
+            
+            // Buscar el campo exacto
+            if (isset($data_array[$field])) {
+                return $this->format_field_output($data_array[$field], $field);
+            }
+            
+            // Buscar variaciones del campo
+            foreach ($data_array as $key => $value) {
+                if (sanitize_key($key) === $field) {
+                    return $this->format_field_output($value, $field);
                 }
-                
-                // Si no estamos en un loop, obtener datos dinámicamente con parámetros
-                $value = $this->get_dynamic_field_value($identifier, $field, $post, $context);
-                return $value !== '' ? $value : $matches[0];
-            },
-            $content
-        );
+            }
+            
+        } catch (Exception $e) {
+            if (defined('WP_DEBUG') && WP_DEBUG) {
+                error_log("Error al obtener datos de source: " . $e->getMessage());
+            }
+        }
         
-        return $content;
+        return '';
     }
     
     /**
