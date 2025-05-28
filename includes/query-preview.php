@@ -70,7 +70,7 @@ trait QueryPreview {
         $limit = intval($_POST['limit'] ?? 1);
         
         // Verificar nonce
-        if (!wp_verify_nonce($_POST['nonce'] ?? '', 'preview_query_' . $query_type)) {
+        if (!wp_verify_nonce($_POST['nonce'] ?? '', 'bricks_api_preview')) {
             wp_send_json_error(['message' => 'Nonce inválido']);
         }
         

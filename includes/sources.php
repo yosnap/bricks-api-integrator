@@ -230,6 +230,9 @@ function render_api_sources_page() {
     </div>
     
     <script>
+    // Pass nonce to JavaScript
+    var bricksApiPreviewNonce = '<?php echo wp_create_nonce('bricks_api_preview'); ?>';
+    
     jQuery(document).ready(function($) {
         // Show/hide pagination fields based on pagination type
         $('#pagination_type').on('change', function() {
@@ -284,7 +287,7 @@ function render_api_sources_page() {
                 action: 'preview_query_type',
                 query_type: queryType,
                 limit: 1,
-                nonce: '<?php echo wp_create_nonce('bricks_api_preview'); ?>'
+                nonce: bricksApiPreviewNonce
             }, function(response) {
                 if (response.success && response.data.preview_data && response.data.preview_data.length > 0) {
                     showPreviewModal(response.data, sourceName);
