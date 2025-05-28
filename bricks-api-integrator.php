@@ -667,13 +667,109 @@ class BricksAPIIntegrator {
     }
     
     /**
-     * RENDERIZADO DINÁMICO - Con Soporte para Arrays Complejos
+     * Renderizar Dynamic Tags diferenciados AUTO/MANUAL
      */
     public function render_dynamic_tags_dynamic($content, $post, $context) {
         if (strpos($content, '{snap_') === false) {
             return $content;
         }
         
+        // Procesar tags con diferentes patrones para AUTO/MANUAL
+        $content = preg_replace_callback(
+            '/\{snap_(auto_)?([a-zA-Z0-9_]+)_([a-zA-Z0-9_]+)\}/',
+            function($matches) use ($post, $context) {
+                $is_auto = !empty($matches[1]); // Detectar si es tag automático
+                $identifier = $matches[2]; // nombre del endpoint/source
+                $field = $matches[3]; // campo
+                
+                // Primero verificar si estamos en un loop de Bricks
+                $loop_object = \Bricks\Query::get_loop_object();
+                
+                if (!empty($loop_object) && isset($loop_object->api_data)) {
+                    $api_data = $loop_object->api_data;
+                    
+                    if (is_array($api_data) || is_object($api_data)) {
+                        $data_array = (array) $api_data;
+                        
+                        // Manejar campos especiales de arrays
+                        if (strpos($field, '_item_') !== false) {
+                            return $this->handle_array_item_field($data_array, $field, $context);
+                        } elseif (strpos($field, '_last_') !== false) {
+                            return $this->handle_array_last_field($data_array, $field);
+                        }
+                        
+                        // Buscar el campo exacto
+                        if (isset($data_array[$field])) {
+                            return $this->format_field_output($data_array[$field], $field);
+                        }
+                        
+                        // Buscar variaciones del campo
+                        foreach ($data_array as $key => $value) {
+                            if (sanitize_key($key) === $field) {
+                                return $this->format_field_output($value, $field);
+                            }
+                        }
+                    }
+                }
+                
+                // Si no estamos en un loop, obtener datos dinámicamente
+                if ($is_auto) {
+                    // Tag automático: obtener desde endpoint
+                    $value = $this->get_dynamic_field_value($identifier, $field, $post, $context);
+                } else {
+                    // Tag manual: obtener desde source
+                    $value = $this->get_source_field_value($identifier, $field, $post, $context);
+                }
+                
+                return $value !== '' ? $value : $matches[0];
+            },
+            $content
+        );
+        
+        return $content;
+    }
+    
+    /**
+     * Obtener valor de campo desde source (tags manuales)
+     */
+    private function get_source_field_value($source_identifier, $field, $post = null, $context = null) {
+        $sources = get_option('bricks_api_sources', []);
+        $endpoints = get_option('bricks_api_endpoints', []);
+        
+        // Buscar el source por identificador
+        $target_source = null;
+        foreach ($sources as $source_id => $source) {
+            if (sanitize_key($source['name']) === $source_identifier) {
+                $target_source = $source;
+                break;
+            }
+        }
+        
+        if (!$target_source) {
+            if (defined('WP_DEBUG') && WP_DEBUG) {
+                error_log("Source no encontrado: {$source_identifier}");
+            }
+            return '';
+        }
+        
+        // Obtener endpoint asociado
+        $endpoint_id = $target_source['endpoint_id'] ?? '';
+        if (!isset($endpoints[$endpoint_id])) {
+            return '';
+        }
+        
+        $endpoint = $endpoints[$endpoint_id];
+        
+        try {
+            // Obtener datos del endpoint
+            $raw_data = $this->get_api_data_with_cache($endpoint['url'], $endpoint);
+            
+            if (empty($raw_data)) {
+                return '';
+            }
+            
+            // Aplicar items_path si está configurado
+            if (!empty($target_source['items_path'])) {
                 $api_data = $this->extract_nested_items($raw_data, $target_source['items_path']);
             } else {
                 $api_data = $raw_data;
@@ -706,7 +802,7 @@ class BricksAPIIntegrator {
         
         return '';
     }
-    
+
     /**
      * Manejar campos de array por índice
      */
