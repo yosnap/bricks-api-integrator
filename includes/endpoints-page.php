@@ -230,15 +230,11 @@ if (!function_exists('render_api_endpoints_page')) {
             
             // Inicializar nonce inmediatamente para debug
             window.currentNonce = '<?php echo wp_create_nonce('get_dynamic_tags'); ?>';
-            console.log('Nonce inicializado:', window.currentNonce);
             
             // Añadir nuevo endpoint
             $('#add-endpoint').click(function() {
-                console.log('🔘 Botón Añadir Endpoint clickeado');
-                console.log('🔘 endpointCounter actual:', endpointCounter);
                 try {
                     addGenericEndpoint();
-                    console.log('✅ Endpoint genérico añadido correctamente');
                 } catch (error) {
                     console.error('❌ Error al añadir endpoint genérico:', error);
                 }
@@ -246,10 +242,8 @@ if (!function_exists('render_api_endpoints_page')) {
             
             // Añadir endpoint relacionado (genérico con parámetros del post actual)
             $('#add-related-endpoint').click(function() {
-                console.log('🔗 Botón Añadir Endpoint Relacionado clickeado');
                 try {
                     addRelatedEndpoint();
-                    console.log('✅ Endpoint relacionado añadido correctamente');
                 } catch (error) {
                     console.error('❌ Error al añadir endpoint relacionado:', error);
                 }
@@ -712,14 +706,11 @@ if (!function_exists('render_api_endpoints_page')) {
                     index: index,
                     nonce: window.currentNonce || '<?php echo wp_create_nonce('get_dynamic_tags'); ?>'
                 }, function(response) {
-                    console.log('📥 AJAX Response recibida:', response);
                     
                     if (response.success && response.data.tags && response.data.tags.length > 0) {
-                        console.log('✅ Procesando tags exitosamente - ' + response.data.tags.length + ' tags encontrados');
                         
                         // Obtener datos de ejemplo si están disponibles
                         const sampleData = response.data.sample_data || response.data.fields_info || {};
-                        console.log('🔍 Datos de ejemplo disponibles:', sampleData);
                         
                         // Generar HTML con valores de ejemplo en dos columnas
                         let html = '<div style="padding: 15px;">';
@@ -745,13 +736,11 @@ if (!function_exists('render_api_endpoints_page')) {
                             const fieldMatch = tag.match(/\{snap_[^_]+_(.+)\}/);
                             const fieldName = fieldMatch ? fieldMatch[1] : '';
                             
-                            console.log('🏷️ Procesando tag:', tag, '-> campo:', fieldName);
                             
                             // Buscar valor de ejemplo
                             let sampleValue = '';
                             if (fieldName && sampleData && typeof sampleData === 'object') {
                                 sampleValue = findSampleValue(sampleData, fieldName);
-                                console.log('📄 Valor encontrado para', fieldName, ':', sampleValue);
                             }
                             
                             html += '<div style="background: #f8f9fa; padding: 8px 10px; border-radius: 3px; border-left: 3px solid #007cba; cursor: pointer; transition: all 0.2s; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-items: center;" onclick="copyToClipboard(\'' + tag + '\', this)" title="Clic para copiar">';
@@ -779,11 +768,9 @@ if (!function_exists('render_api_endpoints_page')) {
                         
                         // Función helper para buscar valores de ejemplo - MEJORADA
                         function findSampleValue(data, fieldName) {
-                            console.log('🔍 Buscando valor para campo:', fieldName, 'en data:', data);
                             
                             // Búsqueda directa
                             if (data[fieldName] !== undefined) {
-                                console.log('✅ Encontrado directo:', data[fieldName]);
                                 return formatSampleValue(data[fieldName]);
                             }
                             
@@ -799,7 +786,6 @@ if (!function_exists('render_api_endpoints_page')) {
                                     return accents[match] || match;
                                 });
                                 if (normalizedKey === normalizedField) {
-                                    console.log('✅ Encontrado normalizado:', key, '=', data[key]);
                                     return formatSampleValue(data[key]);
                                 }
                             }
@@ -809,7 +795,6 @@ if (!function_exists('render_api_endpoints_page')) {
                             // 1. Especialidades count
                             if (fieldName.includes('especialidades') && fieldName.includes('count')) {
                                 if (data.especialidades && Array.isArray(data.especialidades)) {
-                                    console.log('✅ Especialidades count:', data.especialidades.length);
                                     return data.especialidades.length.toString();
                                 }
                             }
@@ -819,11 +804,9 @@ if (!function_exists('render_api_endpoints_page')) {
                                 const subField = fieldName.replace('especialidades_first_', '');
                                 if (data.especialidades && Array.isArray(data.especialidades) && data.especialidades[0]) {
                                     const firstEsp = data.especialidades[0];
-                                    console.log('🔍 Buscando en primera especialidad:', subField, 'en', firstEsp);
                                     
                                     // Búsqueda directa en la primera especialidad
                                     if (firstEsp[subField] !== undefined) {
-                                        console.log('✅ Encontrado en primera esp:', firstEsp[subField]);
                                         return formatSampleValue(firstEsp[subField]);
                                     }
                                     
@@ -832,7 +815,6 @@ if (!function_exists('render_api_endpoints_page')) {
                                         const normalizedKey = key.toLowerCase().replace(/[_-]/g, '');
                                         const normalizedSubField = subField.toLowerCase().replace(/[_-]/g, '');
                                         if (normalizedKey === normalizedSubField) {
-                                            console.log('✅ Encontrado normalizado en primera esp:', key, '=', firstEsp[key]);
                                             return formatSampleValue(firstEsp[key]);
                                         }
                                     }
@@ -844,10 +826,8 @@ if (!function_exists('render_api_endpoints_page')) {
                                 const subField = fieldName.replace('especialidades_last_', '');
                                 if (data.especialidades && Array.isArray(data.especialidades) && data.especialidades.length > 0) {
                                     const lastEsp = data.especialidades[data.especialidades.length - 1];
-                                    console.log('🔍 Buscando en última especialidad:', subField, 'en', lastEsp);
                                     
                                     if (lastEsp[subField] !== undefined) {
-                                        console.log('✅ Encontrado en última esp:', lastEsp[subField]);
                                         return formatSampleValue(lastEsp[subField]);
                                     }
                                     
@@ -855,7 +835,6 @@ if (!function_exists('render_api_endpoints_page')) {
                                         const normalizedKey = key.toLowerCase().replace(/[_-]/g, '');
                                         const normalizedSubField = subField.toLowerCase().replace(/[_-]/g, '');
                                         if (normalizedKey === normalizedSubField) {
-                                            console.log('✅ Encontrado normalizado en última esp:', key, '=', lastEsp[key]);
                                             return formatSampleValue(lastEsp[key]);
                                         }
                                     }
@@ -867,10 +846,8 @@ if (!function_exists('render_api_endpoints_page')) {
                                 const subField = fieldName.replace('especialidades_item_', '');
                                 if (data.especialidades && Array.isArray(data.especialidades) && data.especialidades[0]) {
                                     const itemEsp = data.especialidades[0]; // Usar primera como ejemplo
-                                    console.log('🔍 Buscando en item especialidad:', subField, 'en', itemEsp);
                                     
                                     if (itemEsp[subField] !== undefined) {
-                                        console.log('✅ Encontrado en item esp:', itemEsp[subField]);
                                         return formatSampleValue(itemEsp[subField]);
                                     }
                                     
@@ -878,7 +855,6 @@ if (!function_exists('render_api_endpoints_page')) {
                                         const normalizedKey = key.toLowerCase().replace(/[_-]/g, '');
                                         const normalizedSubField = subField.toLowerCase().replace(/[_-]/g, '');
                                         if (normalizedKey === normalizedSubField) {
-                                            console.log('✅ Encontrado normalizado en item esp:', key, '=', itemEsp[key]);
                                             return formatSampleValue(itemEsp[key]);
                                         }
                                     }
@@ -889,10 +865,8 @@ if (!function_exists('render_api_endpoints_page')) {
                             if (fieldName.includes('horario_')) {
                                 const subField = fieldName.replace('horario_', '');
                                 if (data.horario && typeof data.horario === 'object') {
-                                    console.log('🔍 Buscando en horario:', subField, 'en', data.horario);
                                     
                                     if (data.horario[subField] !== undefined) {
-                                        console.log('✅ Encontrado en horario:', data.horario[subField]);
                                         return formatSampleValue(data.horario[subField]);
                                     }
                                     
@@ -900,7 +874,6 @@ if (!function_exists('render_api_endpoints_page')) {
                                         const normalizedKey = key.toLowerCase().replace(/[_-]/g, '');
                                         const normalizedSubField = subField.toLowerCase().replace(/[_-]/g, '');
                                         if (normalizedKey === normalizedSubField) {
-                                            console.log('✅ Encontrado normalizado en horario:', key, '=', data.horario[key]);
                                             return formatSampleValue(data.horario[key]);
                                         }
                                     }
@@ -914,21 +887,18 @@ if (!function_exists('render_api_endpoints_page')) {
                                         // Buscar en el primer elemento del array
                                         const result = findSampleValue(data[key][0], fieldName);
                                         if (result) {
-                                            console.log('✅ Encontrado en array anidado:', result);
                                             return result;
                                         }
                                     } else {
                                         // Buscar en objeto anidado
                                         const result = findSampleValue(data[key], fieldName);
                                         if (result) {
-                                            console.log('✅ Encontrado en objeto anidado:', result);
                                             return result;
                                         }
                                     }
                                 }
                             }
                             
-                            console.log('❌ No encontrado valor para:', fieldName);
                             return null;
                         }
                         
@@ -953,12 +923,10 @@ if (!function_exists('render_api_endpoints_page')) {
                         }
                         
                         // Actualizar la interfaz
-                        console.log('🎨 Actualizando interfaz con valores de ejemplo...');
                         $loading.hide();
                         $tagsList.html(html);
                         $tagsList.show();
                         
-                        console.log('✅ Tags con valores de ejemplo mostrados correctamente');
                         
                     } else if (response.success) {
                         console.warn('⚠️ Response exitosa pero sin tags');
@@ -984,7 +952,6 @@ if (!function_exists('render_api_endpoints_page')) {
             
             // Función para mostrar los dynamic tags
             function displayDynamicTags(data, $tagsList, $loading) {
-                console.log('Displaying dynamic tags:', data); // Debug
                 
                 let html = '';
                 
@@ -1070,25 +1037,19 @@ if (!function_exists('render_api_endpoints_page')) {
                     html += '</div>';
                 }
                 
-                console.log('Generated HTML length:', html.length); // Debug
-                
                 $tagsList.html(html);
                 $loading.hide();
                 $tagsList.show();
-                
-                console.log('Tags displayed successfully'); // Debug
             }
             
             // Función para copiar al clipboard (simplificada)
             window.copyToClipboard = function(text, element) {
-                console.log('Copying to clipboard:', text); // Debug
                 
                 // Método moderno
                 if (navigator.clipboard && navigator.clipboard.writeText) {
                     navigator.clipboard.writeText(text).then(function() {
                         showCopyFeedback(element, text);
                     }).catch(function(err) {
-                        console.log('Clipboard error:', err);
                         fallbackCopyTextToClipboard(text, element);
                     });
                 } else {
@@ -1113,7 +1074,6 @@ if (!function_exists('render_api_endpoints_page')) {
                         showCopyFeedback(element, text);
                     }
                 } catch (err) {
-                    console.log('Fallback copy failed:', err);
                 }
                 
                 document.body.removeChild(textArea);
@@ -1151,21 +1111,17 @@ if (!function_exists('render_api_endpoints_page')) {
                     }, 300);
                 }, 2000);
                 
-                console.log('Copy feedback shown for:', text);
             }
             
             // Función de debug para probar AJAX (solo para desarrollo)
             window.testDynamicTagsAjax = function(index) {
-                console.log('Testing AJAX for endpoint index:', index);
                 
                 $.post(ajaxurl, {
                     action: 'get_dynamic_tags_for_endpoint',
                     index: index,
                     nonce: window.currentNonce || '<?php echo wp_create_nonce('get_dynamic_tags'); ?>'
                 }, function(response) {
-                    console.log('✅ AJAX Success:', response);
                 }).fail(function(xhr, status, error) {
-                    console.log('❌ AJAX Failed:', {
                         status: status, 
                         error: error, 
                         response: xhr.responseText,
@@ -1177,13 +1133,10 @@ if (!function_exists('render_api_endpoints_page')) {
             
             // Función helper para probar la interfaz directamente
             window.testShowDynamicTags = function(index) {
-                console.log('🧪 Testing show dynamic tags for index:', index);
                 const $accordion = $('#dynamic-tags-' + index);
-                console.log('🧪 Accordion found:', $accordion.length);
                 
                 if ($accordion.length > 0) {
                     $accordion.show();
-                    console.log('🧪 Accordion mostrado, llamando loadDynamicTags...');
                     loadDynamicTags(index);
                 } else {
                     console.error('🧪 ❌ Accordion no encontrado para index:', index);
@@ -1191,16 +1144,10 @@ if (!function_exists('render_api_endpoints_page')) {
             };
             
             // Log para debug
-            console.log('🚀 Bricks API Integrator - Dynamic Tags system loaded');
-            console.log('💡 Usa testShowDynamicTags(index) para probar tags de un endpoint específico');
             
             // Verificar que los botones existen
-            console.log('🔘 Botones encontrados:');
-            console.log('- add-endpoint:', $('#add-endpoint').length);
-            console.log('- add-related-endpoint:', $('#add-related-endpoint').length);
             
             <?php if (defined('WP_DEBUG') && WP_DEBUG): ?>
-            console.log('🔧 Modo debug activo - Funciones adicionales disponibles en la consola');
             <?php endif; ?>
             
             // FUNCIÓN SIMPLE PARA ACORDEONES - Solo toggle mostrar/ocultar
