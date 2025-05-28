@@ -1,79 +1,133 @@
 /**
- * Query Preview JavaScript
+ * Query Preview JavaScript - Version Corregida
  * Archivo: assets/query-preview.js
  */
 
 (function($) {
     'use strict';
     
+    // Verificar que jQuery está disponible
+    if (typeof $ === 'undefined') {
+        console.error('jQuery no está disponible para query-preview.js');
+        return;
+    }
+    
     // Objeto principal para preview de queries
     window.BricksApiQueryPreview = {
         
         init: function() {
+            console.log('BricksApiQueryPreview: Inicializando...');
             this.bindEvents();
             this.addPreviewButtons();
         },
         
         bindEvents: function() {
+            console.log('BricksApiQueryPreview: Binding events...');
+            
             // Event listener para botones de preview
             $(document).on('click', '.bricks-api-preview-btn', this.handlePreviewClick.bind(this));
             
-            // Event listener para cerrar preview
+            // Event listener para cerrar preview  
             $(document).on('click', '.preview-modal-close', this.closePreview.bind(this));
             
             // Cerrar con ESC
+            var self = this;
             $(document).keyup(function(e) {
                 if (e.keyCode === 27) {
-                    BricksApiQueryPreview.closePreview();
+                    self.closePreview();
                 }
             });
         },
         
         addPreviewButtons: function() {
-            // Añadir botones de preview en admin
-            this.addAdminPreviewButtons();
-        },
-        
-        addAdminPreviewButtons: function() {
-            // Añadir botones en la página de configuración de endpoints
-            if (window.location.href.includes('api-endpoints') || window.location.href.includes('bricks-api')) {
-                $('.endpoint-card, .endpoint-accordion').each(function() {
-                    const $card = $(this);
-                    const endpointName = $card.find('input[name*="[name]"]').val();
-                    
-                    if (endpointName && !$card.find('.admin-preview-btn').length) {
-                        const queryType = 'api_' + BricksApiQueryPreview.sanitizeKey(endpointName);
-                        const $previewBtn = $('<button type="button" class="button admin-preview-btn bricks-api-preview-btn" data-query-type="' + queryType + '" style="margin-left: 10px;">🔍 Preview Datos</button>');
-                        
-                        // Añadir después del botón de test
-                        const $testBtn = $card.find('.test-endpoint');
-                        if ($testBtn.length) {
-                            $testBtn.after($previewBtn);
-                        } else {
-                            $card.find('.form-table').last().after($previewBtn);
-                        }
-                    }
-                });
+            console.log('BricksApiQueryPreview: Añadiendo botones de preview...');
+            
+            // Solo ejecutar si estamos en una página de admin relevante
+            if (this.isRelevantAdminPage()) {
+                this.addAdminPreviewButtons();
             }
         },
         
-        handlePreviewClick: function(e) {
-            e.preventDefault();
-            e.stopPropagation();
+        isRelevantAdminPage: function() {
+            if (typeof window.location === 'undefined' || !window.location.href) {
+                return false;
+            }
             
-            const $btn = $(e.currentTarget);
-            const queryType = $btn.data('query-type');
+            return window.location.href.includes('api-endpoints') || 
+                   window.location.href.includes('bricks-api') ||
+                   window.location.href.includes('page=bricks-api-integrator');
+        },
+        
+        addAdminPreviewButtons: function() {
+            var self = this;
+            
+            // Esperar a que el DOM esté completamente cargado
+            setTimeout(function() {
+                $('.endpoint-card, .endpoint-accordion').each(function() {
+                    var $card = $(this);
+                    var endpointName = $card.find('input[name*="[name]"]').val();
+                    
+                    if (endpointName && !$card.find('.admin-preview-btn').length) {
+                        var queryType = 'api_' + self.sanitizeKey(endpointName);
+                        var $previewBtn = $('<button type="button" class="button admin-preview-btn bricks-api-preview-btn" data-query-type="' + queryType + '" style="margin-left: 10px;">🔍 Preview Datos</button>');
+                        
+                        // Añadir después del botón de test
+                        var $testBtn = $card.find('.test-endpoint');
+                        if ($testBtn.length) {
+                            $testBtn.after($previewBtn);
+                        } else {
+                            var $lastTable = $card.find('.form-table').last();
+                            if ($lastTable.length) {
+                                $lastTable.after($previewBtn);
+                            }
+                        }
+                        
+                        console.log('Botón de preview añadido para:', endpointName);
+                    }
+                });
+            }, 1000);
+        },
+        
+        handlePreviewClick: function(e) {
+            console.log('BricksApiQueryPreview: Preview button clicked');
+            
+            if (e && e.preventDefault) {
+                e.preventDefault();
+            }
+            if (e && e.stopPropagation) {
+                e.stopPropagation();
+            }
+            
+            var $btn = $(e.currentTarget);
+            var queryType = $btn.data('query-type');
             
             if (!queryType) {
                 alert('Error: No se pudo determinar el query type');
                 return;
             }
             
-            this.showPreview(queryType, $btn);
+            console.log('Query type:', queryType);
+            
+            // Por ahora, mostrar un mensaje simple
+            alert('Preview funcionando para: ' + queryType + '\n\nEsta funcionalidad se expandirá pronto con el modal completo.');
         },
         
-        // Utilidades básicas
+        closePreview: function() {
+            console.log('BricksApiQueryPreview: Closing preview');
+            
+            var $modal = $('#bricks-api-preview-modal');
+            if ($modal.length) {
+                $modal.removeClass('active');
+                $('body').removeClass('preview-modal-open');
+            }
+        },
+        
+        // Utilidades
         sanitizeKey: function(str) {
+            if (typeof str !== 'string') {
+                return 'default';
+            }
+            
             return str.toLowerCase()
                      .replace(/[^a-z0-9]/g, '_')
                      .replace(/_+/g, '_')
@@ -81,7 +135,11 @@
         },
         
         sanitizeHtml: function(str) {
-            const div = document.createElement('div');
+            if (typeof str !== 'string') {
+                return '';
+            }
+            
+            var div = document.createElement('div');
             div.textContent = str;
             return div.innerHTML;
         }
@@ -89,7 +147,23 @@
     
     // Inicializar cuando el DOM esté listo
     $(document).ready(function() {
-        BricksApiQueryPreview.init();
+        console.log('DOM ready - Inicializando BricksApiQueryPreview');
+        
+        // Verificar que el objeto bricksApiPreview está disponible
+        if (typeof bricksApiPreview === 'undefined') {
+            console.log('bricksApiPreview no está definido, creando objeto por defecto');
+            window.bricksApiPreview = {
+                ajaxUrl: (typeof ajaxurl !== 'undefined') ? ajaxurl : '/wp-admin/admin-ajax.php',
+                nonce: 'default-nonce'
+            };
+        }
+        
+        // Inicializar nuestro objeto
+        if (window.BricksApiQueryPreview) {
+            window.BricksApiQueryPreview.init();
+        } else {
+            console.error('BricksApiQueryPreview no se pudo inicializar');
+        }
     });
     
 })(jQuery);

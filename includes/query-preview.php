@@ -23,12 +23,12 @@ trait QueryPreview {
         add_action('wp_ajax_preview_query_type', [$this, 'ajax_preview_query_type']);
         add_action('wp_ajax_nopriv_preview_query_type', [$this, 'ajax_preview_query_type']);
         
-        // Hook para modificar la interfaz de Bricks con botón de preview
-        add_filter('bricks/setup/control_options', [$this, 'add_preview_options_to_query_controls'], 20);
-        
-        // Enqueue scripts para preview
+        // Enqueue scripts solo en admin
         add_action('admin_enqueue_scripts', [$this, 'enqueue_preview_scripts']);
-        add_action('wp_enqueue_scripts', [$this, 'enqueue_preview_scripts']);
+        
+        if (defined('WP_DEBUG') && WP_DEBUG) {
+            error_log('Query Preview: Hooks inicializados');
+        }
     }
     
     /**
@@ -191,9 +191,13 @@ trait QueryPreview {
      * Enqueue scripts para preview
      */
     public function enqueue_preview_scripts($hook = '') {
-        // Solo cargar en Bricks Builder o en admin donde sea necesario
-        if (!function_exists('bricks_is_builder') && !is_admin()) {
+        // Solo cargar en admin
+        if (!is_admin()) {
             return;
+        }
+        
+        if (defined('WP_DEBUG') && WP_DEBUG) {
+            error_log('Query Preview: Cargando scripts en: ' . $hook);
         }
         
         wp_enqueue_script(
