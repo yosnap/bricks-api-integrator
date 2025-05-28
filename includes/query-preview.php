@@ -23,8 +23,9 @@ trait QueryPreview {
         add_action('wp_ajax_preview_query_type', [$this, 'ajax_preview_query_type']);
         add_action('wp_ajax_nopriv_preview_query_type', [$this, 'ajax_preview_query_type']);
         
-        // Enqueue scripts solo en admin
+        // Enqueue scripts en admin y frontend (para Bricks Builder)
         add_action('admin_enqueue_scripts', [$this, 'enqueue_preview_scripts']);
+        add_action('wp_enqueue_scripts', [$this, 'enqueue_preview_scripts']);
         
         if (defined('WP_DEBUG') && WP_DEBUG) {
             error_log('Query Preview: Hooks inicializados');
@@ -191,34 +192,47 @@ trait QueryPreview {
      * Enqueue scripts para preview
      */
     public function enqueue_preview_scripts($hook = '') {
-        // Solo cargar en admin
-        if (!is_admin()) {
-            return;
-        }
-        
         if (defined('WP_DEBUG') && WP_DEBUG) {
             error_log('Query Preview: Cargando scripts en: ' . $hook);
         }
         
+        // Script para admin (configuración de endpoints)
+        if (is_admin()) {
+            wp_enqueue_script(
+                'bricks-api-query-preview',
+                BRICKS_API_INTEGRATOR_URL . 'assets/query-preview.js',
+                ['jquery'],
+                BRICKS_API_INTEGRATOR_VERSION,
+                true
+            );
+            
+            wp_enqueue_style(
+                'bricks-api-query-preview',
+                BRICKS_API_INTEGRATOR_URL . 'assets/query-preview.css',
+                [],
+                BRICKS_API_INTEGRATOR_VERSION
+            );
+        }
+        
+        // Script específico para Bricks Builder (frontend)
         wp_enqueue_script(
-            'bricks-api-query-preview',
-            BRICKS_API_INTEGRATOR_URL . 'assets/query-preview.js',
+            'bricks-query-type-preview',
+            BRICKS_API_INTEGRATOR_URL . 'assets/bricks-query-preview.js',
             ['jquery'],
             BRICKS_API_INTEGRATOR_VERSION,
             true
         );
         
+        // Localizar variables para ambos scripts
         wp_localize_script('bricks-api-query-preview', 'bricksApiPreview', [
             'ajaxUrl' => admin_url('admin-ajax.php'),
             'nonce' => wp_create_nonce('bricks_api_preview')
         ]);
         
-        wp_enqueue_style(
-            'bricks-api-query-preview',
-            BRICKS_API_INTEGRATOR_URL . 'assets/query-preview.css',
-            [],
-            BRICKS_API_INTEGRATOR_VERSION
-        );
+        wp_localize_script('bricks-query-type-preview', 'bricksApiPreview', [
+            'ajaxUrl' => admin_url('admin-ajax.php'),
+            'nonce' => wp_create_nonce('bricks_api_preview')
+        ]);
     }
     
     /**

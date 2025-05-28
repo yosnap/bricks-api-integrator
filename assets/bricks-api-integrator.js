@@ -285,22 +285,31 @@ document.addEventListener("DOMContentLoaded", function () {
     const button = e.target;
     const index = parseInt(button.getAttribute('data-index'));
     const resultDiv = document.getElementById(`test-result-${index}`);
-    const group = button.closest('.endpoint-group');
+    const card = button.closest('.endpoint-accordion, .endpoint-card');
+    
+    if (!card) {
+      console.error('No se encontró el contenedor del endpoint');
+      return;
+    }
     
     // Obtener datos del endpoint
-    const nameInput = group.querySelector(`input[name*="[name]"]`);
-    const urlInput = group.querySelector(`input[name*="[url]"]`);
-    const authSelect = group.querySelector(`select[name*="[auth_type]"]`);
+    const nameInput = card.querySelector(`input[name*="[name]"]`);
+    const urlInput = card.querySelector(`input[name*="[url]"]`);
+    const authSelect = card.querySelector(`select[name*="[auth_type]"]`);
     
     if (!urlInput || !urlInput.value) {
-      resultDiv.innerHTML = '<p style="color: red;">❌ URL requerida</p>';
+      if (resultDiv) {
+        resultDiv.innerHTML = '<p style="color: red;">❌ URL requerida</p>';
+      }
       return;
     }
     
     // Mostrar loading
     button.disabled = true;
     button.textContent = '🔄 Probando...';
-    resultDiv.innerHTML = '<p style="color: blue;">🔄 Probando conexión...</p>';
+    if (resultDiv) {
+      resultDiv.innerHTML = '<p style="color: blue;">🔄 Probando conexión...</p>';
+    }
     
     // Simular test (en implementación real, aquí iría AJAX)
     setTimeout(function() {
