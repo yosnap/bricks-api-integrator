@@ -217,6 +217,7 @@ function render_api_sources_page() {
                                     </td>
                                     <td>
                                         <a href="<?php echo esc_url(admin_url('admin.php?page=bricks-api-integrator-sources&action=edit&source_id=' . $source_id)); ?>" class="button button-small"><?php esc_html_e('Edit', 'bricks-api-integrator'); ?></a>
+                                        <button type="button" class="button button-small query-type-preview-btn" data-source-id="<?php echo esc_attr($source_id); ?>" data-source-name="<?php echo esc_attr($source['name']); ?>" style="background: #007cba; color: white; margin-left: 5px;">🔍 Preview</button>
                                         <a href="<?php echo esc_url(wp_nonce_url(admin_url('admin.php?page=bricks-api-integrator-sources&action=delete&source_id=' . $source_id), 'delete_api_source_' . $source_id)); ?>" class="button button-small button-link-delete" onclick="return confirm('<?php esc_attr_e('¿Estás seguro de que quieres eliminar este query type?', 'bricks-api-integrator'); ?>')"><?php esc_html_e('Eliminar', 'bricks-api-integrator'); ?></a>
                                     </td>
                                 </tr>
@@ -261,6 +262,98 @@ function render_api_sources_page() {
         $(document).on('click', '.remove-param', function() {
             $(this).closest('.dynamic-param-row').remove();
         });
+        
+        // Handle Query Type Preview buttons
+        $('.query-type-preview-btn').on('click', function(e) {
+            e.preventDefault();
+            
+            var $btn = $(this);
+            var sourceId = $btn.data('source-id');
+            var sourceName = $btn.data('source-name');
+            
+            // Create query type string for manual source
+            var queryType = 'source_' + sourceName.toLowerCase().replace(/[^a-z0-9]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '');
+            
+            console.log('Preview clicked for:', queryType);
+            
+            // Show loading state
+            $btn.prop('disabled', true).text('⏳ Cargando...');
+            
+            // Make AJAX request
+            $.post(ajaxurl, {
+                action: 'preview_query_type',
+                query_type: queryType,
+                limit: 1,
+                nonce: '<?php echo wp_create_nonce('bricks_api_preview'); ?>'
+            }, function(response) {
+                if (response.success && response.data.preview_data && response.data.preview_data.length > 0) {
+                    showPreviewModal(response.data, sourceName);
+                } else {
+                    alert('Error: ' + (response.data ? response.data.message : 'No se encontraron datos'));
+                }
+            }).fail(function() {
+                alert('Error de conexión al servidor');
+            }).always(function() {
+                // Restore button
+                $btn.prop('disabled', false).text('🔍 Preview');
+            });
+        });
+        
+        // Function to show preview modal
+        function showPreviewModal(data, sourceName) {
+            // Remove existing modal
+            $('#query-type-preview-modal').remove();
+            
+            var item = data.preview_data[0];
+            var modalHtml = '<div id="query-type-preview-modal" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 999999; display: flex; align-items: center; justify-content: center;">';
+            modalHtml += '<div style="background: white; border-radius: 8px; max-width: 800px; max-height: 80vh; overflow: auto; box-shadow: 0 10px 30px rgba(0,0,0,0.3);">';
+            modalHtml += '<div style="background: #f8f9fa; padding: 15px 20px; border-bottom: 1px solid #dee2e6; display: flex; justify-content: space-between; align-items: center;">';
+            modalHtml += '<h3 style="margin: 0; color: #343a40;">🔍 Preview: ' + sourceName + '</h3>';
+            modalHtml += '<button onclick="jQuery(this).closest(\'#query-type-preview-modal\').remove()" style="background: #dc3545; color: white; border: none; width: 30px; height: 30px; border-radius: 50%; cursor: pointer;">✕</button>';
+            modalHtml += '</div>';
+            modalHtml += '<div style="padding: 20px;">';
+            modalHtml += '<h4 style="color: #007cba; margin-top: 0;">📊 Primer elemento encontrado:</h4>';
+            modalHtml += '<div style="background: #f8f9fa; border-radius: 6px; padding: 15px;">';
+            
+            // Show item fields
+            Object.keys(item).forEach(function(key) {
+                var value = item[key];
+                var displayValue = '';
+                
+                if (value === null || value === undefined) {
+                    displayValue = '<em style="color: #6c757d;">null</em>';
+                } else if (Array.isArray(value)) {
+                    displayValue = '<span style="color: #17a2b8;">[Array con ' + value.length + ' elementos]</span>';
+                } else if (typeof value === 'object') {
+                    displayValue = '<span style="color: #ffc107;">[Objeto con ' + Object.keys(value).length + ' propiedades]</span>';
+                } else {
+                    var strValue = String(value);
+                    displayValue = strValue.length > 100 ? strValue.substring(0, 97) + '...' : strValue;
+                }
+                
+                modalHtml += '<div style="display: grid; grid-template-columns: 150px 1fr; gap: 10px; padding: 8px 0; border-bottom: 1px solid #e9ecef;">';
+                modalHtml += '<div style="font-weight: 600; color: #495057; font-size: 13px;">' + key + '</div>';
+                modalHtml += '<div style="font-size: 13px; color: #212529; word-break: break-word;">' + displayValue + '</div>';
+                modalHtml += '</div>';
+            });
+            
+            modalHtml += '</div>';
+            
+            // Show dynamic tags if available
+            if (data.sample_tags && data.sample_tags.length > 0) {
+                modalHtml += '<h4 style="color: #007cba; margin: 20px 0 10px 0;">🏷️ Dynamic Tags disponibles:</h4>';
+                modalHtml += '<div style="background: #e7f3ff; border-radius: 6px; padding: 15px; font-family: monospace; font-size: 12px; line-height: 1.5;">';
+                data.sample_tags.slice(0, 10).forEach(function(tag) {
+                    modalHtml += '<div style="background: white; padding: 4px 8px; margin: 2px 0; border-radius: 3px; cursor: pointer;" onclick="navigator.clipboard.writeText(\'' + tag + '\').then(() => alert(\'Tag copiado: ' + tag + '\'))">' + tag + '</div>';
+                });
+                modalHtml += '</div>';
+                modalHtml += '<p style="font-size: 12px; color: #6c757d; margin: 10px 0 0 0;">💡 Haz clic en cualquier tag para copiarlo</p>';
+            }
+            
+            modalHtml += '</div></div></div>';
+            
+            $('body').append(modalHtml);
+        }
         
         // Check if we need to redirect after saving
         <?php 

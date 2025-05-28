@@ -59,33 +59,8 @@
         },
         
         addAdminPreviewButtons: function() {
-            var self = this;
-            
-            // Esperar a que el DOM esté completamente cargado
-            setTimeout(function() {
-                $('.endpoint-card, .endpoint-accordion').each(function() {
-                    var $card = $(this);
-                    var endpointName = $card.find('input[name*="[name]"]').val();
-                    
-                    if (endpointName && !$card.find('.admin-preview-btn').length) {
-                        var queryType = 'api_' + self.sanitizeKey(endpointName);
-                        var $previewBtn = $('<button type="button" class="button admin-preview-btn bricks-api-preview-btn" data-query-type="' + queryType + '" style="margin-left: 10px;">🔍 Preview Datos</button>');
-                        
-                        // Añadir después del botón de test
-                        var $testBtn = $card.find('.test-endpoint');
-                        if ($testBtn.length) {
-                            $testBtn.after($previewBtn);
-                        } else {
-                            var $lastTable = $card.find('.form-table').last();
-                            if ($lastTable.length) {
-                                $lastTable.after($previewBtn);
-                            }
-                        }
-                        
-                        console.log('Botón de preview añadido para:', endpointName);
-                    }
-                });
-            }, 1000);
+            // No añadir botones en endpoints - solo funcionalidad básica
+            console.log('Query preview: Admin buttons disabled for endpoints');
         },
         
         handlePreviewClick: function(e) {
