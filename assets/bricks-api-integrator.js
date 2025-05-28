@@ -5,7 +5,7 @@
 
 document.addEventListener("DOMContentLoaded", function () {
   // Variables globales
-  let endpointWrapper = document.getElementById("endpoints-wrapper");
+  let endpointWrapper = document.getElementById("endpoints-container");
   let addEndpointButton = document.getElementById("add-endpoint");
   let endpointCounter = 0;
 
@@ -20,82 +20,104 @@ document.addEventListener("DOMContentLoaded", function () {
       e.preventDefault();
       
       let newGroup = document.createElement("div");
-      newGroup.classList.add("endpoint-group");
+      newGroup.classList.add("endpoint-accordion");
+      newGroup.style.cssText = "background: #fff; margin: 20px 0; border: 1px solid #ddd; border-radius: 5px;";
       newGroup.setAttribute("data-index", endpointCounter);
       
       newGroup.innerHTML = `
-        <div class="endpoint-header" onclick="toggleEndpointVisibility(${endpointCounter})">
-          <h4>
-            <span class="endpoint-title">Endpoint ${endpointCounter + 1}</span>
-            <span class="toggle-icon">▼</span>
-          </h4>
+        <div class="endpoint-header" onclick="toggleEndpoint(${endpointCounter})" style="background: #f1f1f1; padding: 15px; cursor: pointer; border-bottom: 1px solid #ddd;">
+          <h3 style="margin: 0; display: inline-block;">Endpoint ${endpointCounter + 1} - Sin nombre</h3>
+          <span id="toggle-icon-${endpointCounter}" style="float: right; font-size: 18px;">🔽</span>
         </div>
         
-        <div class="endpoint-content" id="endpoint-content-${endpointCounter}">
+        <div id="endpoint-content-${endpointCounter}" class="endpoint-content" style="padding: 20px;">
           <table class="form-table">
             <tr>
-              <th><label>Nombre del Endpoint:</label></th>
+              <th><label>Nombre del Endpoint</label></th>
               <td>
                 <input type="text" 
-                       name="bricks_api_endpoints[${endpointCounter}][name]" 
-                       class="regular-text endpoint-name-input" 
+                       name="endpoints[${endpointCounter}][name]" 
+                       class="regular-text" 
                        placeholder="Nombre del Endpoint" 
-                       onchange="updateEndpointTitleFromInput(${endpointCounter}, this.value)" 
+                       onchange="updateEndpointTitle(${endpointCounter}, this.value)" 
                        required />
               </td>
             </tr>
             <tr>
-              <th><label>URL del Endpoint:</label></th>
+              <th><label>URL del Endpoint</label></th>
               <td>
                 <input type="url" 
-                       name="bricks_api_endpoints[${endpointCounter}][url]" 
+                       name="endpoints[${endpointCounter}][url]" 
                        class="regular-text" 
                        placeholder="https://api.ejemplo.com/datos" 
                        required />
-                <p class="description">Usa {parámetro} para parámetros dinámicos</p>
               </td>
             </tr>
             <tr>
-              <th><label>Autenticación:</label></th>
+              <th><label>Autenticación</label></th>
               <td>
-                <select name="bricks_api_endpoints[${endpointCounter}][auth_type]" 
-                        class="auth-type-select" 
-                        onchange="handleAuthFieldChange(${endpointCounter}, this.value)">
+                <select name="endpoints[${endpointCounter}][auth_type]" class="auth-type-select">
                   <option value="none">Sin Autenticación</option>
                   <option value="basic">Autenticación Básica</option>
-                  <option value="token">Bearer Token</option>
+                  <option value="bearer">Bearer Token</option>
                   <option value="api_key">API Key</option>
                 </select>
               </td>
             </tr>
           </table>
           
-          <div class="auth-fields" id="auth-fields-${endpointCounter}"></div>
-          
-          <div class="endpoint-actions" style="margin: 15px 0;">
-            <button type="button" class="button test-endpoint" data-index="${endpointCounter}">🧪 Test API</button>
-            <button type="button" class="button button-link-delete remove-endpoint" data-index="${endpointCounter}">🗑️ Eliminar Endpoint</button>
+          <div class="endpoint-actions" style="margin-top: 20px; padding-top: 15px; border-top: 1px solid #ddd;">
+            <button type="button" class="test-endpoint button button-secondary" data-index="${endpointCounter}">
+              ✅ Test API
+            </button>
+            <button type="button" class="show-dynamic-tags button button-warning" data-index="${endpointCounter}">
+              🏷️ Ver Dynamic Tags
+            </button>
+            <button type="button" class="refresh-endpoint-data button button-success" data-index="${endpointCounter}">
+              🔄 Actualizar Datos
+            </button>
+            <button type="button" class="remove-endpoint button button-danger" data-index="${endpointCounter}" style="float: right;">
+              🗑️ Eliminar
+            </button>
           </div>
           
-          <div class="test-result" id="test-result-${endpointCounter}"></div>
+          <div class="dynamic-tags-accordion" id="dynamic-tags-${endpointCounter}" style="display: none; margin-top: 15px; padding: 15px; background: #f9f9f9; border-radius: 5px;">
+            <div class="dynamic-tags-content">
+              <h4 style="margin: 0 0 10px 0; color: #007cba;">🏷️ Dynamic Tags Disponibles</h4>
+              <div class="tags-loading" style="text-align: center; padding: 20px;">
+                <span style="color: #666;">⏳ Generando dynamic tags...</span>
+              </div>
+              <div class="tags-list" style="display: none;">
+                <!-- Se llenará con AJAX -->
+              </div>
+              <div class="tags-help" style="margin-top: 15px; padding: 10px; background: #e7f3ff; border-radius: 3px;">
+                <p style="margin: 0; font-size: 13px; color: #0073aa;">
+                  💡 <strong>Cómo usar:</strong> Copia y pega estos tags en tus elementos de Bricks Builder. 
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
-        <hr>
       `;
       
       endpointWrapper.appendChild(newGroup);
       endpointCounter++;
       
-      // Reinicializar event listeners
+      // Reinicializar event listeners para el nuevo endpoint
       initializeEventListeners();
     });
   }
 
   // Función para actualizar el título del endpoint
-  window.updateEndpointTitleFromInput = function(index, name) {
-    const titleSpan = document.querySelector(`[data-index="${index}"] .endpoint-title`);
-    if (titleSpan) {
-      titleSpan.textContent = name || `Endpoint ${index + 1}`;
+  window.updateEndpointTitle = function(index, name) {
+    const headerH3 = document.querySelector(`#toggle-icon-${index}`).parentElement.querySelector('h3');
+    if (headerH3) {
+      headerH3.textContent = `Endpoint ${index + 1} - ${name || 'Sin nombre'}`;
     }
+  };
+  
+  window.updateEndpointTitleFromInput = function(index, name) {
+    updateEndpointTitle(index, name);
   };
 
   // Función para toggle de visibilidad
