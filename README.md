@@ -1,9 +1,9 @@
-# Bricks API Integrator v2.1
+# Bricks API Integrator v2.1.1
 
-> Sistema completo para integrar APIs externas con Bricks Builder - Crea sitios web dinámicos con páginas de detalle automáticas, URLs limpias y una interfaz moderna con acordeones.
+> Sistema completo para integrar APIs externas con Bricks Builder - Ahora con sistema diferenciado AUTO/MANUAL para máxima flexibilidad.
 
 [![WordPress](https://img.shields.io/badge/WordPress-5.0+-blue.svg)]()
-[![Bricks Builder](https://img.shields.io/badge/Bricks%20Builder-1.5+-green.svg)]()
+[![Bricks Builder](https://img.shields.io/badge/Bricks%20Builder-1.8+-green.svg)]()
 [![PHP](https://img.shields.io/badge/PHP-7.4+-purple.svg)]()
 [![License](https://img.shields.io/badge/License-GPL%202-red.svg)]()
 
@@ -11,43 +11,47 @@
 
 **Transforma cualquier API en un sitio web completo** con WordPress y Bricks Builder. Crea automáticamente:
 
-- ✅ **Dynamic Tags** para mostrar datos de API en Bricks
-- ✅ **Query Types** para Query Loop de listados  
+- ✅ **Query Types Diferenciados** - Automáticos y Manuales
+- ✅ **Dynamic Tags Inteligentes** - Prefijos diferenciados para máxima claridad
 - ✅ **URLs limpias** como `/productos/123/` para páginas de detalle
 - ✅ **Parámetros dinámicos** que se adaptan al contexto actual
-- ✅ **Templates automáticas** con rewrite rules de WordPress
-- ✅ **Interfaz moderna** con acordeones y autenticación dinámica
+- ✅ **Arrays anidados** con Items Path para estructuras complejas
+- ✅ **Interfaz moderna** con sistema explicativo y guías paso a paso
 
-## 🆕 **Novedades v2.1**
+## 🆕 **Novedades v2.1.1 - Sistema Diferenciado**
 
-### **🎨 Interfaz Mejorada**
-- **Acordeones organizados**: Cada endpoint en su propio acordeón expandible
-- **Autenticación dinámica**: Campos de auth aparecen instantáneamente al seleccionar tipo
-- **Headers clickeables**: Navegación rápida entre endpoints múltiples
-- **Experiencia fluida**: Sin recargas de página innecesarias
+### **🎯 Query Types Automáticos vs Manuales**
 
-### **⚡ Configuración Más Rápida**
-```
-ANTES: Seleccionar auth → Guardar → Recargar → Ver campos
-DESPUÉS: Seleccionar auth → ¡Campos aparecen inmediatamente!
-```
+#### 🤖 **Automáticos (Auto)**
+- **Se crean automáticamente** al configurar un Endpoint
+- **Aparecen como**: `Mi API (Auto)` en Bricks
+- **Tags**: `{snap_auto_miapi_campo}`
+- **Ideal para**: APIs simples y directas
 
-## 🚀 Características Principales
+#### ⚙️ **Manuales (Manual)**  
+- **Se crean manualmente** en página Query Types
+- **Aparecen como**: `Mi Lista (Manual)` en Bricks
+- **Tags**: `{snap_milista_campo}`
+- **Ideal para**: Arrays anidados con `items_path`
 
-### **Sistema Único de Dynamic Tags**
+### **🏷️ Sistema de Tags Mejorado**
 ```html
-<!-- Automáticamente disponibles en Bricks -->
-<h1>{snap_productos_titulo}</h1>
-<p>{snap_productos_descripcion}</p>
-<img src="{snap_productos_imagen}" alt="{snap_productos_titulo}">
-<p>Precio: ${snap_productos_precio}</p>
+<!-- Tags Automáticos (desde endpoints) -->
+<h1>{snap_auto_productos_titulo}</h1>
+<p>{snap_auto_productos_descripcion}</p>
+
+<!-- Tags Manuales (desde query types con items_path) -->
+<div class="producto">
+  <h3>{snap_productos_nombre}</h3>
+  <p>Precio: ${snap_productos_precio}</p>
+  <span>{snap_productos_categoria}</span>
+</div>
 ```
 
-### **Parámetros Dinámicos Avanzados**
-- **URL Parameters**: `?id=123` → Obtiene datos del producto 123
-- **Post Context**: Usa ID del post actual para datos relacionados
-- **User Context**: Datos específicos del usuario logueado
-- **Meta Fields**: Integra campos personalizados de WordPress
+### **📊 Dashboard Explicativo**
+- **Estadísticas diferenciadas**: Endpoints vs Query Types manuales
+- **Guías paso a paso**: Flujo de trabajo recomendado
+- **Ejemplos prácticos**: Cómo manejar APIs complejas
 - **Static Values**: Valores fijos para filtros específicos
 
 ### **Templates con URLs Limpias**

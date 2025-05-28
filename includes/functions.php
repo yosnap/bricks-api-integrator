@@ -117,7 +117,7 @@ if (!function_exists('bricks_api_integrator_dashboard')) {
         }
         ?>
         <div class="wrap">
-            <h1>🔌 Bricks API Integrator v2.1.0</h1>
+            <h1>🔌 Bricks API Integrator v2.1.1</h1>
             <p>Plugin que integra APIs externas con Bricks Builder de forma dinámica.</p>
             
             <div class="dashboard-stats" style="display: flex; gap: 20px; margin: 20px 0; flex-wrap: wrap;">

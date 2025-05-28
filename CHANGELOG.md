@@ -1,5 +1,44 @@
 # Changelog - Bricks API Integrator v2.1
 
+## [2.1.1] - 2025-05-28
+
+### ✨ **Sistema Diferenciado AUTO/MANUAL**
+
+#### **Query Types Diferenciados**
+- ✅ **Automáticos**: Se crean automáticamente al configurar endpoints - aparecen como "Nombre (Auto)"
+- ✅ **Manuales**: Se crean manualmente en Query Types para ítems anidados - aparecen como "Nombre (Manual)"
+- ✅ **Identificación clara**: Diferenciación visual en Bricks Builder
+- ✅ **Flujo optimizado**: Cada tipo para su caso de uso específico
+
+#### **Dynamic Tags Mejorados**
+- ✅ **Tags Automáticos**: `{snap_auto_endpoint_campo}` para endpoints directos
+- ✅ **Tags Manuales**: `{snap_source_campo}` para query types con items_path
+- ✅ **Renderizado inteligente**: Detección automática del tipo durante procesamiento
+- ✅ **Contexto de Bricks**: Funciona perfectamente en Query Loops
+
+#### **Dashboard Renovado**
+- ✅ **Estadísticas diferenciadas**: Endpoints vs Query Types manuales por separado
+- ✅ **Explicación visual**: Diferencia clara entre automáticos y manuales con colores
+- ✅ **Guía paso a paso**: Flujo de trabajo recomendado para cada tipo
+- ✅ **Ejemplo práctico**: Cómo manejar APIs con arrays anidados
+
+### 🔧 **Mejoras Técnicas**
+- ✅ **Arquitectura limpia**: Código refactorizado sin errores de sintaxis
+- ✅ **Renderizado optimizado**: Procesamiento inteligente según tipo de tag
+- ✅ **Debug mejorado**: Logging detallado para troubleshooting
+- ✅ **Compatibilidad**: Tags existentes siguen funcionando
+
+### 🐛 **Correcciones**
+- ✅ **Sintaxis PHP**: Corregidos errores en `render_dynamic_tags_dynamic`
+- ✅ **Código limpio**: Eliminado código duplicado y bloques catch huérfanos
+- ✅ **Validación**: PHP linting sin errores
+
+### 📚 **Documentación**
+- ✅ **README actualizado**: Nueva funcionalidad explicada
+- ✅ **Guía completa**: GUIA-AUTO-MANUAL.md con ejemplos detallados
+- ✅ **Release notes**: Documentación completa de cambios
+- ✅ **Casos de uso**: Ejemplos prácticos para diferentes escenarios
+
 ## [2.1.0] - 2024-12-27
 
 ### 🎨 **Mejoras de Interfaz de Usuario**
