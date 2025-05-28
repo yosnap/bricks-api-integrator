@@ -1,5 +1,29 @@
 # Changelog - Bricks API Integrator v2.1
 
+## [2.1.3] - 2025-05-28
+
+### 🧹 **Limpieza y Optimización**
+
+#### **Consola de Debugging Limpia**
+- ✅ **Eliminados todos los console.log**: Interfaz profesional sin ruido en consola
+- ✅ **Scripts de testing deshabilitados**: Archivos movidos a `/bak/` con extensión `.disabled`
+- ✅ **Funcionalidad preservada**: Dynamic Tags y todas las características operativas al 100%
+
+#### **Archivos de Debugging Organizados**
+- 🗂️ **debug-dynamic-tags.js** → `bak/debug-dynamic-tags.js.disabled`
+- 🗂️ **analyze-json-structure.js** → `bak/analyze-json-structure.js.disabled`  
+- 🗂️ **test-field-extractor.js** → `bak/test-field-extractor.js.disabled`
+- 🗂️ **verificar-tags.js** → `bak/verificar-tags.js.disabled`
+- 🗂️ **test-especialidades.js** → `bak/test-especialidades.js.disabled`
+- 🗂️ **fix-dynamic-tags.js** → `bak/fix-dynamic-tags.js.disabled`
+
+### 💡 **Para Desarrolladores**
+- Scripts de testing disponibles en carpeta `bak/` para desarrollo futuro
+- Solo se cargan si `WP_DEBUG` está activo y los archivos existen
+- Funcionalidad de producción completamente limpia
+
+---
+
 ## [2.1.2] - 2025-05-28
 
 ### 🔧 **Correcciones Críticas**
