@@ -14,7 +14,9 @@ document.addEventListener("DOMContentLoaded", function () {
     endpointCounter = endpointWrapper.children.length;
   }
 
+  // DESHABILITADO: Este event listener causa duplicación con el JavaScript inline
   // Función para añadir un nuevo endpoint
+  /*
   if (addEndpointButton) {
     addEndpointButton.addEventListener("click", function (e) {
       e.preventDefault();
@@ -107,6 +109,8 @@ document.addEventListener("DOMContentLoaded", function () {
       initializeEventListeners();
     });
   }
+  */
+  // FIN DEL CÓDIGO COMENTADO - Event listener duplicado deshabilitado
 
   // Función para actualizar el título del endpoint
   window.updateEndpointTitle = function(index, name) {

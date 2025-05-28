@@ -2,7 +2,7 @@
 /*
     * Plugin Name: Bricks API Integrator
     * Description: Integra el constructor de páginas Bricks con APIs externas de forma dinámica.
-    * Version: 2.1.3
+    * Version: 2.1.4
     * Author: sn4p Dev
     * Author URI: https://sn4p.dev
     * License: GPL2
@@ -15,7 +15,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Definir constantes del plugin
-define('BRICKS_API_INTEGRATOR_VERSION', '2.1.3');
+define('BRICKS_API_INTEGRATOR_VERSION', '2.1.4');
 define('BRICKS_API_INTEGRATOR_PATH', plugin_dir_path(__FILE__));
 define('BRICKS_API_INTEGRATOR_URL', plugin_dir_url(__FILE__));
 

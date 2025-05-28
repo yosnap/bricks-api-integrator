@@ -1,5 +1,43 @@
 # Changelog - Bricks API Integrator v2.1
 
+## [2.1.4] - 2025-05-28
+
+### 🎯 **Corrección Crítica: Formularios Duplicados**
+
+#### **Problema Resuelto**
+- ❌ **Formularios duplicados eliminados**: Se creaban 2 formularios al añadir endpoints
+- ✅ **Causa identificada**: Conflicto entre event listeners (JS externo vs JS inline)
+- ✅ **Solución aplicada**: Deshabilitado event listener duplicado en `assets/bricks-api-integrator.js`
+
+#### **Mejoras en la Interfaz**
+- ✅ **Acordeones unificados**: Solo se crea 1 formulario completo por endpoint
+- ✅ **Funcionalidad preservada**: Todos los campos y características mantenidas
+- ✅ **UX mejorada**: Eliminada confusión de formularios duplicados
+- ✅ **Debug añadido**: Console.log y mensajes informativos para troubleshooting
+
+#### **Estructura Final Optimizada**
+```
+Endpoint → Acordeón Único
+├── Configuración Básica (nombre, URL, auth)
+├── Campos de Autenticación Dinámicos  
+├── Parámetros Dinámicos (integrados en acordeón)
+├── Botones de Acción
+└── Accordion para Dynamic Tags
+```
+
+#### **Archivos Modificados**
+- 📝 **`includes/endpoints-page.php`**: Formulario único en acordeón
+- 📝 **`assets/bricks-api-integrator.js`**: Event listener duplicado deshabilitado
+- 📚 **Documentación**: Guías completas de la corrección implementada
+
+### 🚀 **Resultado Final**
+- ✅ **Sin duplicación**: 1 formulario por endpoint
+- ✅ **Interfaz profesional**: UX limpia y consistente  
+- ✅ **Funcionalidad completa**: Todas las características operativas
+- ✅ **Código mantenible**: Sin conflictos entre event listeners
+
+---
+
 ## [2.1.3] - 2025-05-28
 
 ### 🧹 **Limpieza y Optimización**

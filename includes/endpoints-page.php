@@ -1,6 +1,6 @@
 <?php
 /**
- * Página de gestión de API Endpoints - VERSIÓN SIMPLE Y FUNCIONAL
+ * Página de gestión de API Endpoints - VERSIÓN CORREGIDA CON ACORDEÓN ÚNICO
  */
 
 if (!defined('ABSPATH')) {
@@ -55,25 +55,45 @@ if (!function_exists('render_api_endpoints_page')) {
         }
         
         $endpoints = get_option('bricks_api_endpoints', []);
+        
+        // DEBUG: Verificar qué endpoints se están cargando
+        if (defined('WP_DEBUG') && WP_DEBUG) {
+            error_log('Endpoints cargados: ' . print_r($endpoints, true));
+        }
         ?>
         <div class="wrap">
             <h1>🔗 API Endpoints</h1>
             <p>Gestiona tus endpoints de API. Los Query Types y Dynamic Tags se generan automáticamente.</p>
             
+            <!-- DEBUG: Mostrar información -->
+            <?php if (defined('WP_DEBUG') && WP_DEBUG): ?>
+                <div style="background: #fff3cd; padding: 10px; margin: 10px 0; border-radius: 3px;">
+                    <strong>DEBUG:</strong> Endpoints encontrados: <?php echo count($endpoints); ?>
+                </div>
+            <?php endif; ?>
+            
             <form method="post">
                 <?php wp_nonce_field('save_endpoints'); ?>
                 
                 <div id="endpoints-container">
+                    <?php if (empty($endpoints)): ?>
+                        <div class="no-endpoints-message" style="background: #f0f0f1; padding: 20px; border-radius: 5px; text-align: center; margin: 20px 0;">
+                            <h3>No hay endpoints configurados</h3>
+                            <p>Añade tu primer endpoint usando los botones de abajo.</p>
+                        </div>
+                    <?php endif; ?>
+                    
                     <?php foreach ($endpoints as $index => $endpoint): ?>
-                        <!-- Acordeón Simple - Solo Header y Contenido -->
+                        <!-- Acordeón Único con Contenido Completo -->
                         <div class="endpoint-accordion" style="background: #fff; margin: 20px 0; border: 1px solid #ddd; border-radius: 5px;">
                             <div class="endpoint-header" onclick="toggleEndpoint(<?php echo $index; ?>)" style="background: #f1f1f1; padding: 15px; cursor: pointer; border-bottom: 1px solid #ddd;">
                                 <h3 style="margin: 0; display: inline-block;">Endpoint <?php echo ($index + 1); ?> - <?php echo esc_html($endpoint['name'] ?: 'Sin nombre'); ?></h3>
                                 <span id="toggle-icon-<?php echo $index; ?>" style="float: right; font-size: 18px;">🔽</span>
                             </div>
                             
-                            <div id="endpoint-content-<?php echo $index; ?>" class="endpoint-content" style="padding: 20px;">
+                            <div id="endpoint-content-<?php echo $index; ?>" class="endpoint-content" style="padding: 20px; display: block;">
                             
+                            <!-- Configuración Básica -->
                             <table class="form-table">
                                 <tr>
                                     <th><label>Nombre del Endpoint</label></th>
@@ -94,7 +114,7 @@ if (!function_exists('render_api_endpoints_page')) {
                                 <tr>
                                     <th><label>Autenticación</label></th>
                                     <td>
-                                        <select name="endpoints[<?php echo $index; ?>][auth_type]">
+                                        <select name="endpoints[<?php echo $index; ?>][auth_type]" onchange="toggleAuthFields(<?php echo $index; ?>, this.value)">
                                             <option value="none" <?php selected($endpoint['auth_type'], 'none'); ?>>Sin Autenticación</option>
                                             <option value="token" <?php selected($endpoint['auth_type'], 'token'); ?>>Bearer Token</option>
                                             <option value="basic" <?php selected($endpoint['auth_type'], 'basic'); ?>>Basic Auth</option>
@@ -104,80 +124,79 @@ if (!function_exists('render_api_endpoints_page')) {
                                 </tr>
                             </table>
                             
-                            <?php if ($endpoint['auth_type'] === 'token'): ?>
+                            <!-- Campos de Autenticación Dinámicos -->
+                            <div id="auth-fields-<?php echo $index; ?>" style="<?php echo ($endpoint['auth_type'] === 'none') ? 'display: none;' : ''; ?>">
+                                <?php if ($endpoint['auth_type'] === 'token'): ?>
+                                    <table class="form-table">
+                                        <tr>
+                                            <th><label>Bearer Token</label></th>
+                                            <td><input type="text" name="endpoints[<?php echo $index; ?>][token]" value="<?php echo esc_attr($endpoint['token']); ?>" class="regular-text" placeholder="Ingresa tu Bearer Token"></td>
+                                        </tr>
+                                    </table>
+                                <?php elseif ($endpoint['auth_type'] === 'basic'): ?>
+                                    <table class="form-table">
+                                        <tr>
+                                            <th><label>Usuario</label></th>
+                                            <td><input type="text" name="endpoints[<?php echo $index; ?>][basic_user]" value="<?php echo esc_attr($endpoint['basic_user']); ?>" class="regular-text" placeholder="Usuario"></td>
+                                        </tr>
+                                        <tr>
+                                            <th><label>Contraseña</label></th>
+                                            <td><input type="password" name="endpoints[<?php echo $index; ?>][basic_password]" value="<?php echo esc_attr($endpoint['basic_password']); ?>" class="regular-text" placeholder="Contraseña"></td>
+                                        </tr>
+                                    </table>
+                                <?php elseif ($endpoint['auth_type'] === 'api_key'): ?>
+                                    <table class="form-table">
+                                        <tr>
+                                            <th><label>API Key</label></th>
+                                            <td><input type="text" name="endpoints[<?php echo $index; ?>][api_key]" value="<?php echo esc_attr($endpoint['api_key']); ?>" class="regular-text" placeholder="Ingresa tu API Key"></td>
+                                        </tr>
+                                        <tr>
+                                            <th><label>Header Name</label></th>
+                                            <td><input type="text" name="endpoints[<?php echo $index; ?>][api_key_header]" value="<?php echo esc_attr($endpoint['api_key_header'] ?: 'X-API-Key'); ?>" class="regular-text" placeholder="X-API-Key"></td>
+                                        </tr>
+                                    </table>
+                                <?php endif; ?>
+                            </div>
+                            
+                            <!-- Parámetros Dinámicos Existentes (del endpoint-card) -->
+                            <?php if (!empty($endpoint['dynamic_params'])): ?>
                                 <table class="form-table">
                                     <tr>
-                                        <th><label>Bearer Token</label></th>
-                                        <td><input type="text" name="endpoints[<?php echo $index; ?>][token]" value="<?php echo esc_attr($endpoint['token']); ?>" class="regular-text"></td>
-                                    </tr>
-                                </table>
-                            <?php elseif ($endpoint['auth_type'] === 'basic'): ?>
-                                <table class="form-table">
-                                    <tr>
-                                        <th><label>Usuario</label></th>
-                                        <td><input type="text" name="endpoints[<?php echo $index; ?>][basic_user]" value="<?php echo esc_attr($endpoint['basic_user']); ?>" class="regular-text"></td>
-                                    </tr>
-                                    <tr>
-                                        <th><label>Contraseña</label></th>
-                                        <td><input type="password" name="endpoints[<?php echo $index; ?>][basic_password]" value="<?php echo esc_attr($endpoint['basic_password']); ?>" class="regular-text"></td>
-                                    </tr>
-                                </table>
-                            <?php elseif ($endpoint['auth_type'] === 'api_key'): ?>
-                                <table class="form-table">
-                                    <tr>
-                                        <th><label>API Key</label></th>
-                                        <td><input type="text" name="endpoints[<?php echo $index; ?>][api_key]" value="<?php echo esc_attr($endpoint['api_key']); ?>" class="regular-text"></td>
-                                    </tr>
-                                    <tr>
-                                        <th><label>Header Name</label></th>
-                                        <td><input type="text" name="endpoints[<?php echo $index; ?>][api_key_header]" value="<?php echo esc_attr($endpoint['api_key_header'] ?: 'X-API-Key'); ?>" class="regular-text"></td>
+                                        <th><label>Parámetros Configurados</label></th>
+                                        <td>
+                                            <?php foreach ($endpoint['dynamic_params'] as $param_index => $param): ?>
+                                                <div class="dynamic-param-row" style="margin-bottom: 10px; padding: 10px; background: #f9f9f9; border-radius: 3px;">
+                                                    <input type="text" name="endpoints[<?php echo $index; ?>][param_names][]" 
+                                                           placeholder="Nombre del parámetro (ej: id, slug)" 
+                                                           class="regular-text" 
+                                                           value="<?php echo esc_attr($param['name']); ?>" style="width: 200px;">
+                                                    
+                                                    <select name="endpoints[<?php echo $index; ?>][param_sources][]" style="width: 180px;">
+                                                        <option value="url" <?php selected($param['source'], 'url'); ?>>Parámetro URL (?id=123)</option>
+                                                        <option value="post" <?php selected($param['source'], 'post'); ?>>ID del Post Actual</option>
+                                                        <option value="post_slug" <?php selected($param['source'], 'post_slug'); ?>>Slug del Post Actual</option>
+                                                        <option value="user" <?php selected($param['source'], 'user'); ?>>ID del Usuario Actual</option>
+                                                        <option value="meta" <?php selected($param['source'], 'meta'); ?>>Meta Field del Post</option>
+                                                        <option value="static" <?php selected($param['source'], 'static'); ?>>Valor Estático</option>
+                                                    </select>
+                                                    
+                                                    <input type="text" name="endpoints[<?php echo $index; ?>][param_defaults][]" 
+                                                           placeholder="Valor por defecto" 
+                                                           class="regular-text" 
+                                                           value="<?php echo esc_attr($param['default']); ?>" style="width: 150px;">
+                                                    
+                                                    <button type="button" class="button remove-param" style="color: #a00;">Eliminar</button>
+                                                </div>
+                                            <?php endforeach; ?>
+                                            <button type="button" class="button add-param" data-endpoint="<?php echo $index; ?>">➕ Añadir Parámetro</button>
+                                            <p class="description" style="margin-top: 10px;">
+                                                <strong>Para páginas de detalle:</strong> Configura parámetros como "id" o "slug" que se tomarán de la URL actual o del post.<br>
+                                                <strong>Ejemplo:</strong> Si tu API necesita <code>?id=123</code>, agrega parámetro "id" con fuente "Parámetro URL".
+                                            </p>
+                                        </td>
                                     </tr>
                                 </table>
                             <?php endif; ?>
-                            
-                            <!-- Parámetros Dinámicos -->
-                            <table class="form-table">
-                                <tr>
-                                    <th><label>Parámetros Dinámicos</label></th>
-                                    <td>
-                                        <div id="dynamic-params-container-<?php echo $index; ?>">
-                                            <?php if (!empty($endpoint['dynamic_params'])): ?>
-                                                <?php foreach ($endpoint['dynamic_params'] as $param_index => $param): ?>
-                                                    <div class="dynamic-param-row" style="margin-bottom: 10px; padding: 10px; background: #f9f9f9; border-radius: 3px;">
-                                                        <input type="text" name="endpoints[<?php echo $index; ?>][param_names][]" 
-                                                               placeholder="Nombre del parámetro (ej: id, slug)" 
-                                                               class="regular-text" 
-                                                               value="<?php echo esc_attr($param['name']); ?>" style="width: 200px;">
-                                                        
-                                                        <select name="endpoints[<?php echo $index; ?>][param_sources][]" style="width: 180px;">
-                                                            <option value="url" <?php selected($param['source'], 'url'); ?>>Parámetro URL (?id=123)</option>
-                                                            <option value="post" <?php selected($param['source'], 'post'); ?>>ID del Post Actual</option>
-                                                            <option value="post_slug" <?php selected($param['source'], 'post_slug'); ?>>Slug del Post Actual</option>
-                                                            <option value="user" <?php selected($param['source'], 'user'); ?>>ID del Usuario Actual</option>
-                                                            <option value="meta" <?php selected($param['source'], 'meta'); ?>>Meta Field del Post</option>
-                                                            <option value="static" <?php selected($param['source'], 'static'); ?>>Valor Estático</option>
-                                                        </select>
-                                                        
-                                                        <input type="text" name="endpoints[<?php echo $index; ?>][param_defaults][]" 
-                                                               placeholder="Valor por defecto" 
-                                                               class="regular-text" 
-                                                               value="<?php echo esc_attr($param['default']); ?>" style="width: 150px;">
-                                                        
-                                                        <button type="button" class="button remove-param" style="color: #a00;">Eliminar</button>
-                                                    </div>
-                                                <?php endforeach; ?>
-                                            <?php else: ?>
-                                                <p style="color: #666; font-style: italic;">No hay parámetros dinámicos configurados</p>
-                                            <?php endif; ?>
-                                        </div>
-                                        <button type="button" class="button add-param" data-endpoint="<?php echo $index; ?>">➕ Añadir Parámetro</button>
-                                        <p class="description" style="margin-top: 10px;">
-                                            <strong>Para páginas de detalle:</strong> Configura parámetros como "id" o "slug" que se tomarán de la URL actual o del post.<br>
-                                            <strong>Ejemplo:</strong> Si tu API necesita <code>?id=123</code>, agrega parámetro "id" con fuente "Parámetro URL".
-                                        </p>
-                                    </td>
-                                </tr>
-                            </table>
                             
                             <button type="button" class="button test-endpoint" data-index="<?php echo $index; ?>">🧪 Test API</button>
                             <button type="button" class="button show-dynamic-tags" data-index="<?php echo $index; ?>">🏷️ Ver Dynamic Tags</button>
@@ -232,46 +251,60 @@ if (!function_exists('render_api_endpoints_page')) {
             window.currentNonce = '<?php echo wp_create_nonce('get_dynamic_tags'); ?>';
             
             // Añadir nuevo endpoint
-            $('#add-endpoint').click(function() {
+            $('#add-endpoint').off('click').on('click', function() {
                 try {
                     addGenericEndpoint();
                 } catch (error) {
-                    // Error al añadir endpoint genérico
+                    console.error('Error al añadir endpoint genérico:', error);
                 }
             });
             
             // Añadir endpoint relacionado (genérico con parámetros del post actual)
-            $('#add-related-endpoint').click(function() {
+            $('#add-related-endpoint').off('click').on('click', function() {
                 try {
                     addRelatedEndpoint();
                 } catch (error) {
-                    // Error al añadir endpoint relacionado
+                    console.error('Error al añadir endpoint relacionado:', error);
                 }
             });
             
             // Función para añadir endpoint genérico
             function addGenericEndpoint() {
+                console.log('addGenericEndpoint llamada, endpointCounter:', endpointCounter);
+                
+                // Eliminar mensaje de "no endpoints" si existe
+                $('.no-endpoints-message').remove();
+                
                 const html = `
-                    <div class="endpoint-card" style="background: #fff; margin: 20px 0; padding: 20px; border: 1px solid #ddd; border-radius: 5px;">
-                        <h3>Endpoint ${endpointCounter + 1}</h3>
+                    <!-- Acordeón Único con Contenido Completo -->
+                    <div class="endpoint-accordion" style="background: #fff; margin: 20px 0; border: 1px solid #ddd; border-radius: 5px;">
+                        <div class="endpoint-header" onclick="toggleEndpoint(${endpointCounter})" style="background: #f1f1f1; padding: 15px; cursor: pointer; border-bottom: 1px solid #ddd;">
+                            <h3 style="margin: 0; display: inline-block;">Endpoint ${endpointCounter + 1} - Sin nombre</h3>
+                            <span id="toggle-icon-${endpointCounter}" style="float: right; font-size: 18px;">🔽</span>
+                        </div>
                         
+                        <div id="endpoint-content-${endpointCounter}" class="endpoint-content" style="padding: 20px; display: block;">
+                        
+                        <!-- Configuración Básica -->
                         <table class="form-table">
                             <tr>
                                 <th><label>Nombre del Endpoint</label></th>
                                 <td>
-                                    <input type="text" name="endpoints[${endpointCounter}][name]" class="regular-text" placeholder="Nombre del Endpoint" required>
+                                    <input type="text" name="endpoints[${endpointCounter}][name]" 
+                                           class="regular-text" placeholder="Nombre del Endpoint" required>
                                 </td>
                             </tr>
                             <tr>
                                 <th><label>URL del Endpoint</label></th>
                                 <td>
-                                    <input type="url" name="endpoints[${endpointCounter}][url]" class="regular-text" placeholder="https://api.ejemplo.com/datos" required>
+                                    <input type="url" name="endpoints[${endpointCounter}][url]" 
+                                           class="regular-text" placeholder="https://api.ejemplo.com/datos" required>
                                 </td>
                             </tr>
                             <tr>
                                 <th><label>Autenticación</label></th>
                                 <td>
-                                    <select name="endpoints[${endpointCounter}][auth_type]">
+                                    <select name="endpoints[${endpointCounter}][auth_type]" onchange="toggleAuthFields(${endpointCounter}, this.value)">
                                         <option value="none">Sin Autenticación</option>
                                         <option value="token">Bearer Token</option>
                                         <option value="basic">Basic Auth</option>
@@ -281,7 +314,10 @@ if (!function_exists('render_api_endpoints_page')) {
                             </tr>
                         </table>
                         
-                        <!-- Parámetros Dinámicos para nuevos endpoints -->
+                        <!-- Campos de Autenticación Dinámicos -->
+                        <div id="auth-fields-${endpointCounter}" style="display: none;"></div>
+                        
+                        <!-- Parámetros Dinámicos -->
                         <table class="form-table">
                             <tr>
                                 <th><label>Parámetros Dinámicos</label></th>
@@ -299,9 +335,9 @@ if (!function_exists('render_api_endpoints_page')) {
                         </table>
                         
                         <button type="button" class="button test-endpoint" data-index="${endpointCounter}">🧪 Test API</button>
-                        <button type="button" class="button show-dynamic-tags" data-index="${endpointCounter}" style="margin-left: 10px;">🏷️ Ver Dynamic Tags</button>
+                        <button type="button" class="button show-dynamic-tags" data-index="${endpointCounter}">🏷️ Ver Dynamic Tags</button>
                         <button type="button" class="button refresh-endpoint-data" data-index="${endpointCounter}" style="background: #28a745; color: white; margin-left: 5px;">🔄 Actualizar Datos</button>
-                        <button type="button" class="button button-link-delete remove-endpoint" data-index="${endpointCounter}" style="color: #a00; margin-left: 10px;">🗑️ Eliminar</button>
+                        <button type="button" class="button button-link-delete remove-endpoint" data-index="${endpointCounter}" style="color: #a00;">🗑️ Eliminar</button>
                         
                         <!-- Accordion para Dynamic Tags -->
                         <div class="dynamic-tags-accordion" id="dynamic-tags-${endpointCounter}" style="display: none; margin-top: 15px;">
@@ -321,7 +357,10 @@ if (!function_exists('render_api_endpoints_page')) {
                                 </div>
                             </div>
                         </div>
-                    </div>
+                        
+                        <div class="test-result" id="test-result-${endpointCounter}" style="margin-top: 10px;"></div>
+                        </div> <!-- Cierre endpoint-content -->
+                    </div> <!-- Cierre endpoint-accordion -->
                 `;
                 
                 $('#endpoints-container').append(html);
@@ -330,6 +369,11 @@ if (!function_exists('render_api_endpoints_page')) {
             
             // Función para añadir endpoint relacionado (genérico con parámetros del post)
             function addRelatedEndpoint() {
+                console.log('addRelatedEndpoint llamada, endpointCounter:', endpointCounter);
+                
+                // Eliminar mensaje de "no endpoints" si existe
+                $('.no-endpoints-message').remove();
+                
                 const html = `
                     <div class="endpoint-card" style="background: #fff; margin: 20px 0; padding: 20px; border: 1px solid #ddd; border-radius: 5px; border-left: 4px solid #6c757d;">
                         <h3>🔗 Endpoint ${endpointCounter + 1} - Relacionado</h3>
@@ -429,14 +473,14 @@ if (!function_exists('render_api_endpoints_page')) {
             $(document).on('click', '.remove-endpoint', function(e) {
                 e.preventDefault();
                 
-                const $card = $(this).closest('.endpoint-card');
+                const $accordion = $(this).closest('.endpoint-accordion');
                 const index = parseInt($(this).data('index'));
                 
                 if (confirm('¿Estás seguro de que quieres eliminar este endpoint?')) {
-                    $card.remove();
+                    $accordion.remove();
                     
                     // Reindexar los endpoints restantes
-                    $('.endpoint-card').each(function(newIndex) {
+                    $('.endpoint-accordion').each(function(newIndex) {
                         $(this).find('input, select').each(function() {
                             const name = $(this).attr('name');
                             if (name && name.includes('endpoints[')) {
@@ -449,7 +493,7 @@ if (!function_exists('render_api_endpoints_page')) {
                         $(this).find('h3').text(`Endpoint ${newIndex + 1}`);
                     });
                     
-                    endpointCounter = $('.endpoint-card').length;
+                    endpointCounter = $('.endpoint-accordion').length;
                 }
             });
             
@@ -458,11 +502,11 @@ if (!function_exists('render_api_endpoints_page')) {
                 const index = $(this).data('index');
                 const $button = $(this);
                 const $result = $('#test-result-' + index);
-                const $card = $(this).closest('.endpoint-card');
+                const $accordion = $(this).closest('.endpoint-accordion');
                 
                 // Obtener datos del endpoint
-                const name = $card.find('input[name*="[name]"]').val();
-                const url = $card.find('input[name*="[url]"]').val();
+                const name = $accordion.find('input[name*="[name]"]').val();
+                const url = $accordion.find('input[name*="[url]"]').val();
                 
                 if (!url) {
                     $result.html('<p style="color: red;">❌ URL requerida</p>');
@@ -511,11 +555,11 @@ if (!function_exists('render_api_endpoints_page')) {
                 const index = $(this).data('index');
                 const $button = $(this);
                 const $result = $('#test-result-' + index);
-                const $card = $(this).closest('.endpoint-card');
+                const $accordion = $(this).closest('.endpoint-accordion');
                 
                 // Obtener datos del endpoint
-                const name = $card.find('input[name*="[name]"]').val();
-                const url = $card.find('input[name*="[url]"]').val();
+                const name = $accordion.find('input[name*="[name]"]').val();
+                const url = $accordion.find('input[name*="[url]"]').val();
                 const authType = $card.find('select[name*="[auth_type]"]').val();
                 
                 if (!url) {
@@ -658,7 +702,7 @@ if (!function_exists('render_api_endpoints_page')) {
                 $tagsList.hide();
                 
                 // Obtener datos del endpoint - VERSIÓN ULTRA ROBUSTA
-                const $endpointCard = $button.closest('.endpoint-card, .endpoint-group, tr, .form-table').parent();
+                const $endpointCard = $button.closest('.endpoint-accordion, .endpoint-group, tr, .form-table').parent();
                 
                 // Múltiples estrategias para encontrar los datos
                 let name = null;
@@ -1150,36 +1194,53 @@ if (!function_exists('render_api_endpoints_page')) {
                 }
             };
             
-            // FUNCIÓN SIMPLE PARA AUTENTICACIÓN DINÁMICA
-            $(document).on('change', 'select[name*="[auth_type]"]', function() {
-                const authType = $(this).val();
-                const index = $(this).attr('name').match(/\[(\d+)\]/)[1];
-                const container = $(this).closest('.endpoint-content');
+            // FUNCIÓN PARA MANEJO DINÁMICO DE CAMPOS DE AUTENTICACIÓN
+            window.toggleAuthFields = function(index, authType) {
+                const authContainer = document.getElementById('auth-fields-' + index);
                 
-                // Remover inputs existentes de auth
-                container.find('.auth-inputs').remove();
-                
-                if (authType !== 'none') {
-                    let authHTML = '<div class="auth-inputs" style="margin-top: 15px;">';
-                    
-                    if (authType === 'token') {
-                        authHTML += '<table class="form-table"><tr><th><label>Bearer Token</label></th><td><input type="text" name="endpoints[' + index + '][token]" class="regular-text"></td></tr></table>';
-                    } else if (authType === 'basic') {
-                        authHTML += '<table class="form-table">';
-                        authHTML += '<tr><th><label>Usuario</label></th><td><input type="text" name="endpoints[' + index + '][basic_user]" class="regular-text"></td></tr>';
-                        authHTML += '<tr><th><label>Contraseña</label></th><td><input type="password" name="endpoints[' + index + '][basic_password]" class="regular-text"></td></tr>';
-                        authHTML += '</table>';
-                    } else if (authType === 'api_key') {
-                        authHTML += '<table class="form-table">';
-                        authHTML += '<tr><th><label>API Key</label></th><td><input type="text" name="endpoints[' + index + '][api_key]" class="regular-text"></td></tr>';
-                        authHTML += '<tr><th><label>Header Name</label></th><td><input type="text" name="endpoints[' + index + '][api_key_header]" value="X-API-Key" class="regular-text"></td></tr>';
-                        authHTML += '</table>';
-                    }
-                    
-                    authHTML += '</div>';
-                    $(this).closest('table').after(authHTML);
+                if (authType === 'none') {
+                    authContainer.style.display = 'none';
+                    authContainer.innerHTML = '';
+                    return;
                 }
-            });
+                
+                authContainer.style.display = 'block';
+                
+                let authHTML = '';
+                
+                if (authType === 'token') {
+                    authHTML = `<table class="form-table">
+                        <tr>
+                            <th><label>Bearer Token</label></th>
+                            <td><input type="text" name="endpoints[${index}][token]" class="regular-text" placeholder="Ingresa tu Bearer Token"></td>
+                        </tr>
+                    </table>`;
+                } else if (authType === 'basic') {
+                    authHTML = `<table class="form-table">
+                        <tr>
+                            <th><label>Usuario</label></th>
+                            <td><input type="text" name="endpoints[${index}][basic_user]" class="regular-text" placeholder="Usuario"></td>
+                        </tr>
+                        <tr>
+                            <th><label>Contraseña</label></th>
+                            <td><input type="password" name="endpoints[${index}][basic_password]" class="regular-text" placeholder="Contraseña"></td>
+                        </tr>
+                    </table>`;
+                } else if (authType === 'api_key') {
+                    authHTML = `<table class="form-table">
+                        <tr>
+                            <th><label>API Key</label></th>
+                            <td><input type="text" name="endpoints[${index}][api_key]" class="regular-text" placeholder="Ingresa tu API Key"></td>
+                        </tr>
+                        <tr>
+                            <th><label>Header Name</label></th>
+                            <td><input type="text" name="endpoints[${index}][api_key_header]" value="X-API-Key" class="regular-text" placeholder="X-API-Key"></td>
+                        </tr>
+                    </table>`;
+                }
+                
+                authContainer.innerHTML = authHTML;
+            };
         });
         </script>
         
@@ -1248,12 +1309,7 @@ if (!function_exists('render_api_endpoints_page')) {
                 background-color: #f0f0f1;
             }
             
-            .endpoint-card {
-                transition: all 0.3s ease;
-                position: relative;
-            }
-            
-            .endpoint-card:hover {
+            .endpoint-accordion:hover {
                 box-shadow: 0 2px 10px rgba(0,0,0,0.1);
             }
             
