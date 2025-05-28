@@ -1,5 +1,29 @@
 # Changelog - Bricks API Integrator v2.1
 
+## [2.1.2] - 2025-05-28
+
+### 🔧 **Correcciones Críticas**
+
+#### **Dynamic Tags Restaurados**
+- ✅ **Funcionalidad completa restaurada**: Los botones "Ver Dynamic Tags" y "Actualizar Datos" vuelven a funcionar
+- ✅ **Funciones faltantes implementadas**: `get_api_data_by_endpoint_name()` y `get_api_data_with_cache()`
+- ✅ **Sistema de cache inteligente**: Cache automático de 5 minutos para mejor rendimiento
+- ✅ **Selectores JavaScript robustos**: 4 estrategias de búsqueda para encontrar datos del endpoint
+- ✅ **Soporte completo de autenticación**: Bearer, API Key, Basic Auth en peticiones
+
+#### **Correcciones JavaScript**
+- ✅ **Error de variable corregido**: `$button is not defined` resuelto
+- ✅ **Búsqueda de datos mejorada**: Múltiples estrategias para encontrar nombre y URL del endpoint
+- ✅ **Compatibilidad preservada**: Toda la funcionalidad existente mantenida intacta
+
+### 🚀 **Mejoras Técnicas**
+- ✅ **Gestión de errores mejorada**: Logging detallado para debugging
+- ✅ **Peticiones HTTP optimizadas**: Timeout de 30s y headers personalizados
+- ✅ **Validación JSON robusta**: Manejo de errores de decodificación
+- ✅ **Transients de WordPress**: Sistema de cache nativo integrado
+
+---
+
 ## [2.1.1] - 2025-05-28
 
 ### ✨ **Sistema Diferenciado AUTO/MANUAL**

@@ -629,70 +629,82 @@ if (!function_exists('render_api_endpoints_page')) {
                 }
             });
             
-            // Mostrar/ocultar dynamic tags - VERSIÓN CORREGIDA
+            // Mostrar/ocultar dynamic tags
             $(document).on('click', '.show-dynamic-tags', function() {
                 const index = $(this).data('index');
                 const $accordion = $('#dynamic-tags-' + index);
                 const $button = $(this);
                 
-                console.log('🔘 Botón Dynamic Tags clickeado para index:', index);
-                console.log('🔘 Accordion visible:', $accordion.is(':visible'));
-                
                 if ($accordion.is(':visible')) {
                     // Ocultar accordion
-                    console.log('🔘 Ocultando accordion');
                     $accordion.slideUp();
                     $button.text('🏷️ Ver Dynamic Tags');
                 } else {
                     // Mostrar accordion y cargar tags
-                    console.log('🔘 Mostrando accordion y cargando tags');
                     $accordion.slideDown();
                     $button.text('🏷️ Ocultar Dynamic Tags');
                     
-                    // SIEMPRE cargar tags (eliminar verificación problemática)
-                    console.log('🔘 Llamando a loadDynamicTags...');
-                    loadDynamicTags(index);
+                    // Cargar tags dinámicos
+                    loadDynamicTags(index, $button);
                 }
             });
             
-            // Función para cargar dynamic tags via AJAX - VERSIÓN CORREGIDA
-            function loadDynamicTags(index) {
-                console.log('🚀 loadDynamicTags called for index:', index);
-                
+            // Función para cargar dynamic tags via AJAX
+            function loadDynamicTags(index, $button) {
                 const $accordion = $('#dynamic-tags-' + index);
                 const $loading = $accordion.find('.tags-loading');
                 const $tagsList = $accordion.find('.tags-list');
                 
-                console.log('DOM elements check:', {
-                    accordion: $accordion.length,
-                    loading: $loading.length,
-                    tagsList: $tagsList.length,
-                    accordionVisible: $accordion.is(':visible')
-                });
-                
-                // Asegurar que el accordion esté visible
+                // Mostrar loading
                 if (!$accordion.is(':visible')) {
                     $accordion.show();
-                    console.log('Accordion mostrado forzadamente');
                 }
                 
                 $loading.show();
                 $tagsList.hide();
                 
-                // Obtener datos del endpoint
-                const $card = $('[data-index="' + index + '"]').closest('.endpoint-card');
-                const name = $card.find('input[name*="[name]"]').val();
-                const url = $card.find('input[name*="[url]"]').val();
+                // Obtener datos del endpoint - VERSIÓN ULTRA ROBUSTA
+                const $endpointCard = $button.closest('.endpoint-card, .endpoint-group, tr, .form-table').parent();
                 
-                console.log('Endpoint data:', {name, url, index});
+                // Múltiples estrategias para encontrar los datos
+                let name = null;
+                let url = null;
+                
+                // Estrategia 1: Buscar en el contenedor padre
+                name = $endpointCard.find('input[name*="[name]"]').val();
+                url = $endpointCard.find('input[name*="[url]"]').val();
+                
+                // Estrategia 2: Buscar por placeholder
+                if (!name || !url) {
+                    name = name || $endpointCard.find('input[placeholder*="Nombre"]').val();
+                    url = url || $endpointCard.find('input[type="url"]').val();
+                }
+                
+                // Estrategia 3: Buscar por texto de labels
+                if (!name || !url) {
+                    $endpointCard.find('tr').each(function() {
+                        const $row = $(this);
+                        const labelText = $row.find('th, label').text().toLowerCase();
+                        
+                        if (labelText.includes('nombre') && !name) {
+                            name = $row.find('input').val();
+                        }
+                        if (labelText.includes('url') && !url) {
+                            url = $row.find('input').val();
+                        }
+                    });
+                }
+                
+                // Estrategia 4: Búsqueda global por index
+                if (!name || !url) {
+                    name = name || $(`input[name="endpoints[${index}][name]"]`).val();
+                    url = url || $(`input[name="endpoints[${index}][url]"]`).val();
+                }
                 
                 if (!name || !url) {
-                    console.error('❌ Datos del endpoint incompletos');
                     $loading.html('<span style="color: #d63638;">❌ Configura el nombre y URL del endpoint primero</span>');
                     return;
                 }
-                
-                console.log('🔄 Enviando petición AJAX...');
                 
                 // AJAX call para obtener dynamic tags
                 $.post(ajaxurl, {

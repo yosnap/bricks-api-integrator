@@ -2,7 +2,7 @@
 /*
     * Plugin Name: Bricks API Integrator
     * Description: Integra el constructor de páginas Bricks con APIs externas de forma dinámica.
-    * Version: 2.1.1
+    * Version: 2.1.2
     * Author: sn4p Dev
     * Author URI: https://sn4p.dev
     * License: GPL2
@@ -15,7 +15,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Definir constantes del plugin
-define('BRICKS_API_INTEGRATOR_VERSION', '2.1.1');
+define('BRICKS_API_INTEGRATOR_VERSION', '2.1.2');
 define('BRICKS_API_INTEGRATOR_PATH', plugin_dir_path(__FILE__));
 define('BRICKS_API_INTEGRATOR_URL', plugin_dir_url(__FILE__));
 
@@ -47,11 +47,9 @@ if (file_exists(BRICKS_API_INTEGRATOR_PATH . 'includes/direct-source.php')) {
     require_once BRICKS_API_INTEGRATOR_PATH . 'includes/direct-source.php';
 }
 */
-/*
 if (file_exists(BRICKS_API_INTEGRATOR_PATH . 'dynamic-tags.php')) {
     require_once BRICKS_API_INTEGRATOR_PATH . 'dynamic-tags.php';
 }
-*/
 
 // Script de limpieza específica para query types
 if (file_exists(BRICKS_API_INTEGRATOR_PATH . 'cleanup-query-types.php')) {
@@ -541,6 +539,124 @@ class BricksAPIIntegrator {
         }
         
         return $tags;
+    }
+    
+    /**
+     * Obtener datos de API por nombre de endpoint
+     */
+    public function get_api_data_by_endpoint_name($endpoint_name) {
+        $endpoints = get_option('bricks_api_endpoints', []);
+        
+        foreach ($endpoints as $endpoint) {
+            if (isset($endpoint['name']) && $endpoint['name'] === $endpoint_name && !empty($endpoint['url'])) {
+                try {
+                    return $this->get_api_data_with_cache($endpoint['url'], $endpoint, true);
+                } catch (Exception $e) {
+                    if (defined('WP_DEBUG') && WP_DEBUG) {
+                        error_log('Error al obtener datos para endpoint ' . $endpoint_name . ': ' . $e->getMessage());
+                    }
+                    return null;
+                }
+            }
+        }
+        
+        return null;
+    }
+    
+    /**
+     * Obtener datos de API con caché
+     */
+    public function get_api_data_with_cache($url, $endpoint_config = [], $bypass_cache = false) {
+        // Si bypass_cache es true, obtener datos frescos
+        if ($bypass_cache) {
+            return $this->fetch_api_data_direct($url, $endpoint_config);
+        }
+        
+        // Generar clave de cache
+        $cache_key = 'bricks_api_cache_' . md5($url . serialize($endpoint_config));
+        
+        // Intentar obtener del cache primero
+        $cached_data = get_transient($cache_key);
+        if ($cached_data !== false && !empty($cached_data)) {
+            return $cached_data;
+        }
+        
+        // Si no hay cache, obtener datos frescos
+        $fresh_data = $this->fetch_api_data_direct($url, $endpoint_config);
+        
+        // Guardar en cache por 5 minutos
+        if (!empty($fresh_data)) {
+            set_transient($cache_key, $fresh_data, 300);
+        }
+        
+        return $fresh_data;
+    }
+    
+    /**
+     * Obtener datos directamente de la API
+     */
+    private function fetch_api_data_direct($url, $endpoint_config = []) {
+        // Configuración por defecto
+        $args = array(
+            'timeout' => 30,
+            'headers' => array(
+                'User-Agent' => 'Bricks API Integrator/2.1.1'
+            )
+        );
+        
+        // Añadir autenticación si está configurada
+        if (!empty($endpoint_config['auth_type']) && $endpoint_config['auth_type'] !== 'none') {
+            switch ($endpoint_config['auth_type']) {
+                case 'bearer':
+                    if (!empty($endpoint_config['auth_token'])) {
+                        $args['headers']['Authorization'] = 'Bearer ' . $endpoint_config['auth_token'];
+                    }
+                    break;
+                case 'api_key':
+                    if (!empty($endpoint_config['auth_key']) && !empty($endpoint_config['auth_value'])) {
+                        $args['headers'][$endpoint_config['auth_key']] = $endpoint_config['auth_value'];
+                    }
+                    break;
+                case 'basic':
+                    if (!empty($endpoint_config['auth_username']) && !empty($endpoint_config['auth_password'])) {
+                        $args['headers']['Authorization'] = 'Basic ' . base64_encode($endpoint_config['auth_username'] . ':' . $endpoint_config['auth_password']);
+                    }
+                    break;
+            }
+        }
+        
+        // Realizar petición
+        $response = wp_remote_get($url, $args);
+        
+        // Verificar errores
+        if (is_wp_error($response)) {
+            if (defined('WP_DEBUG') && WP_DEBUG) {
+                error_log('Error en API request: ' . $response->get_error_message());
+            }
+            return null;
+        }
+        
+        // Obtener código de estado
+        $status_code = wp_remote_retrieve_response_code($response);
+        if ($status_code !== 200) {
+            if (defined('WP_DEBUG') && WP_DEBUG) {
+                error_log('API returned status code: ' . $status_code);
+            }
+            return null;
+        }
+        
+        // Decodificar JSON
+        $body = wp_remote_retrieve_body($response);
+        $data = json_decode($body, true);
+        
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            if (defined('WP_DEBUG') && WP_DEBUG) {
+                error_log('JSON decode error: ' . json_last_error_msg());
+            }
+            return null;
+        }
+        
+        return $data;
     }
     
     /**
