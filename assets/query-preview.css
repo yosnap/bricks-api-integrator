@@ -1,0 +1,244 @@
+/**
+ * Query Preview Styles - Estilos básicos
+ */
+
+.preview-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 999999;
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.3s ease;
+}
+
+.preview-modal.active {
+    opacity: 1;
+    visibility: visible;
+}
+
+.preview-modal-backdrop {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.7);
+    cursor: pointer;
+}
+
+.preview-modal-container {
+    position: relative;
+    width: 90%;
+    max-width: 1200px;
+    height: 90%;
+    margin: 5% auto;
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.preview-content {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+.preview-header {
+    background: #f8f9fa;
+    border-bottom: 1px solid #dee2e6;
+    padding: 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+.preview-title h3 {
+    margin: 0 0 5px 0;
+    color: #343a40;
+    font-size: 18px;
+}
+
+.preview-title p {
+    margin: 0;
+    color: #6c757d;
+    font-size: 14px;
+}
+/* Estilos adicionales */
+.preview-modal-close {
+    background: #dc3545;
+    color: white;
+    border: none;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s ease;
+}
+
+.preview-modal-close:hover {
+    background: #c82333;
+}
+
+/* Tabs */
+.preview-tabs {
+    display: flex;
+    background: #f8f9fa;
+    border-bottom: 1px solid #dee2e6;
+    flex-shrink: 0;
+}
+
+.preview-tab {
+    flex: 1;
+    padding: 12px 16px;
+    background: none;
+    border: none;
+    border-bottom: 3px solid transparent;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    color: #6c757d;
+    transition: all 0.2s ease;
+}
+
+.preview-tab:hover {
+    background: #e9ecef;
+    color: #495057;
+}
+
+.preview-tab.active {
+    color: #007cba;
+    border-bottom-color: #007cba;
+    background: #fff;
+}
+
+/* Tab Content */
+.preview-tab-content {
+    flex: 1;
+    overflow: auto;
+    padding: 0;
+}
+
+.preview-tab-pane {
+    display: none;
+    height: 100%;
+    padding: 20px;
+}
+
+.preview-tab-pane.active {
+    display: block;
+}
+/* Data Preview y más estilos */
+.preview-data-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.preview-group {
+    background: #f8f9fa;
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+.preview-group-title {
+    background: #007cba;
+    color: white;
+    margin: 0;
+    padding: 12px 16px;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.preview-fields {
+    padding: 0;
+}
+
+.preview-field {
+    display: grid;
+    grid-template-columns: 200px 1fr;
+    gap: 16px;
+    padding: 12px 16px;
+    border-bottom: 1px solid #e9ecef;
+    align-items: start;
+}
+
+.preview-field:last-child {
+    border-bottom: none;
+}
+
+.field-label {
+    font-weight: 600;
+    color: #495057;
+    font-size: 13px;
+    word-break: break-word;
+}
+
+.field-value {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-size: 13px;
+    color: #212529;
+    word-break: break-word;
+}
+
+/* Admin Preview Buttons */
+.admin-preview-btn {
+    background: #007cba !important;
+    color: white !important;
+    border-color: #007cba !important;
+}
+
+.admin-preview-btn:hover {
+    background: #005a87 !important;
+    border-color: #005a87 !important;
+}
+
+/* Tags Preview */
+.preview-tags-container {
+    height: 100%;
+}
+
+.tags-info {
+    background: #e7f3ff;
+    border: 1px solid #b8daff;
+    border-radius: 6px;
+    padding: 12px;
+    margin-bottom: 20px;
+}
+
+.preview-tags-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 8px;
+}
+
+.preview-tag-item {
+    background: #f8f9fa;
+    border: 1px solid #e9ecef;
+    border-radius: 4px;
+    padding: 12px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.preview-tag-item:hover {
+    background: #e9ecef;
+    border-color: #007cba;
+}
+
+.tag-code {
+    font-family: monospace;
+    font-size: 12px;
+    color: #d63384;
+    font-weight: 600;
+}

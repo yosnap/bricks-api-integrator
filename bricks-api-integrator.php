@@ -23,6 +23,7 @@ define('BRICKS_API_INTEGRATOR_URL', plugin_dir_url(__FILE__));
 require_once BRICKS_API_INTEGRATOR_PATH . 'includes/api-manager.php';
 require_once BRICKS_API_INTEGRATOR_PATH . 'includes/field-extractor.php';
 require_once BRICKS_API_INTEGRATOR_PATH . 'includes/functions.php';
+require_once BRICKS_API_INTEGRATOR_PATH . 'includes/query-preview.php';
 
 // Archivos necesarios para el admin - HABILITAR SOLO LOS NECESARIOS
 if (file_exists(BRICKS_API_INTEGRATOR_PATH . 'includes/sources.php')) {
@@ -88,7 +89,7 @@ add_action('plugins_loaded', function() {
 class BricksAPIIntegrator {
     
     // Usar traits para funcionalidad modular
-    use APIManager, FieldExtractor;
+    use APIManager, FieldExtractor, QueryPreview;
     
     /**
      * Cache estático para respuestas API
@@ -97,6 +98,7 @@ class BricksAPIIntegrator {
     
     public function __construct() {
         $this->init_hooks();
+        $this->init_query_preview_hooks(); // Añadir hooks de preview
         $this->clean_debug_sources(); // Limpiar sources de debug automáticamente
         
         register_activation_hook(__FILE__, [$this, 'activate_plugin']);
