@@ -236,7 +236,7 @@ if (!function_exists('render_api_endpoints_page')) {
                 try {
                     addGenericEndpoint();
                 } catch (error) {
-                    console.error('❌ Error al añadir endpoint genérico:', error);
+                    // Error al añadir endpoint genérico
                 }
             });
             
@@ -245,7 +245,7 @@ if (!function_exists('render_api_endpoints_page')) {
                 try {
                     addRelatedEndpoint();
                 } catch (error) {
-                    console.error('❌ Error al añadir endpoint relacionado:', error);
+                    // Error al añadir endpoint relacionado
                 }
             });
             
@@ -929,23 +929,14 @@ if (!function_exists('render_api_endpoints_page')) {
                         
                         
                     } else if (response.success) {
-                        console.warn('⚠️ Response exitosa pero sin tags');
                         $loading.html('<div style="color: #f0ad4e; padding: 15px;">⚠️ No se generaron dynamic tags. Verifica que el endpoint devuelve datos válidos.</div>');
                         
                     } else {
-                        console.error('❌ Error del servidor:', response.data);
                         let errorMessage = response.data ? response.data.message : 'Error desconocido';
                         $loading.html('<div style="color: #d63638; padding: 15px; background: #ffeaea; border-radius: 3px;"><strong>❌ Error:</strong> ' + errorMessage + '</div>');
                     }
                     
                 }).fail(function(xhr, status, error) {
-                    console.error('❌ AJAX Failed:', {
-                        status: status, 
-                        error: error, 
-                        responseText: xhr.responseText.substring(0, 200),
-                        readyState: xhr.readyState,
-                        statusCode: xhr.status
-                    });
                     $loading.html('<div style="color: #d63638; padding: 15px; background: #ffeaea; border-radius: 3px;"><strong>❌ Error de conexión:</strong> ' + status + '</div>');
                 });
             }
@@ -1115,19 +1106,14 @@ if (!function_exists('render_api_endpoints_page')) {
             
             // Función de debug para probar AJAX (solo para desarrollo)
             window.testDynamicTagsAjax = function(index) {
-                
                 $.post(ajaxurl, {
                     action: 'get_dynamic_tags_for_endpoint',
                     index: index,
                     nonce: window.currentNonce || '<?php echo wp_create_nonce('get_dynamic_tags'); ?>'
                 }, function(response) {
+                    // Respuesta exitosa - para debugging si es necesario
                 }).fail(function(xhr, status, error) {
-                        status: status, 
-                        error: error, 
-                        response: xhr.responseText,
-                        readyState: xhr.readyState,
-                        statusCode: xhr.status
-                    });
+                    // Error en AJAX - para debugging si es necesario
                 });
             };
             
@@ -1139,7 +1125,7 @@ if (!function_exists('render_api_endpoints_page')) {
                     $accordion.show();
                     loadDynamicTags(index);
                 } else {
-                    console.error('🧪 ❌ Accordion no encontrado para index:', index);
+                    // Accordion no encontrado para index
                 }
             };
             
