@@ -24,17 +24,10 @@ function bricks_api_integrator_render_dashboard()
 <?php
 }
 
-// Registrar el menú de administración
-add_action('admin_menu', 'bricks_api_integrator_menu');
-function bricks_api_integrator_menu()
+// El menú principal ya está registrado en functions.php
+// Esta función solo renderiza el dashboard
+function bricks_api_integrator_render_dashboard()
 {
-    add_menu_page(
-        'Bricks API Integrator',
-        'API Integrator',
-        'manage_options',
-        'bricks-api-integrator',
-        'bricks_api_integrator_render_dashboard',
-        'dashicons-admin-generic',
-        20
-    );
+    // Contenido del dashboard
+    include_once(BRICKS_API_INTEGRATOR_PATH . 'templates/dashboard.php');
 }
