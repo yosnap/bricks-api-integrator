@@ -1,4 +1,4 @@
-# Bricks API Integrator v2.1.1
+# Bricks API Integrator v2.1.5
 
 > Sistema completo para integrar APIs externas con Bricks Builder - Ahora con sistema diferenciado AUTO/MANUAL para máxima flexibilidad.
 
@@ -18,7 +18,14 @@
 - ✅ **Arrays anidados** con Items Path para estructuras complejas
 - ✅ **Interfaz moderna** con sistema explicativo y guías paso a paso
 
-## 🆕 **Novedades v2.1.1 - Sistema Diferenciado**
+## 🆕 **Novedades v2.1.5**
+
+### **🚀 Optimización de Rendimiento**
+- **Eliminación de logs de inicialización**: Reducción significativa de la escritura en logs durante la inicialización del plugin
+- **Mejora de rendimiento**: Menor sobrecarga en el servidor al eliminar registros de debug innecesarios
+- **Logs más limpios**: Mantenimiento de logs de errores críticos para facilitar la depuración cuando sea necesario
+
+## 🔄 **Novedades v2.1.1 - Sistema Diferenciado**
 
 ### **🎯 Query Types Automáticos vs Manuales**
 

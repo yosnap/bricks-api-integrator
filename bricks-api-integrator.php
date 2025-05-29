@@ -2,7 +2,7 @@
 /*
     * Plugin Name: Bricks API Integrator
     * Description: Integra el constructor de páginas Bricks con APIs externas de forma dinámica.
-    * Version: 2.1.4
+    * Version: 2.1.5
     * Author: sn4p Dev
     * Author URI: https://sn4p.dev
     * License: GPL2
@@ -15,7 +15,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Definir constantes del plugin
-define('BRICKS_API_INTEGRATOR_VERSION', '2.1.4');
+define('BRICKS_API_INTEGRATOR_VERSION', '2.1.5');
 define('BRICKS_API_INTEGRATOR_PATH', plugin_dir_path(__FILE__));
 define('BRICKS_API_INTEGRATOR_URL', plugin_dir_url(__FILE__));
 
@@ -141,9 +141,6 @@ class BricksAPIIntegrator {
         
         if ($cleaned) {
             update_option('bricks_api_sources', $sources);
-            if (defined('WP_DEBUG') && WP_DEBUG) {
-                error_log('Bricks API Integrator - Sources de debug eliminados automáticamente');
-            }
         }
     }
     
@@ -198,10 +195,7 @@ class BricksAPIIntegrator {
             $control_options['queryTypes'] = [];
         }
         
-        // DEBUG: Log del estado inicial
-        if (defined('WP_DEBUG') && WP_DEBUG) {
-            error_log('Bricks API Integrator - Query Types iniciales: ' . count($control_options['queryTypes']));
-        }
+        // Inicialización de query types
         
         // Limpiar query types existentes de nuestro plugin primero para evitar duplicación
         $removed_count = 0;
@@ -219,10 +213,7 @@ class BricksAPIIntegrator {
             }
         }
         
-        // DEBUG: Log de limpieza
-        if (defined('WP_DEBUG') && WP_DEBUG && $removed_count > 0) {
-            error_log("Bricks API Integrator - Eliminados {$removed_count} query types duplicados");
-        }
+
         
         $registered_keys = [];
         $added_count = 0;
@@ -255,10 +246,7 @@ class BricksAPIIntegrator {
             }
         }
         
-        // DEBUG: Log final
-        if (defined('WP_DEBUG') && WP_DEBUG) {
-            error_log("Bricks API Integrator - Agregados {$added_count} query types. Total final: " . count($control_options['queryTypes']));
-        }
+
         
         return $control_options;
     }
@@ -269,10 +257,7 @@ class BricksAPIIntegrator {
     public function run_custom_query_dynamic($results, $query_object) {
         $object_type = $query_object->object_type ?? '';
         
-        // DEBUG: Log para debug
-        if (defined('WP_DEBUG') && WP_DEBUG) {
-            error_log('Bricks API Integrator - Query ejecutado: ' . $object_type);
-        }
+
         
         // Verificar si es uno de nuestros query types
         if (strpos($object_type, 'api_') !== 0 && strpos($object_type, 'source_') !== 0) {
@@ -292,9 +277,7 @@ class BricksAPIIntegrator {
                         $sanitized_name = sanitize_key($endpoint['name']);
                         if ($sanitized_name === $endpoint_key) {
                             $api_data = $this->get_api_data_with_cache($endpoint['url'], $endpoint);
-                            if (defined('WP_DEBUG') && WP_DEBUG) {
-                                error_log('Bricks API Integrator - Datos AUTO encontrados: ' . count($api_data) . ' elementos');
-                            }
+
                             break;
                         }
                     }
@@ -323,9 +306,7 @@ class BricksAPIIntegrator {
                                     $api_data = $raw_data;
                                 }
                                 
-                                if (defined('WP_DEBUG') && WP_DEBUG) {
-                                    error_log('Bricks API Integrator - Datos MANUAL encontrados: ' . count($api_data) . ' elementos');
-                                }
+
                             }
                             break;
                         }
@@ -413,9 +394,7 @@ class BricksAPIIntegrator {
             $converted_data[] = $pseudo_post;
         }
         
-        if (defined('WP_DEBUG') && WP_DEBUG) {
-            error_log('Bricks API Integrator - Datos convertidos: ' . count($converted_data) . ' elementos');
-        }
+
         
         return $converted_data;
     }
@@ -428,9 +407,7 @@ class BricksAPIIntegrator {
         $sources = get_option('bricks_api_sources', []);
         
         // DEBUG: Log del proceso
-        if (defined('WP_DEBUG') && WP_DEBUG) {
-            error_log('Generando Dynamic Tags diferenciados AUTO/MANUAL');
-        }
+
         
         // Prefijo fijo para todos los tags
         $fixed_prefix = 'snap_';
@@ -459,9 +436,7 @@ class BricksAPIIntegrator {
                     $tags_generated++;
                 }
                 
-                if (defined('WP_DEBUG') && WP_DEBUG) {
-                    error_log('Tags AUTO básicos generados para endpoint "' . $endpoint['name'] . '": ' . count($basic_fields));
-                }
+
                 continue;
             }
             
@@ -478,9 +453,7 @@ class BricksAPIIntegrator {
                     $tags_generated++;
                 }
                 
-                if (defined('WP_DEBUG') && WP_DEBUG) {
-                    error_log('Tags AUTO generados para endpoint "' . $endpoint['name'] . '": ' . count($fields));
-                }
+
             }
         }
         
@@ -517,9 +490,7 @@ class BricksAPIIntegrator {
                         $tags_generated++;
                     }
                     
-                    if (defined('WP_DEBUG') && WP_DEBUG) {
-                        error_log('Tags MANUAL generados para source "' . $source['name'] . '": ' . count($fields));
-                    }
+
                 } else {
                     // Tags básicos si no hay datos
                     $basic_fields = ['id', 'title', 'name', 'description'];
@@ -536,9 +507,7 @@ class BricksAPIIntegrator {
             }
         }
         
-        if (defined('WP_DEBUG') && WP_DEBUG) {
-            error_log("Dynamic Tags generados: {$tags_generated} (AUTO + MANUAL)");
-        }
+
         
         return $tags;
     }
@@ -670,26 +639,18 @@ class BricksAPIIntegrator {
      */
     private function get_api_data_with_dynamic_params($endpoint, $force_refresh = false) {
         // Registrar para depuración
-        if (defined('WP_DEBUG') && WP_DEBUG) {
-            error_log('Obteniendo datos con parámetros dinámicos para: ' . $endpoint['name']);
-            error_log('Forzar actualización: ' . ($force_refresh ? 'Sí' : 'No'));
-        }
+
         
         // Verificar si hay parámetros configurados
         $has_params = !empty($endpoint['params']) && is_array($endpoint['params']);
         $has_dynamic_params = !empty($endpoint['dynamic_params']) && is_array($endpoint['dynamic_params']);
         
-        if (defined('WP_DEBUG') && WP_DEBUG) {
-            error_log('Tiene parámetros estáticos: ' . ($has_params ? 'Sí' : 'No'));
-            error_log('Tiene parámetros dinámicos: ' . ($has_dynamic_params ? 'Sí' : 'No'));
-        }
+
         
         // Construir URL completa con todos los parámetros (estáticos y dinámicos)
         $test_url = $this->build_complete_test_url($endpoint);
         
-        if (defined('WP_DEBUG') && WP_DEBUG) {
-            error_log('URL construida: ' . $test_url);
-        }
+
         
         if (!empty($test_url)) {
             try {
@@ -697,14 +658,10 @@ class BricksAPIIntegrator {
                 $test_data = $this->get_api_data_with_cache($test_url, $endpoint, $force_refresh);
                 
                 if (!empty($test_data)) {
-                    if (defined('WP_DEBUG') && WP_DEBUG) {
-                        error_log('Datos obtenidos correctamente con parámetros');
-                    }
+
                     return $test_data;
                 } else {
-                    if (defined('WP_DEBUG') && WP_DEBUG) {
-                        error_log('No se obtuvieron datos con la URL: ' . $test_url);
-                    }
+
                 }
             } catch (Exception $e) {
                 if (defined('WP_DEBUG') && WP_DEBUG) {
@@ -718,9 +675,7 @@ class BricksAPIIntegrator {
             $basic_data = $this->get_api_data_by_endpoint_name($endpoint['name']);
             
             if (!empty($basic_data)) {
-                if (defined('WP_DEBUG') && WP_DEBUG) {
-                    error_log('Usando datos básicos del endpoint como respaldo');
-                }
+
                 return $basic_data;
             }
         }
@@ -735,16 +690,10 @@ class BricksAPIIntegrator {
         $url = $endpoint['url'];
         $dynamic_params = $endpoint['dynamic_params'] ?? [];
         
-        if (defined('WP_DEBUG') && WP_DEBUG) {
-            error_log('Construyendo URL de test para: ' . $endpoint['name']);
-            error_log('URL base: ' . $url);
-            error_log('Parámetros dinámicos: ' . json_encode($dynamic_params));
-        }
+
         
         if (empty($dynamic_params)) {
-            if (defined('WP_DEBUG') && WP_DEBUG) {
-                error_log('No hay parámetros dinámicos, devolviendo URL base');
-            }
+
             return $url;
         }
         
@@ -778,9 +727,7 @@ class BricksAPIIntegrator {
             if (!empty($param_default)) {
                 $url = add_query_arg($param_name, $param_default, $url);
                 $params_added++;
-                if (defined('WP_DEBUG') && WP_DEBUG) {
-                    error_log("Agregado parámetro {$param_name} = {$param_default} (por defecto)");
-                }
+
                 continue;
             }
             
@@ -805,14 +752,10 @@ class BricksAPIIntegrator {
             $url = add_query_arg($param_name, $sample_value, $url);
             $params_added++;
             
-            if (defined('WP_DEBUG') && WP_DEBUG) {
-                error_log("Agregado parámetro {$param_name} = {$sample_value} (valor de muestra)");
-            }
+
         }
         
-        if (defined('WP_DEBUG') && WP_DEBUG) {
-            error_log("URL final de test ({$params_added} parámetros agregados): {$url}");
-        }
+
         
         return $url;
     }
@@ -826,10 +769,7 @@ class BricksAPIIntegrator {
     private function build_complete_test_url($endpoint) {
         $url = $endpoint['url'];
         
-        if (defined('WP_DEBUG') && WP_DEBUG) {
-            error_log('Construyendo URL completa para test de API: ' . $endpoint['name']);
-            error_log('URL base: ' . $url);
-        }
+
         
         // 1. Aplicar parámetros estáticos configurados
         if (isset($endpoint['params']) && is_array($endpoint['params'])) {
@@ -841,9 +781,7 @@ class BricksAPIIntegrator {
                     // Asegurarnos de que los parámetros se apliquen correctamente
                     $url = add_query_arg($param_name, $param_value, $url);
                     
-                    if (defined('WP_DEBUG') && WP_DEBUG) {
-                        error_log("Agregado parámetro estático: {$param_name} = {$param_value}");
-                    }
+
                 }
             }
         }
@@ -864,9 +802,7 @@ class BricksAPIIntegrator {
                 if (!empty($param_default)) {
                     $url = add_query_arg($param_name, $param_default, $url);
                     
-                    if (defined('WP_DEBUG') && WP_DEBUG) {
-                        error_log("Agregado parámetro dinámico (valor por defecto): {$param_name} = {$param_default}");
-                    }
+
                     continue;
                 }
                 
@@ -881,15 +817,11 @@ class BricksAPIIntegrator {
                 
                 $url = add_query_arg($param_name, $sample_value, $url);
                 
-                if (defined('WP_DEBUG') && WP_DEBUG) {
-                    error_log("Agregado parámetro dinámico (valor de muestra): {$param_name} = {$sample_value}");
-                }
+
             }
         }
         
-        if (defined('WP_DEBUG') && WP_DEBUG) {
-            error_log("URL final para test de API: {$url}");
-        }
+
         
         return $url;
     }
@@ -926,9 +858,7 @@ class BricksAPIIntegrator {
                         // Usar exactamente el nombre del encabezado configurado por el usuario
                         $headers[$key_name] = $key_value;
                         
-                        if (defined('WP_DEBUG') && WP_DEBUG) {
-                            error_log("Aplicando encabezado API Key: '{$key_name}' = '{$key_value}'");
-                        }
+
                     }
                     break;
                 case 'basic':
@@ -1679,9 +1609,7 @@ class BricksAPIIntegrator {
             if ($auth_type === 'api_key' && !empty($auth_key) && !empty($auth_value)) {
                 $args['headers'][$auth_key] = $auth_value;
                 
-                if (defined('WP_DEBUG') && WP_DEBUG) {
-                    error_log("API Key añadida directamente: '{$auth_key}' = '{$auth_value}'");
-                }
+
             }
             
             // Añadir Bearer Token si está configurado
@@ -1695,16 +1623,10 @@ class BricksAPIIntegrator {
             }
             
             // Registrar los encabezados finales para depuración
-            if (defined('WP_DEBUG') && WP_DEBUG) {
-                error_log('URL de test: ' . $test_url);
-                error_log('Encabezados finales: ' . print_r($args['headers'], true));
-            }
+
             
             // Registrar los encabezados para depuración
-            if (defined('WP_DEBUG') && WP_DEBUG) {
-                error_log('URL de test: ' . $test_url);
-                error_log('Headers enviados: ' . print_r($args['headers'], true));
-            }
+
             
             // Añadir la API key directamente al encabezado si no está presente
             if ($auth_type === 'api_key' && !empty($auth_key) && !empty($auth_value)) {
@@ -1718,17 +1640,11 @@ class BricksAPIIntegrator {
                 }
                 
                 // Registrar en el log para depuración
-                if (defined('WP_DEBUG') && WP_DEBUG) {
-                    error_log("API Key forzada en encabezado: '{$auth_key}' = '{$auth_value}'");
-                    error_log("Encabezados después de añadir API Key: " . print_r($args['headers'], true));
-                }
+
             }
             
             // Mostrar información de depuración
-            if (defined('WP_DEBUG') && WP_DEBUG) {
-                error_log('Realizando petición a: ' . $test_url);
-                error_log('Encabezados finales: ' . print_r($args['headers'], true));
-            }
+
             
             // Realizar la petición a la API
             $response = wp_remote_get($test_url, $args);
