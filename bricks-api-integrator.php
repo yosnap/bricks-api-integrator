@@ -663,34 +663,65 @@ class BricksAPIIntegrator {
     
     /**
      * Obtener datos de API con parámetros dinámicos para páginas de detalle
+     * 
+     * @param array $endpoint Configuración del endpoint
+     * @param bool $force_refresh Forzar actualización de caché
+     * @return mixed Datos de la API o null si no se pudieron obtener
      */
-    private function get_api_data_with_dynamic_params($endpoint) {
-        // Primero intentar obtener datos básicos del endpoint
-        $basic_data = $this->get_api_data_by_endpoint_name($endpoint['name']);
-        
-        // Si tenemos datos básicos, usarlos
-        if (!empty($basic_data)) {
-            return $basic_data;
+    private function get_api_data_with_dynamic_params($endpoint, $force_refresh = false) {
+        // Registrar para depuración
+        if (defined('WP_DEBUG') && WP_DEBUG) {
+            error_log('Obteniendo datos con parámetros dinámicos para: ' . $endpoint['name']);
+            error_log('Forzar actualización: ' . ($force_refresh ? 'Sí' : 'No'));
         }
         
-        // Si no hay datos básicos, intentar con parámetros de muestra para páginas de detalle
-        if (!empty($endpoint['dynamic_params'])) {
-            $test_url = $this->build_test_url_with_params($endpoint);
-            
-            if (!empty($test_url)) {
-                try {
-                    $test_data = $this->get_api_data_with_cache($test_url, $endpoint, true);
-                    if (!empty($test_data)) {
-                        if (defined('WP_DEBUG') && WP_DEBUG) {
-                            error_log('Datos obtenidos con parámetros de test para: ' . $endpoint['name']);
-                        }
-                        return $test_data;
-                    }
-                } catch (Exception $e) {
+        // Verificar si hay parámetros configurados
+        $has_params = !empty($endpoint['params']) && is_array($endpoint['params']);
+        $has_dynamic_params = !empty($endpoint['dynamic_params']) && is_array($endpoint['dynamic_params']);
+        
+        if (defined('WP_DEBUG') && WP_DEBUG) {
+            error_log('Tiene parámetros estáticos: ' . ($has_params ? 'Sí' : 'No'));
+            error_log('Tiene parámetros dinámicos: ' . ($has_dynamic_params ? 'Sí' : 'No'));
+        }
+        
+        // Construir URL completa con todos los parámetros (estáticos y dinámicos)
+        $test_url = $this->build_complete_test_url($endpoint);
+        
+        if (defined('WP_DEBUG') && WP_DEBUG) {
+            error_log('URL construida: ' . $test_url);
+        }
+        
+        if (!empty($test_url)) {
+            try {
+                // Obtener datos con la URL completa
+                $test_data = $this->get_api_data_with_cache($test_url, $endpoint, $force_refresh);
+                
+                if (!empty($test_data)) {
                     if (defined('WP_DEBUG') && WP_DEBUG) {
-                        error_log('Error al obtener datos con parámetros de test: ' . $e->getMessage());
+                        error_log('Datos obtenidos correctamente con parámetros');
+                    }
+                    return $test_data;
+                } else {
+                    if (defined('WP_DEBUG') && WP_DEBUG) {
+                        error_log('No se obtuvieron datos con la URL: ' . $test_url);
                     }
                 }
+            } catch (Exception $e) {
+                if (defined('WP_DEBUG') && WP_DEBUG) {
+                    error_log('Error al obtener datos con parámetros: ' . $e->getMessage());
+                }
+            }
+        }
+        
+        // Si todo lo anterior falla, intentar obtener datos básicos del endpoint
+        if (!$force_refresh) {
+            $basic_data = $this->get_api_data_by_endpoint_name($endpoint['name']);
+            
+            if (!empty($basic_data)) {
+                if (defined('WP_DEBUG') && WP_DEBUG) {
+                    error_log('Usando datos básicos del endpoint como respaldo');
+                }
+                return $basic_data;
             }
         }
         
@@ -784,6 +815,179 @@ class BricksAPIIntegrator {
         }
         
         return $url;
+    }
+    
+    /**
+     * Construir URL completa con todos los parámetros configurados (estáticos y dinámicos)
+     * 
+     * @param array $endpoint Configuración del endpoint
+     * @return string URL completa con todos los parámetros
+     */
+    private function build_complete_test_url($endpoint) {
+        $url = $endpoint['url'];
+        
+        if (defined('WP_DEBUG') && WP_DEBUG) {
+            error_log('Construyendo URL completa para test de API: ' . $endpoint['name']);
+            error_log('URL base: ' . $url);
+        }
+        
+        // 1. Aplicar parámetros estáticos configurados
+        if (isset($endpoint['params']) && is_array($endpoint['params'])) {
+            foreach ($endpoint['params'] as $param) {
+                if (!empty($param['name']) && isset($param['value'])) {
+                    $param_name = $param['name'];
+                    $param_value = $param['value'];
+                    
+                    // Asegurarnos de que los parámetros se apliquen correctamente
+                    $url = add_query_arg($param_name, $param_value, $url);
+                    
+                    if (defined('WP_DEBUG') && WP_DEBUG) {
+                        error_log("Agregado parámetro estático: {$param_name} = {$param_value}");
+                    }
+                }
+            }
+        }
+        
+        // 2. Aplicar parámetros dinámicos si existen
+        $dynamic_params = $endpoint['dynamic_params'] ?? [];
+        
+        if (!empty($dynamic_params)) {
+            foreach ($dynamic_params as $param) {
+                $param_name = $param['name'] ?? '';
+                $param_default = $param['default'] ?? '';
+                
+                if (empty($param_name)) {
+                    continue;
+                }
+                
+                // Usar valor por defecto si existe
+                if (!empty($param_default)) {
+                    $url = add_query_arg($param_name, $param_default, $url);
+                    
+                    if (defined('WP_DEBUG') && WP_DEBUG) {
+                        error_log("Agregado parámetro dinámico (valor por defecto): {$param_name} = {$param_default}");
+                    }
+                    continue;
+                }
+                
+                // Usar un valor de muestra para el test
+                $sample_value = '1';
+                if (strpos($param_name, 'slug') !== false || 
+                    strpos($param_name, 'name') !== false || 
+                    strpos($param_name, 'category') !== false || 
+                    strpos($param_name, 'tag') !== false) {
+                    $sample_value = 'sample';
+                }
+                
+                $url = add_query_arg($param_name, $sample_value, $url);
+                
+                if (defined('WP_DEBUG') && WP_DEBUG) {
+                    error_log("Agregado parámetro dinámico (valor de muestra): {$param_name} = {$sample_value}");
+                }
+            }
+        }
+        
+        if (defined('WP_DEBUG') && WP_DEBUG) {
+            error_log("URL final para test de API: {$url}");
+        }
+        
+        return $url;
+    }
+    
+    /**
+     * Obtener los encabezados de autenticación para una petición a la API
+     * 
+     * @param array $endpoint Configuración del endpoint
+     * @return array Encabezados de autenticación
+     */
+    private function get_auth_headers($endpoint) {
+        $headers = [
+            'User-Agent' => 'PostmanRuntime/7.44.0',
+            'Accept' => '*/*',
+            'Connection' => 'keep-alive',
+            'Cache-Control' => 'no-cache'
+        ];
+        
+        // Añadir autenticación si está configurada
+        if (!empty($endpoint['auth_type']) && $endpoint['auth_type'] !== 'none') {
+            switch ($endpoint['auth_type']) {
+                case 'bearer':
+                    if (!empty($endpoint['auth_token'])) {
+                        $headers['Authorization'] = 'Bearer ' . $endpoint['auth_token'];
+                    }
+                    break;
+                case 'api_key':
+                    if (!empty($endpoint['auth_key']) && !empty($endpoint['auth_value'])) {
+                        // Preservar el nombre exacto del encabezado como lo configuró el usuario
+                        // Esto es crucial para APIs que esperan un formato específico
+                        $key_name = $endpoint['auth_key'];
+                        $key_value = $endpoint['auth_value'];
+                        
+                        // Usar exactamente el nombre del encabezado configurado por el usuario
+                        $headers[$key_name] = $key_value;
+                        
+                        if (defined('WP_DEBUG') && WP_DEBUG) {
+                            error_log("Aplicando encabezado API Key: '{$key_name}' = '{$key_value}'");
+                        }
+                    }
+                    break;
+                case 'basic':
+                    if (!empty($endpoint['auth_username']) && !empty($endpoint['auth_password'])) {
+                        $headers['Authorization'] = 'Basic ' . base64_encode($endpoint['auth_username'] . ':' . $endpoint['auth_password']);
+                    }
+                    break;
+            }
+        }
+        
+        return $headers;
+    }
+    
+    /**
+     * Obtener los parámetros aplicados para mostrarlos en la respuesta
+     * 
+     * @param array $endpoint Configuración del endpoint
+     * @return array Parámetros aplicados
+     */
+    private function get_applied_params($endpoint) {
+        $params = [];
+        
+        // Parámetros estáticos
+        if (isset($endpoint['params']) && is_array($endpoint['params'])) {
+            foreach ($endpoint['params'] as $param) {
+                if (!empty($param['name']) && isset($param['value'])) {
+                    $params[$param['name']] = $param['value'];
+                }
+            }
+        }
+        
+        // Parámetros dinámicos
+        $dynamic_params = $endpoint['dynamic_params'] ?? [];
+        if (!empty($dynamic_params)) {
+            foreach ($dynamic_params as $param) {
+                $param_name = $param['name'] ?? '';
+                $param_default = $param['default'] ?? '';
+                
+                if (empty($param_name)) {
+                    continue;
+                }
+                
+                if (!empty($param_default)) {
+                    $params[$param_name] = $param_default;
+                } else {
+                    // Valor de muestra para el test
+                    $sample_value = '1';
+                    if (strpos($param_name, 'slug') !== false || 
+                        strpos($param_name, 'name') !== false || 
+                        strpos($param_name, 'category') !== false || 
+                        strpos($param_name, 'tag') !== false) {
+                        $sample_value = 'sample';
+                    }
+                    $params[$param_name] = $sample_value;
+                }
+            }
+        }
+        
+        return $params;
     }
     
     /**
@@ -1439,22 +1643,173 @@ class BricksAPIIntegrator {
         $endpoint = $endpoints[$index];
         
         try {
-            // Usar el método mejorado que maneja parámetros dinámicos
-            $data = $this->get_api_data_with_dynamic_params($endpoint);
+            // Construir URL con todos los parámetros configurados (estáticos y dinámicos)
+            $test_url = $this->build_complete_test_url($endpoint);
+            
+            // Obtener los valores de autenticación
+            $auth_type = isset($endpoint['auth_type']) ? $endpoint['auth_type'] : 'none';
+            $auth_key = isset($endpoint['auth_key']) ? trim($endpoint['auth_key']) : '';
+            $auth_value = isset($endpoint['auth_value']) ? $endpoint['auth_value'] : '';
+            
+            // Configurar encabezados básicos de Postman
+            $headers = [
+                'User-Agent' => 'PostmanRuntime/7.44.0',
+                'Accept' => '*/*',
+                'Connection' => 'keep-alive',
+                'Cache-Control' => 'no-cache'
+            ];
+            
+            // Configuración básica de la solicitud
+            $args = [
+                'timeout' => 30,
+                'headers' => [
+                    'User-Agent' => 'PostmanRuntime/7.44.0',
+                    'Accept' => '*/*',
+                    'Connection' => 'keep-alive',
+                    'Cache-Control' => 'no-cache'
+                ]
+            ];
+            
+            // Añadir la API key directamente a los encabezados
+            if ($auth_type === 'api_key' && !empty($auth_key) && !empty($auth_value)) {
+                $args['headers'][$auth_key] = $auth_value;
+            }
+            
+            // Añadir API Key directamente a los encabezados de la solicitud
+            if ($auth_type === 'api_key' && !empty($auth_key) && !empty($auth_value)) {
+                $args['headers'][$auth_key] = $auth_value;
+                
+                if (defined('WP_DEBUG') && WP_DEBUG) {
+                    error_log("API Key añadida directamente: '{$auth_key}' = '{$auth_value}'");
+                }
+            }
+            
+            // Añadir Bearer Token si está configurado
+            if ($auth_type === 'bearer' && !empty($endpoint['auth_token'])) {
+                $args['headers']['Authorization'] = 'Bearer ' . $endpoint['auth_token'];
+            }
+            
+            // Añadir Basic Auth si está configurado
+            if ($auth_type === 'basic' && !empty($endpoint['auth_username']) && !empty($endpoint['auth_password'])) {
+                $args['headers']['Authorization'] = 'Basic ' . base64_encode($endpoint['auth_username'] . ':' . $endpoint['auth_password']);
+            }
+            
+            // Registrar los encabezados finales para depuración
+            if (defined('WP_DEBUG') && WP_DEBUG) {
+                error_log('URL de test: ' . $test_url);
+                error_log('Encabezados finales: ' . print_r($args['headers'], true));
+            }
+            
+            // Registrar los encabezados para depuración
+            if (defined('WP_DEBUG') && WP_DEBUG) {
+                error_log('URL de test: ' . $test_url);
+                error_log('Headers enviados: ' . print_r($args['headers'], true));
+            }
+            
+            // Añadir la API key directamente al encabezado si no está presente
+            if ($auth_type === 'api_key' && !empty($auth_key) && !empty($auth_value)) {
+                // Forzar la API key en el encabezado correcto
+                $args['headers'][$auth_key] = $auth_value;
+                
+                // Si la URL contiene api-sports.io o api-football, añadir el encabezado específico
+                if (strpos($test_url, 'api-sports.io') !== false || strpos($test_url, 'api-football') !== false) {
+                    // Para esta API específica, asegurarnos de que el encabezado tenga el formato correcto
+                    $args['headers']['x-apisports-key'] = $auth_value;
+                }
+                
+                // Registrar en el log para depuración
+                if (defined('WP_DEBUG') && WP_DEBUG) {
+                    error_log("API Key forzada en encabezado: '{$auth_key}' = '{$auth_value}'");
+                    error_log("Encabezados después de añadir API Key: " . print_r($args['headers'], true));
+                }
+            }
+            
+            // Mostrar información de depuración
+            if (defined('WP_DEBUG') && WP_DEBUG) {
+                error_log('Realizando petición a: ' . $test_url);
+                error_log('Encabezados finales: ' . print_r($args['headers'], true));
+            }
+            
+            // Realizar la petición a la API
+            $response = wp_remote_get($test_url, $args);
+            
+            if (is_wp_error($response)) {
+                wp_send_json_error([
+                    'message' => 'Error de conexión: ' . $response->get_error_message(),
+                    'test_url' => $test_url,
+                    'base_url' => $endpoint['url']
+                ]);
+                return;
+            }
+            
+            $status_code = wp_remote_retrieve_response_code($response);
+            if ($status_code !== 200) {
+                $response_body = wp_remote_retrieve_body($response);
+                $response_headers = wp_remote_retrieve_headers($response);
+                
+                // Intentar decodificar la respuesta de error para mostrar información más detallada
+                $error_details = '';
+                $decoded_error = json_decode($response_body, true);
+                if (json_last_error() === JSON_ERROR_NONE && !empty($decoded_error)) {
+                    $error_details = ' - Detalles: ' . json_encode($decoded_error, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+                }
+                
+                // Registrar información detallada en el log para depuración
+                if (defined('WP_DEBUG') && WP_DEBUG) {
+                    error_log('Error en la API: Código ' . $status_code);
+                    error_log('URL: ' . $test_url);
+                    error_log('Encabezados enviados: ' . print_r($headers, true));
+                    error_log('Encabezados recibidos: ' . print_r($response_headers, true));
+                    error_log('Cuerpo de la respuesta: ' . $response_body);
+                }
+                
+                // Crear una copia de los encabezados para mostrar en la respuesta
+                $headers_for_display = $args['headers'];
+                
+                // Si es API key, asegurarnos de que se muestre en la respuesta
+                if ($auth_type === 'api_key' && !empty($auth_key) && !empty($auth_value)) {
+                    $headers_for_display[$auth_key] = $auth_value;
+                }
+                
+                wp_send_json_error([
+                    'message' => 'La API devolvió un código de estado no válido: ' . $status_code . $error_details,
+                    'test_url' => $test_url,
+                    'base_url' => $endpoint['url'],
+                    'response_body' => $response_body,
+                    'headers_sent' => $headers_for_display,
+                    'headers_received' => $response_headers,
+                    'auth_config' => [
+                        'type' => $auth_type,
+                        'key_name' => $auth_key,
+                        'has_value' => !empty($auth_value) ? 'yes' : 'no'
+                    ]
+                ]);
+                return;
+            }
+            
+            // Obtener el cuerpo de la respuesta
+            $body = wp_remote_retrieve_body($response);
+            
+            // Intentar decodificar el JSON
+            $data = json_decode($body, true);
+            
+            if (json_last_error() !== JSON_ERROR_NONE) {
+                wp_send_json_error([
+                    'message' => 'Error al decodificar JSON: ' . json_last_error_msg(),
+                    'test_url' => $test_url,
+                    'base_url' => $endpoint['url'],
+                    'response_body' => $body
+                ]);
+                return;
+            }
             
             if (empty($data)) {
-                // Si no hay datos con parámetros dinámicos, intentar con URL base
-                $data = $this->get_api_data_with_cache($endpoint['url'], $endpoint, true);
-                
-                if (empty($data)) {
-                    // Construir URL de test para mostrar en el error
-                    $test_url = $this->build_test_url_with_params($endpoint);
-                    wp_send_json_error([
-                        'message' => 'No se obtuvieron datos de la API. Verifica la URL y autenticación.',
-                        'test_url' => $test_url,
-                        'base_url' => $endpoint['url']
-                    ]);
-                }
+                wp_send_json_error([
+                    'message' => 'No se obtuvieron datos de la API. Verifica la URL y autenticación.',
+                    'test_url' => $test_url,
+                    'base_url' => $endpoint['url']
+                ]);
+                return;
             }
             
             // Analizar estructura de datos
@@ -1478,16 +1833,86 @@ class BricksAPIIntegrator {
                 $sample_fields = array_slice(array_keys($fields), 0, 8);
             }
             
-            // Construir URL de test para mostrar
-            $test_url = $this->build_test_url_with_params($endpoint);
+            // Construir URL de test para mostrar (con todos los parámetros)
+            $test_url = $this->build_complete_test_url($endpoint);
+            
+            // Obtener el cuerpo de la respuesta original sin procesar
+            $original_body = wp_remote_retrieve_body($response);
+            
+            // Asegurarnos de que estamos pasando el payload completo sin procesar
+            // Esto garantiza que se muestre exactamente lo que devuelve la API
+            $full_response_json = $original_body;
+            
+            // Verificar que el JSON sea válido y esté bien formateado
+            $decoded_json = json_decode($original_body);
+            if (json_last_error() === JSON_ERROR_NONE) {
+                // Si el JSON es válido, lo re-codificamos con formato bonito
+                // Esto asegura que se muestre correctamente en el frontend
+                $full_response_json = json_encode($decoded_json, 
+                    JSON_PRETTY_PRINT | 
+                    JSON_UNESCAPED_UNICODE | 
+                    JSON_UNESCAPED_SLASHES | 
+                    JSON_PRESERVE_ZERO_FRACTION
+                );
+            }
+            
+            // Limitar el tamaño del payload solo si es extremadamente grande para evitar problemas de memoria
+            if (strlen($full_response_json) > 1000000) {
+                $full_response_json = substr($full_response_json, 0, 1000000) . '... (truncado por tamaño excesivo)';
+            }
+            
+            // Analizar estructura de datos
+            $sample_fields = [];
+            $sample_data = null;
+            $count = 0;
+            $total_items = 0;
+            
+            if (is_array($data)) {
+                // Manejar estructura de respuesta tipo array
+                if (isset($data['items']) && is_array($data['items'])) {
+                    // Formato común: { items: [...], total: X }
+                    $count = count($data['items']);
+                    $total_items = isset($data['total']) ? $data['total'] : $count;
+                    
+                    if ($count > 0) {
+                        $sample_data = $data['items'][0];
+                        $fields = $this->extract_fields_from_data($sample_data);
+                        $sample_fields = array_slice(array_keys($fields), 0, 12);
+                    }
+                } else if (isset($data[0])) {
+                    // Formato de array simple: [item1, item2, ...]
+                    $count = count($data);
+                    $total_items = $count;
+                    $sample_data = $data[0];
+                    $fields = $this->extract_fields_from_data($sample_data);
+                    $sample_fields = array_slice(array_keys($fields), 0, 12);
+                } else {
+                    // Objeto simple
+                    $count = 1;
+                    $total_items = 1;
+                    $sample_data = $data;
+                    $fields = $this->extract_fields_from_data($data);
+                    $sample_fields = array_slice(array_keys($fields), 0, 12);
+                }
+            } else {
+                $count = 1;
+                $total_items = 1;
+                $sample_data = $data;
+                $fields = $this->extract_fields_from_data($data);
+                $sample_fields = array_slice(array_keys($fields), 0, 12);
+            }
             
             wp_send_json_success([
                 'count' => $count,
+                'total_items' => $total_items,
                 'sample_fields' => $sample_fields,
                 'sample_data' => $sample_data,
                 'message' => 'API funcionando correctamente',
                 'test_url' => $test_url,
-                'base_url' => $endpoint['url']
+                'base_url' => $endpoint['url'],
+                'full_response' => $full_response_json,
+                'response_structure' => $this->analyze_data_structure($data),
+                'params_applied' => $this->get_applied_params($endpoint)
             ]);
             
         } catch (Exception $e) {
@@ -1917,18 +2342,115 @@ class BricksAPIIntegrator {
         $endpoint = $endpoints[$index];
         
         try {
-            // Limpiar caché específico de este endpoint primero
-            $cache_key = 'api_data_' . md5($endpoint['url'] . serialize($endpoint));
+            // Limpiar todas las cachés relacionadas con este endpoint
+            $cache_key_base = 'api_data_' . md5($endpoint['url']);
+            $cache_key = $cache_key_base . serialize($endpoint);
             delete_transient($cache_key);
             
-            // Forzar actualización de datos
-            $data = $this->get_api_data_with_cache($endpoint['url'], $endpoint, true);
+            // También limpiar otras posibles cachés relacionadas
+            global $wpdb;
+            $like = '%' . $wpdb->esc_like($cache_key_base) . '%';
+            $keys = $wpdb->get_col($wpdb->prepare(
+                "SELECT option_name FROM {$wpdb->options} 
+                WHERE option_name LIKE %s 
+                AND option_name LIKE %s",
+                '_transient_%', $like
+            ));
+            
+            foreach ($keys as $key) {
+                $key = str_replace('_transient_', '', $key);
+                delete_transient($key);
+                if (defined('WP_DEBUG') && WP_DEBUG) {
+                    error_log('Eliminada caché: ' . $key);
+                }
+            }
+            
+            // Verificar si el endpoint tiene parámetros configurados
+            $has_static_params = !empty($endpoint['params']) && is_array($endpoint['params']);
+            $has_dynamic_params = !empty($endpoint['dynamic_params']) && is_array($endpoint['dynamic_params']);
+            
+            // Registrar para depuración
+            if (defined('WP_DEBUG') && WP_DEBUG) {
+                error_log('Actualizando endpoint: ' . $endpoint['name']);
+                error_log('URL base: ' . $endpoint['url']);
+                error_log('Tiene parámetros estáticos: ' . ($has_static_params ? 'Sí' : 'No'));
+                error_log('Tiene parámetros dinámicos: ' . ($has_dynamic_params ? 'Sí' : 'No'));
+                
+                if ($has_static_params) {
+                    error_log('Parámetros estáticos: ' . print_r($endpoint['params'], true));
+                }
+                if ($has_dynamic_params) {
+                    error_log('Parámetros dinámicos: ' . print_r($endpoint['dynamic_params'], true));
+                }
+            }
+            
+            // Construir la URL completa con todos los parámetros configurados
+            $test_url = $this->build_complete_test_url($endpoint);
+            
+            if (defined('WP_DEBUG') && WP_DEBUG) {
+                error_log('URL completa para actualización: ' . $test_url);
+            }
+            
+            // Configurar encabezados
+            $headers = [
+                'User-Agent' => 'PostmanRuntime/7.44.0',
+                'Accept' => '*/*',
+                'Connection' => 'keep-alive',
+                'Cache-Control' => 'no-cache'
+            ];
+            
+            // Añadir encabezado de API Key si está configurado
+            if ($endpoint['auth_type'] === 'api_key' && !empty($endpoint['auth_key']) && !empty($endpoint['auth_value'])) {
+                $headers[$endpoint['auth_key']] = $endpoint['auth_value'];
+            }
+            
+            // Añadir encabezado de Bearer Token si está configurado
+            if ($endpoint['auth_type'] === 'bearer' && !empty($endpoint['auth_token'])) {
+                $headers['Authorization'] = 'Bearer ' . $endpoint['auth_token'];
+            }
+            
+            // Añadir encabezado de Basic Auth si está configurado
+            if ($endpoint['auth_type'] === 'basic' && !empty($endpoint['auth_username']) && !empty($endpoint['auth_password'])) {
+                $headers['Authorization'] = 'Basic ' . base64_encode($endpoint['auth_username'] . ':' . $endpoint['auth_password']);
+            }
+            
+            // Realizar la petición directamente sin usar la caché
+            $response = wp_remote_get($test_url, [
+                'timeout' => 30,
+                'headers' => $headers
+            ]);
+            
+            if (is_wp_error($response)) {
+                throw new Exception($response->get_error_message());
+            }
+            
+            $status_code = wp_remote_retrieve_response_code($response);
+            if ($status_code !== 200) {
+                throw new Exception('La API devolvió un código de estado no válido: ' . $status_code);
+            }
+            
+            $body = wp_remote_retrieve_body($response);
+            $data = json_decode($body, true);
+            
+            if (json_last_error() !== JSON_ERROR_NONE) {
+                throw new Exception('Error al decodificar la respuesta JSON: ' . json_last_error_msg());
+            }
+            
+            // Registrar la respuesta para depuración
+            if (defined('WP_DEBUG') && WP_DEBUG) {
+                error_log('Respuesta recibida correctamente');
+                error_log('Tipo de datos: ' . gettype($data));
+                error_log('Estructura: ' . (is_array($data) ? 'Array con ' . count($data) . ' elementos' : 'No es un array'));
+            }
             
             if (empty($data)) {
                 wp_send_json_error([
-                    'message' => 'No se obtuvieron datos de la API. Verifica la URL y configuración.',
-                    'endpoint_url' => $endpoint['url']
+                    'message' => 'La API devolvió una respuesta vacía. Verifica la URL y configuración.',
+                    'test_url' => $test_url,
+                    'has_static_params' => $has_static_params,
+                    'has_dynamic_params' => $has_dynamic_params
                 ]);
+                return;
             }
             
             // Analizar estructura de datos
@@ -1993,17 +2515,11 @@ class BricksAPIIntegrator {
         $url = $endpoint['url'];
         $params_applied = [];
         
-        // Aplicar los parámetros configurados en el endpoint (excepto anunci-actiu)
+        // Aplicar todos los parámetros configurados en el endpoint
         if (isset($endpoint['params']) && is_array($endpoint['params'])) {
             foreach ($endpoint['params'] as $param) {
                 if (!empty($param['name']) && isset($param['value'])) {
                     $param_name = $param['name'];
-                    
-                    // IMPORTANTE: Ignorar explícitamente el parámetro anunci-actiu
-                    if ($param_name === 'anunci-actiu') {
-                        continue;
-                    }
-                    
                     $param_value = $param['value'];
                     
                     // Convertir valores booleanos a su representación correcta

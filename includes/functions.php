@@ -71,7 +71,13 @@ if (!function_exists('bricks_api_integrator_assets')) {
         // Script para probar items_path
         wp_enqueue_script('bricks-api-items-path-tester', BRICKS_API_INTEGRATOR_URL . 'assets/items-path-tester.js', ['jquery'], null, true);
         
-        // Pasar variables al script
+        // Pasar variables al script principal
+        wp_localize_script('bricks-api-integrator-script', 'bricks_api_integrator_vars', [
+            'nonce' => wp_create_nonce('test_api_endpoint'),
+            'ajaxurl' => admin_url('admin-ajax.php')
+        ]);
+        
+        // Pasar variables al script de items_path
         wp_localize_script('bricks-api-items-path-tester', 'bricks_api_vars', [
             'nonce' => wp_create_nonce('test_items_path')
         ]);

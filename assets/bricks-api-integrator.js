@@ -221,19 +221,69 @@ document.addEventListener("DOMContentLoaded", function () {
   function removeEndpointHandler(e) {
     e.preventDefault();
     
-    const button = e.target;
+    // Asegurarnos de obtener el botón correcto incluso si se hace clic en un elemento hijo
+    const button = e.target.closest('.eliminar-endpoint');
+    if (!button) return;
+    
     const index = parseInt(button.getAttribute('data-index'));
-    const group = button.closest('.endpoint-card'); // CAMBIADO de .endpoint-group a .endpoint-card
+    
+    // Buscar el contenedor del endpoint (.endpoint-card)
+    const group = button.closest('.endpoint-card');
     
     console.log('removeEndpointHandler called, index:', index, 'group found:', group);
     
     if (confirm('¿Estás seguro de que quieres eliminar este endpoint?')) {
-      // Remover el elemento
-      group.remove();
-      
-      // Reindexar todos los endpoints restantes
-      reindexEndpoints();
+      // Verificar que el grupo existe antes de intentar eliminarlo
+      if (group) {
+        // Remover el elemento
+        group.remove();
+        
+        // Reindexar todos los endpoints restantes
+        reindexEndpoints();
+      } else {
+        // Si no se encuentra el grupo, intentar eliminar por AJAX de todos modos
+        console.log('No se encontró el contenedor del endpoint, intentando eliminar por AJAX');
+        removeEndpointByAjax(index);
+      }
     }
+  }
+  
+  // Función para eliminar endpoint por AJAX cuando no se encuentra el elemento DOM
+  function removeEndpointByAjax(index) {
+    // Mostrar indicador de carga
+    const loadingDiv = document.createElement('div');
+    loadingDiv.className = 'loading-indicator';
+    loadingDiv.innerHTML = 'Eliminando endpoint...';
+    document.body.appendChild(loadingDiv);
+    
+    // Enviar solicitud AJAX para eliminar el endpoint
+    const data = new FormData();
+    data.append('action', 'remove_api_endpoint');
+    data.append('index', index);
+    data.append('nonce', bricksApiIntegrator.nonce);
+    
+    fetch(bricksApiIntegrator.ajaxUrl, {
+      method: 'POST',
+      body: data
+    })
+    .then(response => response.json())
+    .then(data => {
+      // Eliminar indicador de carga
+      loadingDiv.remove();
+      
+      if (data.success) {
+        // Recargar la página para mostrar los cambios
+        window.location.reload();
+      } else {
+        alert('Error al eliminar el endpoint: ' + (data.message || 'Error desconocido'));
+      }
+    })
+    .catch(error => {
+      // Eliminar indicador de carga
+      loadingDiv.remove();
+      console.error('Error:', error);
+      alert('Error al eliminar el endpoint. Consulta la consola para más detalles.');
+    });
   }
 
   // Función para reindexar endpoints después de eliminar
@@ -337,20 +387,217 @@ document.addEventListener("DOMContentLoaded", function () {
       resultDiv.innerHTML = '<p style="color: blue;">🔄 Probando conexión...</p>';
     }
     
-    // Simular test (en implementación real, aquí iría AJAX)
-    setTimeout(function() {
-      // Simular respuesta exitosa
-      resultDiv.innerHTML = `
-        <div style="color: green; background: #f0f8ff; padding: 10px; border-radius: 3px;">
-          <p><strong>✅ Conexión exitosa</strong></p>
-          <p><strong>URL:</strong> ${urlInput.value}</p>
-          <p><strong>Estado:</strong> API lista para usar</p>
-        </div>
-      `;
+    // Realizar llamada AJAX real
+    jQuery.ajax({
+      url: bricks_api_integrator_vars.ajaxurl,
+      type: 'POST',
+      data: {
+        action: 'test_api_endpoint',
+        nonce: bricks_api_integrator_vars.nonce,
+        index: index
+      },
+      success: function(response) {
+        button.disabled = false;
+        button.textContent = '🧪 Test API';
+        
+        if (response.success) {
+          // Construir HTML para la respuesta exitosa
+          let html = `
+            <div style="color: green; background: #f0f8ff; padding: 10px; border-radius: 3px; margin-bottom: 15px;">
+              <p><strong>✅ Conexión exitosa</strong></p>
+              <p><strong>URL:</strong> ${response.data.test_url || response.data.base_url}</p>
+              <p><strong>Estado:</strong> API lista para usar</p>
+              ${response.data.total_items ? `<p><strong>Total de elementos:</strong> ${response.data.total_items}</p>` : ''}
+            </div>
+          `;
+          
+          // Mostrar los parámetros aplicados
+          if (response.data.params_applied && Object.keys(response.data.params_applied).length > 0) {
+            html += `<div style="margin-bottom: 15px;">
+              <p><strong>Parámetros aplicados:</strong></p>
+              <ul style="background: #f5f5f5; padding: 10px; border-radius: 3px; margin-top: 5px;">`;
+              
+            for (const [key, value] of Object.entries(response.data.params_applied)) {
+              html += `<li><code>${key}</code>: <strong>${value}</strong></li>`;
+            }
+            
+            html += `</ul>
+            </div>`;
+          }
+          
+          // Mostrar campos detectados si están disponibles
+          if (response.data.sample_fields && response.data.sample_fields.length > 0) {
+            html += `<p><strong>Campos detectados:</strong> ${response.data.sample_fields.join(', ')}</p>`;
+          }
+          
+          // Añadir sección de datos de ejemplo
+          if (response.data.sample_data) {
+            html += `
+              <details class="api-sample-details" style="margin-top: 15px; border: 1px solid #6c757d; border-radius: 5px; padding: 0; overflow: hidden;">
+                <summary style="cursor: pointer; font-weight: bold; color: white; background: #6c757d; padding: 8px 15px; display: flex; align-items: center; justify-content: space-between;">
+                  <span>📋 Ver datos de ejemplo</span>
+                  <span class="toggle-icon">▼</span>
+                </summary>
+                <div style="padding: 15px; border-top: 1px solid #6c757d;">
+                  <p style="font-size: 13px; color: #666; margin-bottom: 10px;">Muestra de los datos recibidos:</p>
+                  <pre style="background: #f8f8f8; padding: 12px; border-radius: 3px; max-height: 200px; overflow: auto; font-size: 12px; margin: 0; border: 1px solid #dee2e6;">${JSON.stringify(response.data.sample_data, null, 2)}</pre>
+                </div>
+              </details>
+            `;
+          }
+          
+          // Añadir sección de respuesta completa
+          if (response.data.full_response) {
+            // Intentar formatear el JSON para una mejor visualización
+            let formattedJson = response.data.full_response;
+            
+            // Si el JSON ya está formateado, usarlo directamente
+            // Si no, intentar formatearlo nosotros
+            try {
+              // Verificar si es un string JSON o un objeto ya parseado
+              if (typeof formattedJson === 'string') {
+                const jsonObj = JSON.parse(formattedJson);
+                formattedJson = JSON.stringify(jsonObj, null, 2);
+              }
+            } catch (e) {
+              console.log('Error al formatear JSON:', e);
+              // Si hay error, mantener el formato original
+            }
+            
+            html += `
+              <details class="api-response-details" style="margin-top: 15px; border: 1px solid #0073aa; border-radius: 5px; padding: 0; overflow: hidden;" open>
+                <summary style="cursor: pointer; font-weight: bold; color: white; background: #0073aa; padding: 8px 15px; display: flex; align-items: center; justify-content: space-between;">
+                  <span>📊 Ver respuesta completa de la API</span>
+                  <span class="toggle-icon">▲</span>
+                </summary>
+                <div style="padding: 15px; border-top: 1px solid #0073aa;">
+                  <p style="font-size: 13px; color: #666; margin-bottom: 10px;">Esta es la respuesta completa recibida de la API, útil para diagnóstico y depuración.</p>
+                  <pre style="background: #f0f8ff; padding: 12px; border-radius: 3px; max-height: 800px; overflow: auto; font-size: 12px; margin: 0; border: 1px solid #cce5ff; white-space: pre-wrap;">${formattedJson}</pre>
+                </div>
+              </details>
+            `;
+          }
+          
+          // Añadir sección de estructura de datos
+          if (response.data.response_structure) {
+            html += `
+              <details class="api-structure-details" style="margin-top: 15px; border: 1px solid #46b450; border-radius: 5px; padding: 0; overflow: hidden;">
+                <summary style="cursor: pointer; font-weight: bold; color: white; background: #46b450; padding: 8px 15px; display: flex; align-items: center; justify-content: space-between;">
+                  <span>🔍 Ver estructura de datos</span>
+                  <span class="toggle-icon">▼</span>
+                </summary>
+                <div style="padding: 15px; border-top: 1px solid #46b450;">
+                  <p style="font-size: 13px; color: #666; margin-bottom: 10px;">Análisis de la estructura de datos recibida:</p>
+                  <pre style="background: #f6fff8; padding: 12px; border-radius: 3px; max-height: 300px; overflow: auto; font-size: 12px; margin: 0; border: 1px solid #c3e6cb;">${JSON.stringify(response.data.response_structure, null, 2)}</pre>
+                </div>
+              </details>
+            `;
+          }
+          
+          resultDiv.innerHTML = html;
+          
+          // Inicializar los desplegables
+          initializeDetailsElements(resultDiv);
+          
+        } else {
+          // Mostrar error
+          let errorMessage = response.data && response.data.message ? response.data.message : 'Error desconocido';
+          let errorUrl = response.data && response.data.test_url ? response.data.test_url : (response.data && response.data.base_url ? response.data.base_url : urlInput.value);
+          
+          // Construir HTML para mostrar información detallada del error
+          let errorHtml = `
+            <div style="color: red; background: #fff0f0; padding: 10px; border-radius: 3px; margin-bottom: 15px;">
+              <p><strong>❌ Error en la API</strong></p>
+              <p><strong>URL:</strong> ${errorUrl}</p>
+              <p><strong>Error:</strong> ${errorMessage}</p>
+            </div>
+          `;
+          
+          // Añadir información sobre los encabezados enviados si están disponibles
+          if (response.data && response.data.headers_sent) {
+            const headersSent = response.data.headers_sent;
+            errorHtml += `
+              <details style="margin-top: 15px; border: 1px solid #dc3545; border-radius: 5px; padding: 0; overflow: hidden;">
+                <summary style="cursor: pointer; font-weight: bold; color: white; background: #dc3545; padding: 8px 15px; display: flex; align-items: center; justify-content: space-between;">
+                  <span>🔍 Ver encabezados enviados</span>
+                  <span class="toggle-icon">▼</span>
+                </summary>
+                <div style="padding: 15px; border-top: 1px solid #dc3545;">
+                  <p style="font-size: 13px; color: #666; margin-bottom: 10px;">Estos son los encabezados que se enviaron a la API:</p>
+                  <pre style="background: #f8f8f8; padding: 12px; border-radius: 3px; max-height: 200px; overflow: auto; font-size: 12px; margin: 0; border: 1px solid #dee2e6;">${JSON.stringify(headersSent, null, 2)}</pre>
+                </div>
+              </details>
+            `;
+          }
+          
+          // Añadir cuerpo de la respuesta si está disponible
+          if (response.data && response.data.response_body) {
+            let responseBody = response.data.response_body;
+            
+            // Intentar formatear el JSON si es posible
+            try {
+              const jsonBody = JSON.parse(responseBody);
+              responseBody = JSON.stringify(jsonBody, null, 2);
+            } catch (e) {
+              // Si no es JSON, mostrar como texto
+            }
+            
+            errorHtml += `
+              <details style="margin-top: 15px; border: 1px solid #dc3545; border-radius: 5px; padding: 0; overflow: hidden;">
+                <summary style="cursor: pointer; font-weight: bold; color: white; background: #dc3545; padding: 8px 15px; display: flex; align-items: center; justify-content: space-between;">
+                  <span>📄 Ver respuesta de error</span>
+                  <span class="toggle-icon">▼</span>
+                </summary>
+                <div style="padding: 15px; border-top: 1px solid #dc3545;">
+                  <p style="font-size: 13px; color: #666; margin-bottom: 10px;">Esta es la respuesta de error recibida de la API:</p>
+                  <pre style="background: #f8f8f8; padding: 12px; border-radius: 3px; max-height: 300px; overflow: auto; font-size: 12px; margin: 0; border: 1px solid #dee2e6;">${responseBody}</pre>
+                </div>
+              </details>
+            `;
+          }
+          
+          resultDiv.innerHTML = errorHtml;
+          
+          // Inicializar los desplegables
+          initializeDetailsElements(resultDiv);
+        }
+      },
+      error: function(xhr, status, error) {
+        button.disabled = false;
+        button.textContent = '🧪 Test API';
+        
+        resultDiv.innerHTML = `
+          <div style="color: red; background: #fff0f0; padding: 10px; border-radius: 3px;">
+            <p><strong>❌ Error de conexión con el servidor</strong></p>
+            <p><strong>Error:</strong> ${error || 'Error desconocido'}</p>
+          </div>
+        `;
+      }
+    });
+  }
+  
+  // Función para inicializar los elementos details
+  function initializeDetailsElements(container) {
+    const detailsElements = container.querySelectorAll('details');
+    
+    detailsElements.forEach(function(details) {
+      const summary = details.querySelector('summary');
+      const toggleIcon = summary.querySelector('.toggle-icon');
       
-      button.disabled = false;
-      button.textContent = '🧪 Test API';
-    }, 2000);
+      summary.addEventListener('click', function(e) {
+        e.preventDefault();
+        
+        if (details.hasAttribute('open')) {
+          details.removeAttribute('open');
+          if (toggleIcon) toggleIcon.textContent = '▼';
+        } else {
+          details.setAttribute('open', 'open');
+          if (toggleIcon) toggleIcon.textContent = '▲';
+        }
+      });
+    });
+    
+    console.log('Desplegables inicializados:', detailsElements.length);
   }
 
   // Función para inicializar todos los event listeners

@@ -278,9 +278,47 @@
             
             if (response.data.sample_data) {
                 html += `
-                    <details style="margin-top: 10px;">
-                        <summary style="cursor: pointer; font-weight: bold;">Ver datos de ejemplo</summary>
-                        <pre style="background: #f8f8f8; padding: 10px; border-radius: 3px; max-height: 200px; overflow: auto; font-size: 12px; margin-top: 5px;">${JSON.stringify(response.data.sample_data, null, 2)}</pre>
+                    <details class="api-sample-details" style="margin-top: 15px; border: 1px solid #6c757d; border-radius: 5px; padding: 0; overflow: hidden;">
+                        <summary style="cursor: pointer; font-weight: bold; color: white; background: #6c757d; padding: 8px 15px; display: flex; align-items: center; justify-content: space-between;">
+                            <span>📋 Ver datos de ejemplo</span>
+                            <span class="toggle-icon">▼</span>
+                        </summary>
+                        <div style="padding: 15px; border-top: 1px solid #6c757d;">
+                            <p style="font-size: 13px; color: #666; margin-bottom: 10px;">Muestra de los datos recibidos:</p>
+                            <pre style="background: #f8f8f8; padding: 12px; border-radius: 3px; max-height: 200px; overflow: auto; font-size: 12px; margin: 0; border: 1px solid #dee2e6;">${JSON.stringify(response.data.sample_data, null, 2)}</pre>
+                        </div>
+                    </details>
+                `;
+            }
+            
+            // Mostrar el payload completo para mejor diagnóstico
+            if (response.data.full_response) {
+                html += `
+                    <details class="api-response-details" style="margin-top: 15px; border: 1px solid #0073aa; border-radius: 5px; padding: 0; overflow: hidden;">
+                        <summary style="cursor: pointer; font-weight: bold; color: white; background: #0073aa; padding: 8px 15px; display: flex; align-items: center; justify-content: space-between;">
+                            <span>📊 Ver respuesta completa de la API</span>
+                            <span class="toggle-icon">▼</span>
+                        </summary>
+                        <div style="padding: 15px; border-top: 1px solid #0073aa;">
+                            <p style="font-size: 13px; color: #666; margin-bottom: 10px;">Esta es la respuesta completa recibida de la API, útil para diagnóstico y depuración.</p>
+                            <pre style="background: #f0f8ff; padding: 12px; border-radius: 3px; max-height: 400px; overflow: auto; font-size: 12px; border: 1px solid #cce5ff; margin: 0;">${response.data.full_response}</pre>
+                        </div>
+                    </details>
+                `;
+            }
+            
+            // Mostrar estructura de datos para mejor comprensión
+            if (response.data.response_structure) {
+                html += `
+                    <details class="api-structure-details" style="margin-top: 15px; border: 1px solid #46b450; border-radius: 5px; padding: 0; overflow: hidden;">
+                        <summary style="cursor: pointer; font-weight: bold; color: white; background: #46b450; padding: 8px 15px; display: flex; align-items: center; justify-content: space-between;">
+                            <span>🔍 Ver estructura de datos</span>
+                            <span class="toggle-icon">▼</span>
+                        </summary>
+                        <div style="padding: 15px; border-top: 1px solid #46b450;">
+                            <p style="font-size: 13px; color: #666; margin-bottom: 10px;">Análisis de la estructura de datos recibida:</p>
+                            <pre style="background: #f6fff8; padding: 12px; border-radius: 3px; max-height: 300px; overflow: auto; font-size: 12px; border: 1px solid #c3e6cb; margin: 0;">${JSON.stringify(response.data.response_structure, null, 2)}</pre>
+                        </div>
                     </details>
                 `;
             }
@@ -631,6 +669,31 @@
                    .addClass(type)
                    .html(content)
                    .show();
+            
+            // Asegurarse de que los desplegables funcionen correctamente
+            if (type === 'success') {
+                // Añadir un pequeño retraso para asegurar que el DOM se ha actualizado
+                setTimeout(() => {
+                    // Inicializar los desplegables y añadir estilos para mejorar la visualización
+                    $result.find('details').each(function() {
+                        // Añadir clase para estilos
+                        $(this).addClass('api-details-section');
+                        
+                        // Añadir evento de clic para el summary
+                        $(this).find('summary').on('click', function(e) {
+                            e.preventDefault();
+                            const details = $(this).parent('details');
+                            if (details.attr('open')) {
+                                details.removeAttr('open');
+                            } else {
+                                details.attr('open', 'open');
+                            }
+                        });
+                    });
+                    
+                    console.log('Desplegables inicializados:', $result.find('details').length);
+                }, 100);
+            }
         },
         
         // Mostrar notificación flotante

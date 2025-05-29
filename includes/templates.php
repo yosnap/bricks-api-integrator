@@ -156,8 +156,8 @@ function render_api_templates_page() {
                                 <label for="url_base"><?php _e('URL Base', 'bricks-api-integrator'); ?></label>
                             </th>
                             <td>
-                                <input type="text" id="url_base" name="url_base" class="regular-text" value="<?php echo $editing && isset($current_template['url_base']) ? esc_attr($current_template['url_base']) : ''; ?>" required>
-                                <p class="description"><?php _e('The base URL for this template (e.g., "api-cars" or "api-products").', 'bricks-api-integrator'); ?></p>
+                                <input type="text" id="url_base" name="url_base" class="regular-text" value="<?php echo $editing && isset($current_template['url_base']) ? esc_attr($current_template['url_base']) : ''; ?>">
+                                <p class="description"><?php _e('The base URL for this template (e.g., "api-cars" or "api-products"). Required for Single templates.', 'bricks-api-integrator'); ?></p>
                             </td>
                         </tr>
                         <tr id="id_param_row" style="<?php echo $editing && isset($current_template['template_type']) && $current_template['template_type'] === 'single' ? '' : 'display: none;'; ?>">
@@ -178,6 +178,35 @@ function render_api_templates_page() {
                         <?php endif; ?>
                     </p>
                 </form>
+                
+                <script type="text/javascript">
+                document.addEventListener('DOMContentLoaded', function() {
+                    // Obtener referencias a los elementos del formulario
+                    const templateTypeSelect = document.getElementById('template_type');
+                    const idParamRow = document.getElementById('id_param_row');
+                    const urlBaseInput = document.getElementById('url_base');
+                    
+                    // Función para actualizar la validación según el tipo de template
+                    function updateValidation() {
+                        const templateType = templateTypeSelect.value;
+                        
+                        // Mostrar/ocultar fila de ID Parameter
+                        if (templateType === 'single') {
+                            idParamRow.style.display = '';
+                            urlBaseInput.setAttribute('required', 'required');
+                        } else {
+                            idParamRow.style.display = 'none';
+                            urlBaseInput.removeAttribute('required');
+                        }
+                    }
+                    
+                    // Ejecutar al cargar la página
+                    updateValidation();
+                    
+                    // Añadir listener para cambios en el tipo de template
+                    templateTypeSelect.addEventListener('change', updateValidation);
+                });
+                </script>
             </div>
             
             <div class="api-template-list">
@@ -281,26 +310,70 @@ function render_api_templates_page() {
  * Save API template data
  */
 function save_api_template() {
+    // Debug: Registrar los datos recibidos
+    if (defined('WP_DEBUG') && WP_DEBUG) {
+        error_log('API Template Form Data: ' . print_r($_POST, true));
+    }
+    
     // Validate and sanitize inputs
     $template_name = isset($_POST['template_name']) ? sanitize_text_field($_POST['template_name']) : '';
-    $endpoint_id = isset($_POST['endpoint_id']) ? intval($_POST['endpoint_id']) : '';
+    $endpoint_id = isset($_POST['endpoint_id']) ? $_POST['endpoint_id'] : '';  // No usar sanitize_text_field aquí porque podría ser un número
     $template_type = isset($_POST['template_type']) ? sanitize_text_field($_POST['template_type']) : 'archive';
     $page_id = isset($_POST['page_id']) ? intval($_POST['page_id']) : 0;
     $url_base = isset($_POST['url_base']) ? sanitize_title($_POST['url_base']) : '';
     $id_param = isset($_POST['id_param']) ? sanitize_text_field($_POST['id_param']) : 'id';
     
-    // Check required fields
-    if (empty($template_name) || empty($endpoint_id) || empty($page_id) || empty($url_base)) {
-        add_settings_error('bricks_api_templates', 'missing_fields', __('All fields are required.', 'bricks-api-integrator'), 'error');
+    // Debug: Registrar los valores procesados
+    if (defined('WP_DEBUG') && WP_DEBUG) {
+        error_log('Processed values:');
+        error_log('template_name: ' . $template_name);
+        error_log('endpoint_id: ' . $endpoint_id);
+        error_log('template_type: ' . $template_type);
+        error_log('page_id: ' . $page_id);
+        error_log('url_base: ' . $url_base);
+    }
+    
+    // Registrar los valores para depuración
+    if (defined('WP_DEBUG') && WP_DEBUG) {
+        error_log('Validando campos:');
+        error_log('template_name: ' . $template_name);
+        error_log('endpoint_id: ' . $endpoint_id . ' (tipo: ' . gettype($endpoint_id) . ')');
+        error_log('page_id: ' . $page_id . ' (tipo: ' . gettype($page_id) . ')');
+        error_log('url_base: ' . $url_base);
+        error_log('template_type: ' . $template_type);
+    }
+    
+    // Validar cada campo individualmente para mostrar mensajes más específicos
+    if (empty($template_name)) {
+        add_settings_error('bricks_api_templates', 'missing_name', __('Template name is required.', 'bricks-api-integrator'), 'error');
         return;
     }
     
-    // Validate that the endpoint exists
+    // Para el endpoint_id, verificar si es una cadena vacía o si no existe en los endpoints
+    if ($endpoint_id === '') {
+        add_settings_error('bricks_api_templates', 'missing_endpoint', __('Please select an API endpoint.', 'bricks-api-integrator'), 'error');
+        return;
+    }
+    
+    // Verificar que el endpoint exista (podría ser '0', que es válido pero evaluaría a false con empty())
     $endpoints = get_option('bricks_api_endpoints', []);
     if (!isset($endpoints[$endpoint_id])) {
         add_settings_error('bricks_api_templates', 'invalid_endpoint', __('Selected endpoint does not exist.', 'bricks-api-integrator'), 'error');
         return;
     }
+    
+    if (empty($page_id)) {
+        add_settings_error('bricks_api_templates', 'missing_page', __('Please select a template page.', 'bricks-api-integrator'), 'error');
+        return;
+    }
+    
+    // Para templates de tipo single, el URL base es obligatorio
+    if ($template_type === 'single' && empty($url_base)) {
+        add_settings_error('bricks_api_templates', 'missing_url_base', __('URL Base is required for single item templates.', 'bricks-api-integrator'), 'error');
+        return;
+    }
+    
+    // Este bloque de validación ya se realiza más abajo, así que lo eliminamos para evitar duplicación
     
     // Get existing templates
     $api_templates = get_option('bricks_api_templates', []);
