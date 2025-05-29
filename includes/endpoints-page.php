@@ -65,12 +65,7 @@ if (!function_exists('render_api_endpoints_page')) {
             <h1>🔗 API Endpoints</h1>
             <p>Gestiona tus endpoints de API. Los Query Types y Dynamic Tags se generan automáticamente.</p>
             
-            <!-- DEBUG: Mostrar información -->
-            <?php if (defined('WP_DEBUG') && WP_DEBUG): ?>
-                <div style="background: #fff3cd; padding: 10px; margin: 10px 0; border-radius: 3px;">
-                    <strong>DEBUG:</strong> Endpoints encontrados: <?php echo count($endpoints); ?>
-                </div>
-            <?php endif; ?>
+
             
             <form method="post">
                 <?php wp_nonce_field('save_endpoints'); ?>
@@ -88,10 +83,10 @@ if (!function_exists('render_api_endpoints_page')) {
                         <div class="endpoint-accordion" style="background: #fff; margin: 20px 0; border: 1px solid #ddd; border-radius: 5px;">
                             <div class="endpoint-header" onclick="toggleEndpoint(<?php echo $index; ?>)" style="background: #f1f1f1; padding: 15px; cursor: pointer; border-bottom: 1px solid #ddd;">
                                 <h3 style="margin: 0; display: inline-block;">Endpoint <?php echo ($index + 1); ?> - <?php echo esc_html($endpoint['name'] ?: 'Sin nombre'); ?></h3>
-                                <span id="toggle-icon-<?php echo $index; ?>" style="float: right; font-size: 18px;">🔽</span>
+                                <span id="toggle-icon-<?php echo $index; ?>" style="float: right; font-size: 18px;">▶️</span>
                             </div>
                             
-                            <div id="endpoint-content-<?php echo $index; ?>" class="endpoint-content" style="padding: 20px; display: block;">
+                            <div id="endpoint-content-<?php echo $index; ?>" class="endpoint-content" style="padding: 20px; display: none;">
                             
                             <!-- Configuración Básica -->
                             <table class="form-table">

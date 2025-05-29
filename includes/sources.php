@@ -54,6 +54,8 @@ function render_api_sources_page() {
     <div class="wrap">
         <h1><?php esc_html_e('Query Types para Bricks Builder', 'bricks-api-integrator'); ?></h1>
         
+        <?php settings_errors('bricks_api_sources'); ?>
+        
         <?php if (empty($endpoints)): ?>
             <div class="notice notice-warning">
                 <p><?php esc_html_e('No API endpoints configured yet. Please add endpoints first.', 'bricks-api-integrator'); ?></p>
@@ -107,8 +109,29 @@ function render_api_sources_page() {
                                 <label for="items_path"><?php esc_html_e('Ruta de Elementos', 'bricks-api-integrator'); ?></label>
                             </th>
                             <td>
-                                <input type="text" id="items_path" name="items_path" class="regular-text" value="<?php echo $editing ? esc_attr($source_to_edit['items_path']) : ''; ?>">
+                                <div class="items-path-container" style="display: flex; align-items: center; gap: 10px;">
+                                    <input type="text" id="items_path" name="items_path" class="regular-text" value="<?php echo $editing ? esc_attr($source_to_edit['items_path']) : ''; ?>" style="flex-grow: 1;">
+                                    <?php if ($editing && !empty($source_to_edit['endpoint_id'])): ?>
+                                        <button type="button" class="button test-items-path" data-endpoint-id="<?php echo esc_attr($source_to_edit['endpoint_id']); ?>" data-source-id="<?php echo esc_attr($source_id_to_edit); ?>">
+                                            <?php esc_html_e('Probar Ruta', 'bricks-api-integrator'); ?>
+                                        </button>
+                                    <?php endif; ?>
+                                </div>
+                                
+                                <?php if ($editing && !empty($source_to_edit['endpoint_id'])): ?>
+                                <div class="items-path-filter" style="margin-top: 10px; display: flex; gap: 10px;">
+                                    <input type="text" id="filter_field" placeholder="<?php esc_attr_e('Campo de filtro (ej: estado)', 'bricks-api-integrator'); ?>" class="regular-text" style="flex: 1;">
+                                    <input type="text" id="filter_value" placeholder="<?php esc_attr_e('Valor (ej: true)', 'bricks-api-integrator'); ?>" class="regular-text" style="flex: 1;">
+                                </div>
+                                <?php endif; ?>
+                                
                                 <p class="description"><?php esc_html_e('Ruta al array de elementos en la respuesta de la API (ej. "data" o "results"). Dejar vacío si los elementos están en el nivel raíz.', 'bricks-api-integrator'); ?></p>
+                                <div id="items-path-result" style="margin-top: 10px; display: none;">
+                                    <div class="notice notice-info inline">
+                                        <p><strong><?php esc_html_e('Resultado de la prueba:', 'bricks-api-integrator'); ?></strong> <span id="items-path-message"></span></p>
+                                        <pre id="items-path-preview" style="max-height: 200px; overflow: auto; background: #f5f5f5; padding: 10px; border: 1px solid #ddd; margin-top: 10px; display: none;"></pre>
+                                    </div>
+                                </div>
                             </td>
                         </tr>
                         <tr>
@@ -410,7 +433,25 @@ function save_api_source() {
     $editing = isset($_POST['source_id']) && !empty($_POST['source_id']);
     $source_id = $editing ? sanitize_text_field($_POST['source_id']) : 'query_type_' . time();
     
-    // Prepare query type data
+    // Si estamos creando un nuevo query type, limpiar cualquier dato residual
+    if (!$editing) {
+        // Limpiar caché de parámetros dinámicos para evitar persistencia de datos
+        clean_dynamic_params_cache();
+    }
+    
+    // Verificar explícitamente que no haya un parámetro anunci-actiu no deseado
+    foreach ($dynamic_params as $key => $param) {
+        if ($param['name'] === 'anunci-actiu' && !in_array('anunci-actiu', $_POST['param_names'])) {
+            // Si encontramos un parámetro anunci-actiu que no fue enviado por el usuario, lo eliminamos
+            unset($dynamic_params[$key]);
+            error_log('Se eliminó un parámetro anunci-actiu no deseado durante el guardado del Query Type');
+        }
+    }
+    
+    // Reindexar el array después de posibles eliminaciones
+    $dynamic_params = array_values($dynamic_params);
+    
+    // Prepare query type data - Asegurarse de que solo se guarden los datos proporcionados explícitamente
     $source_data = [
         'name' => $source_name,
         'endpoint_id' => $endpoint_id,
@@ -420,7 +461,8 @@ function save_api_source() {
         'pagination_param' => $pagination_param,
         'per_page_param' => $per_page_param,
         'dynamic_params' => $dynamic_params,
-        'query_type_name' => !empty($field_prefix) ? $field_prefix . $source_name : $source_name // Aplicar prefijo al nombre del query type
+        'query_type_name' => !empty($field_prefix) ? $field_prefix . $source_name : $source_name, // Aplicar prefijo al nombre del query type
+        'last_updated' => current_time('mysql') // Añadir timestamp para seguimiento
     ];
     
     // Add or update query type
@@ -452,6 +494,8 @@ function handle_api_source_actions() {
         return;
     }
     
+
+    
     // Handle delete action
     if (isset($_GET['action']) && $_GET['action'] === 'delete' && isset($_GET['source_id'])) {
         $source_id = sanitize_text_field($_GET['source_id']);
@@ -466,14 +510,30 @@ function handle_api_source_actions() {
         
         // Remove the query type
         if (isset($api_sources[$source_id])) {
+            // Guardar el nombre del query type para limpieza adicional
+            $source_name = isset($api_sources[$source_id]['name']) ? $api_sources[$source_id]['name'] : '';
+            
+            // Eliminar el query type
             unset($api_sources[$source_id]);
             update_option('bricks_api_sources', $api_sources);
+            
+            // Limpiar caché de WordPress
+            wp_cache_delete('bricks_api_sources', 'options');
+            
+            // Limpiar transients relacionados
+            if (!empty($source_name)) {
+                $transient_key = 'bricks_api_source_' . sanitize_key($source_name);
+                delete_transient($transient_key);
+            }
+            
+            // Limpiar parámetros dinámicos persistentes
+            clean_dynamic_params_cache();
             
             // Add success message
             add_settings_error(
                 'bricks_api_sources',
                 'source_deleted',
-                __('Query Type eliminado correctamente.', 'bricks-api-integrator'),
+                __('Query Type eliminado completamente. Se han limpiado todos los datos relacionados.', 'bricks-api-integrator'),
                 'updated'
             );
         }
@@ -484,6 +544,127 @@ function handle_api_source_actions() {
     }
 }
 add_action('admin_init', 'handle_api_source_actions');
+
+/**
+ * Limpiar caché de parámetros dinámicos
+ * Esta función elimina cualquier rastro de parámetros dinámicos persistentes
+ */
+function clean_dynamic_params_cache() {
+    // Limpiar transients que puedan contener parámetros dinámicos
+    global $wpdb;
+    
+    // Eliminar transients relacionados con API
+    $transients = $wpdb->get_col(
+        "SELECT option_name FROM {$wpdb->options} 
+        WHERE option_name LIKE '%_transient_bricks_api_%' 
+        OR option_name LIKE '%_transient_timeout_bricks_api_%'"
+    );
+    
+    foreach ($transients as $transient) {
+        if (strpos($transient, '_transient_timeout_') === 0) {
+            $transient_name = str_replace('_transient_timeout_', '', $transient);
+            delete_transient($transient_name);
+        } elseif (strpos($transient, '_transient_') === 0) {
+            $transient_name = str_replace('_transient_', '', $transient);
+            delete_transient($transient_name);
+        }
+    }
+    
+    // Limpiar opciones temporales que puedan contener parámetros
+    $temp_options = $wpdb->get_col(
+        "SELECT option_name FROM {$wpdb->options} 
+        WHERE option_name LIKE 'bricks_api_temp_%'"
+    );
+    
+    foreach ($temp_options as $option) {
+        delete_option($option);
+    }
+    
+    // Limpiar específicamente el parámetro anunci-actiu que está causando problemas
+    clean_anunci_actiu_parameter();
+    
+    // Forzar limpieza de caché de objetos
+    wp_cache_flush();
+}
+
+/**
+ * Limpiar específicamente el parámetro anunci-actiu que está causando problemas
+ * Esta función busca y elimina cualquier referencia al parámetro anunci-actiu en la base de datos
+ */
+function clean_anunci_actiu_parameter() {
+    global $wpdb;
+    
+    // Buscar opciones que contengan el parámetro anunci-actiu
+    $options = $wpdb->get_results(
+        "SELECT option_name, option_value FROM {$wpdb->options} 
+        WHERE option_value LIKE '%anunci-actiu%'"
+    );
+    
+    foreach ($options as $option) {
+        if ($option->option_name === 'bricks_api_sources') {
+            // Para la opción principal de sources, necesitamos actualizar en lugar de eliminar
+            $sources = get_option('bricks_api_sources', []);
+            
+            // Recorrer cada source y limpiar el parámetro anunci-actiu
+            foreach ($sources as $source_id => $source) {
+                if (isset($source['dynamic_params']) && is_array($source['dynamic_params'])) {
+                    foreach ($source['dynamic_params'] as $key => $param) {
+                        if ($param['name'] === 'anunci-actiu') {
+                            // Eliminar este parámetro
+                            unset($sources[$source_id]['dynamic_params'][$key]);
+                        }
+                    }
+                    
+                    // Reindexar el array de parámetros
+                    if (isset($sources[$source_id]['dynamic_params'])) {
+                        $sources[$source_id]['dynamic_params'] = array_values($sources[$source_id]['dynamic_params']);
+                    }
+                }
+            }
+            
+            // Actualizar la opción
+            update_option('bricks_api_sources', $sources);
+        } else {
+            // Para otras opciones, verificar si son transients o opciones normales
+            if (strpos($option->option_name, '_transient_') === 0) {
+                $transient_name = str_replace('_transient_', '', $option->option_name);
+                delete_transient($transient_name);
+            } else {
+                // Intentar limpiar el valor si es un array serializado
+                $value = get_option($option->option_name);
+                if (is_array($value)) {
+                    $modified = false;
+                    
+                    // Función recursiva para limpiar arrays anidados
+                    $clean_array = function($array) use (&$clean_array, &$modified) {
+                        foreach ($array as $key => $val) {
+                            if ($key === 'anunci-actiu') {
+                                unset($array[$key]);
+                                $modified = true;
+                            } elseif (is_array($val)) {
+                                $array[$key] = $clean_array($val);
+                            } elseif (is_string($val) && strpos($val, 'anunci-actiu') !== false) {
+                                // Limpiar strings que contengan el parámetro
+                                $array[$key] = str_replace('anunci-actiu', '', $val);
+                                $modified = true;
+                            }
+                        }
+                        return $array;
+                    };
+                    
+                    $value = $clean_array($value);
+                    
+                    if ($modified) {
+                        update_option($option->option_name, $value);
+                    }
+                }
+            }
+        }
+    }
+    
+    // Limpiar la caché de WordPress
+    wp_cache_flush();
+}
 
 /**
  * Register Query Types with Bricks Query Loop

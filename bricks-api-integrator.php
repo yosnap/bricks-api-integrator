@@ -24,6 +24,7 @@ require_once BRICKS_API_INTEGRATOR_PATH . 'includes/api-manager.php';
 require_once BRICKS_API_INTEGRATOR_PATH . 'includes/field-extractor.php';
 require_once BRICKS_API_INTEGRATOR_PATH . 'includes/functions.php';
 require_once BRICKS_API_INTEGRATOR_PATH . 'includes/query-preview.php';
+require_once BRICKS_API_INTEGRATOR_PATH . 'includes/cleaner.php';
 
 // Archivos necesarios para el admin - HABILITAR SOLO LOS NECESARIOS
 if (file_exists(BRICKS_API_INTEGRATOR_PATH . 'includes/sources.php')) {
@@ -174,6 +175,7 @@ class BricksAPIIntegrator {
         add_action('wp_ajax_update_cache_duration', [$this, 'ajax_update_cache_duration']);
         add_action('wp_ajax_get_cache_duration', [$this, 'ajax_get_cache_duration']);
         add_action('wp_ajax_refresh_endpoint_data', [$this, 'ajax_refresh_endpoint_data']);
+        add_action('wp_ajax_test_items_path', [$this, 'ajax_test_items_path']);
         
         // Shortcode para debug
         if (defined('WP_DEBUG') && WP_DEBUG) {
@@ -1460,6 +1462,8 @@ class BricksAPIIntegrator {
             $sample_data = null;
             $count = 0;
             
+
+            
             if (is_array($data)) {
                 $count = count($data);
                 if (isset($data[0])) {
@@ -1630,6 +1634,8 @@ class BricksAPIIntegrator {
                 ]);
                 return;
             }
+            
+
             
             // Extraer campos dinámicamente
             $sample_item = is_array($sample_data) && isset($sample_data[0]) ? $sample_data[0] : $sample_data;
@@ -1959,6 +1965,201 @@ class BricksAPIIntegrator {
     }
     
     /**
+     * AJAX handler para probar el items_path en un endpoint
+     */
+    public function ajax_test_items_path() {
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(['message' => 'Sin permisos']);
+        }
+        
+        if (!wp_verify_nonce($_POST['nonce'], 'test_items_path')) {
+            wp_send_json_error(['message' => 'Nonce inválido']);
+        }
+        
+        $endpoint_id = sanitize_text_field($_POST['endpoint_id']);
+        $items_path = sanitize_text_field($_POST['items_path']);
+        $filter_field = isset($_POST['filter_field']) ? sanitize_text_field($_POST['filter_field']) : '';
+        $filter_value = isset($_POST['filter_value']) ? sanitize_text_field($_POST['filter_value']) : '';
+        
+        $endpoints = get_option('bricks_api_endpoints', []);
+        
+        if (!isset($endpoints[$endpoint_id])) {
+            wp_send_json_error(['message' => 'Endpoint no encontrado']);
+        }
+        
+        $endpoint = $endpoints[$endpoint_id];
+        
+        // Obtener la URL del endpoint sin modificaciones automáticas
+        $url = $endpoint['url'];
+        $params_applied = [];
+        
+        // Aplicar los parámetros configurados en el endpoint (excepto anunci-actiu)
+        if (isset($endpoint['params']) && is_array($endpoint['params'])) {
+            foreach ($endpoint['params'] as $param) {
+                if (!empty($param['name']) && isset($param['value'])) {
+                    $param_name = $param['name'];
+                    
+                    // IMPORTANTE: Ignorar explícitamente el parámetro anunci-actiu
+                    if ($param_name === 'anunci-actiu') {
+                        continue;
+                    }
+                    
+                    $param_value = $param['value'];
+                    
+                    // Convertir valores booleanos a su representación correcta
+                    if ($param_value === 'true') {
+                        $param_value = true;
+                    } elseif ($param_value === 'false') {
+                        $param_value = false;
+                    }
+                    
+                    // Determinar si el parámetro es para la URL o para el cuerpo
+                    if (strpos($url, '{' . $param_name . '}') !== false) {
+                        // Reemplazar en la URL
+                        $url = str_replace('{' . $param_name . '}', urlencode($param_value), $url);
+                    } else {
+                        // Añadir como parámetro de consulta
+                        $url = add_query_arg($param_name, $param_value, $url);
+                    }
+                    
+                    $params_applied[$param_name] = $param_value;
+                }
+            }
+        }
+        
+        // Actualizar la URL en la configuración del endpoint para la solicitud
+        $endpoint['url'] = $url;
+        
+        try {
+            // Obtener datos de la API (sin caché para pruebas)
+            $raw_data = $this->get_api_data_with_cache($url, $endpoint, true);
+            
+            if (empty($raw_data)) {
+                wp_send_json_error(['message' => 'No se pudieron obtener datos de la API']);
+            }
+            
+            // Aplicar items_path si está configurado
+            if (!empty($items_path)) {
+                $items_data = $this->extract_nested_items($raw_data, $items_path);
+                
+                // Verificar si se obtuvieron datos
+                if (empty($items_data)) {
+                    // Analizar la estructura de los datos para ayudar en la depuración
+                    $structure_info = $this->analyze_data_structure($raw_data);
+                    
+                    // Intentar buscar automáticamente la ruta correcta
+                    $auto_detected_path = '';
+                    $auto_detected_data = null;
+                    
+                    // Buscar rutas comunes
+                    $common_paths = ['items', 'data', 'results', 'content', 'list', 'records', 'vehicles'];
+                    foreach ($common_paths as $path) {
+                        if (is_array($raw_data) && isset($raw_data[$path]) && !empty($raw_data[$path])) {
+                            $auto_detected_path = $path;
+                            $auto_detected_data = $raw_data[$path];
+                            break;
+                        }
+                    }
+                    
+                    // Si no se encontró en el primer nivel, buscar en el segundo nivel
+                    if (empty($auto_detected_path)) {
+                        foreach ($common_paths as $path1) {
+                            if (is_array($raw_data) && isset($raw_data[$path1]) && is_array($raw_data[$path1])) {
+                                foreach ($common_paths as $path2) {
+                                    if (isset($raw_data[$path1][$path2]) && !empty($raw_data[$path1][$path2])) {
+                                        $auto_detected_path = $path1 . '.' . $path2;
+                                        $auto_detected_data = $raw_data[$path1][$path2];
+                                        break 2;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Mostrar la estructura completa de la respuesta para depuración
+                    $full_response = json_encode($raw_data, JSON_PRETTY_PRINT);
+                    if (strlen($full_response) > 5000) {
+                        $full_response = substr($full_response, 0, 5000) . '... (truncado)';
+                    }
+                    
+                    wp_send_json_error([
+                        'message' => 'No se encontraron datos en la ruta especificada',
+                        'path' => $items_path,
+                        'raw_data_preview' => json_encode(array_keys(is_array($raw_data) ? $raw_data : []), JSON_PRETTY_PRINT),
+                        'structure_info' => $structure_info,
+                        'raw_data_sample' => $this->get_sample_data($raw_data),
+                        'auto_detected_path' => $auto_detected_path,
+                        'full_response' => $full_response
+                    ]);
+                }
+                
+                // Aplicar filtro si se especificó
+                if (!empty($filter_field) && $filter_value !== '') {
+                    $filtered_data = [];
+                    
+                    // Convertir valor de filtro a tipo apropiado
+                    $typed_filter_value = $filter_value;
+                    if ($filter_value === 'true') {
+                        $typed_filter_value = true;
+                    } elseif ($filter_value === 'false') {
+                        $typed_filter_value = false;
+                    } elseif (is_numeric($filter_value)) {
+                        $typed_filter_value = strpos($filter_value, '.') !== false ? 
+                            (float)$filter_value : (int)$filter_value;
+                    }
+                    
+                    foreach ($items_data as $item) {
+                        if (is_array($item) && isset($item[$filter_field])) {
+                            // Comparación estricta para booleanos, laxa para otros tipos
+                            $match = false;
+                            if (is_bool($typed_filter_value)) {
+                                $match = $item[$filter_field] === $typed_filter_value;
+                            } else {
+                                $match = $item[$filter_field] == $typed_filter_value;
+                            }
+                            
+                            if ($match) {
+                                $filtered_data[] = $item;
+                            }
+                        }
+                    }
+                    
+                    $items_data = $filtered_data;
+                }
+                
+                // Obtener una muestra de los datos
+                $sample_item = is_array($items_data) && !empty($items_data) ? $items_data[0] : $items_data;
+                $fields = $this->extract_fields_from_data($sample_item);
+                
+                wp_send_json_success([
+                    'message' => sprintf('Se encontraron %d elementos en la ruta "%s"', count($items_data), $items_path),
+                    'count' => count($items_data),
+                    'sample_data' => json_encode($sample_item, JSON_PRETTY_PRINT),
+                    'fields' => array_keys($fields),
+                    'has_filter' => !empty($filter_field) && $filter_value !== '',
+                    'filter_count' => !empty($filter_field) ? count($items_data) : 0,
+                    'params_applied' => $params_applied,
+                    'url_used' => $url
+                ]);
+            } else {
+                // Sin items_path, usar datos directos
+                $count = is_array($raw_data) ? count($raw_data) : 1;
+                $sample_item = is_array($raw_data) && isset($raw_data[0]) ? $raw_data[0] : $raw_data;
+                $fields = $this->extract_fields_from_data($sample_item);
+                
+                wp_send_json_success([
+                    'message' => 'Usando datos directos de la API (sin ruta de elementos)',
+                    'count' => $count,
+                    'sample_data' => json_encode($sample_item, JSON_PRETTY_PRINT),
+                    'fields' => array_keys($fields)
+                ]);
+            }
+        } catch (Exception $e) {
+            wp_send_json_error(['message' => 'Error al procesar los datos: ' . $e->getMessage()]);
+        }
+    }
+    
+    /**
      * UTILITY METHODS
      */
     
@@ -2092,6 +2293,169 @@ class BricksAPIIntegrator {
         </div>
         <?php
         return ob_get_clean();
+    }
+    
+    /**
+     * Analizar la estructura de los datos para ayudar en la depuración
+     */
+    private function analyze_data_structure($data) {
+        $result = [];
+        
+        if (is_array($data)) {
+            $result['type'] = 'array';
+            $result['count'] = count($data);
+            
+            // Determinar si es un array asociativo o indexado
+            $keys = array_keys($data);
+            $is_associative = false;
+            foreach ($keys as $key) {
+                if (!is_numeric($key)) {
+                    $is_associative = true;
+                    break;
+                }
+            }
+            
+            $result['is_associative'] = $is_associative;
+            
+            // Analizar las claves principales
+            $result['keys'] = array_slice($keys, 0, 10); // Mostrar hasta 10 claves
+            if (count($keys) > 10) {
+                $result['keys_truncated'] = true;
+                $result['total_keys'] = count($keys);
+            }
+            
+            // Sugerir posibles rutas de elementos
+            $suggested_paths = [];
+            
+            // Verificar si hay una clave 'data', 'items', 'results', etc.
+            $common_container_keys = ['data', 'items', 'results', 'content', 'list', 'records', 'vehicles'];
+            foreach ($common_container_keys as $container_key) {
+                if (isset($data[$container_key]) && is_array($data[$container_key])) {
+                    $suggested_paths[] = $container_key;
+                }
+            }
+            
+            // Verificar si hay una clave 'status' y 'data'
+            if (isset($data['status']) && isset($data['data']) && is_array($data['data'])) {
+                $suggested_paths[] = 'data';
+            }
+            
+            $result['suggested_paths'] = $suggested_paths;
+            
+            // Si es un array indexado, analizar el primer elemento
+            if (!$is_associative && !empty($data)) {
+                $first_item = reset($data);
+                if (is_array($first_item) || is_object($first_item)) {
+                    $result['first_item_keys'] = array_keys((array)$first_item);
+                }
+            }
+        } elseif (is_object($data)) {
+            $result['type'] = 'object';
+            $data_array = (array)$data;
+            $result['count'] = count($data_array);
+            
+            // Analizar las propiedades principales
+            $result['properties'] = array_slice(array_keys($data_array), 0, 10);
+            if (count($data_array) > 10) {
+                $result['properties_truncated'] = true;
+                $result['total_properties'] = count($data_array);
+            }
+            
+            // Sugerir posibles rutas de elementos
+            $suggested_paths = [];
+            
+            // Verificar si hay una propiedad 'data', 'items', 'results', etc.
+            $common_container_props = ['data', 'items', 'results', 'content', 'list', 'records', 'vehicles'];
+            foreach ($common_container_props as $container_prop) {
+                if (isset($data->$container_prop) && (is_array($data->$container_prop) || is_object($data->$container_prop))) {
+                    $suggested_paths[] = $container_prop;
+                }
+            }
+            
+            $result['suggested_paths'] = $suggested_paths;
+        } else {
+            $result['type'] = gettype($data);
+            $result['value'] = (string)$data;
+        }
+        
+        return $result;
+    }
+    
+    /**
+     * Obtener una muestra de los datos para ayudar en la depuración
+     */
+    private function get_sample_data($data) {
+        if (is_array($data)) {
+            $sample = [];
+            
+            // Si es un array asociativo, mostrar las claves principales
+            $keys = array_keys($data);
+            $is_associative = false;
+            foreach ($keys as $key) {
+                if (!is_numeric($key)) {
+                    $is_associative = true;
+                    break;
+                }
+            }
+            
+            if ($is_associative) {
+                // Para arrays asociativos, mostrar las claves principales y sus tipos
+                foreach ($keys as $key) {
+                    if (count($sample) >= 5) break; // Limitar a 5 elementos
+                    
+                    $value = $data[$key];
+                    if (is_array($value)) {
+                        $sample[$key] = '[Array: ' . count($value) . ' elementos]';
+                        
+                        // Si es un array, mostrar las primeras claves
+                        if (!empty($value)) {
+                            $first_keys = array_slice(array_keys($value), 0, 3);
+                            $sample[$key] .= ' Claves: ' . implode(', ', $first_keys);
+                            
+                            // Si el primer elemento es un array, mostrar su estructura
+                            $first_value = reset($value);
+                            if (is_array($first_value)) {
+                                $sample[$key] .= ' | Primer elemento: [' . implode(', ', array_slice(array_keys($first_value), 0, 3)) . '...]';
+                            }
+                        }
+                    } elseif (is_object($value)) {
+                        $sample[$key] = '[Object: ' . count((array)$value) . ' propiedades]';
+                    } else {
+                        $sample[$key] = $value;
+                    }
+                }
+            } else {
+                // Para arrays indexados, mostrar los primeros elementos
+                $sample = array_slice($data, 0, 2);
+                if (count($data) > 2) {
+                    $sample[] = '... (' . (count($data) - 2) . ' elementos más)';
+                }
+            }
+            
+            return $sample;
+        } elseif (is_object($data)) {
+            $sample = [];
+            $data_array = (array)$data;
+            
+            // Mostrar las propiedades principales
+            $properties = array_keys($data_array);
+            foreach ($properties as $prop) {
+                if (count($sample) >= 5) break; // Limitar a 5 propiedades
+                
+                $value = $data_array[$prop];
+                if (is_array($value)) {
+                    $sample[$prop] = '[Array: ' . count($value) . ' elementos]';
+                } elseif (is_object($value)) {
+                    $sample[$prop] = '[Object: ' . count((array)$value) . ' propiedades]';
+                } else {
+                    $sample[$prop] = $value;
+                }
+            }
+            
+            return $sample;
+        }
+        
+        return $data;
     }
 }
 

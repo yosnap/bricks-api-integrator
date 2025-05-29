@@ -594,11 +594,11 @@
         initializeExistingAccordions: function() {
             $('.endpoint-accordion').each((index, element) => {
                 const $accordion = $(element);
-                // Expandir acordeones existentes por defecto
-                $accordion.removeClass('collapsed').find('.endpoint-content').addClass('expanded');
+                // Colapsar acordeones existentes por defecto
+                $accordion.addClass('collapsed').find('.endpoint-content').removeClass('expanded');
             });
             
-            this.log('Acordeones existentes inicializados');
+            this.log('Acordeones existentes inicializados (colapsados por defecto)');
         },
         
         // Inicializar inputs de autenticación existentes
