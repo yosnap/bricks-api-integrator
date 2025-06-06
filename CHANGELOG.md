@@ -388,3 +388,9 @@ Este rediseño completo mejora significativamente la experiencia del usuario, el
 **Fecha**: 27 de Diciembre, 2024  
 **Autor**: sn4p Dev  
 **Compatibilidad**: WordPress 5.0+, Bricks Builder 1.5+
+
+## [2.1.x] - 2025-06-06
+### Mejoras
+- Documentación ampliada sobre el uso de endpoints con arrays anidados (`items_path`), diferenciando entre Query Type AUTO y MANUAL.
+- Aclarado que para arrays anidados (ej: `data.memes`) es necesario crear un Source manual para que el Query Loop de Bricks funcione correctamente.
+- Mejoras visuales y de usabilidad en la gestión de endpoints y parámetros dinámicos.

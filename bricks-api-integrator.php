@@ -173,6 +173,7 @@ class BricksAPIIntegrator {
         add_action('wp_ajax_get_cache_duration', [$this, 'ajax_get_cache_duration']);
         add_action('wp_ajax_refresh_endpoint_data', [$this, 'ajax_refresh_endpoint_data']);
         add_action('wp_ajax_test_items_path', [$this, 'ajax_test_items_path']);
+        add_action('wp_ajax_save_single_api_endpoint', [$this, 'ajax_save_single_api_endpoint']);
         
         // Shortcode para debug
         if (defined('WP_DEBUG') && WP_DEBUG) {
@@ -371,7 +372,7 @@ class BricksAPIIntegrator {
         foreach ($api_data as $index => $item) {
             // Crear un objeto pseudo-post para cada item
             $pseudo_post = new stdClass();
-            $pseudo_post->ID = $index + 1;
+            $pseudo_post->ID = is_numeric($index) ? ($index + 1) : 1;
             $pseudo_post->post_title = '';
             $pseudo_post->post_content = '';
             $pseudo_post->post_type = 'api_data';
@@ -418,15 +419,18 @@ class BricksAPIIntegrator {
             if (empty($endpoint['name']) || empty($endpoint['url'])) {
                 continue;
             }
-            
             // Obtener datos de muestra del endpoint
             $sample_data = $this->get_api_data_with_dynamic_params($endpoint);
             $endpoint_slug = sanitize_key($endpoint['name']);
-            
+
+            // NUEVO: Si el endpoint tiene items_path, extraer el array anidado
+            if (!empty($endpoint['items_path']) && !empty($sample_data)) {
+                $sample_data = $this->extract_nested_items($sample_data, $endpoint['items_path']);
+            }
+
             if (empty($sample_data)) {
                 // Si no hay datos, crear tags básicos por defecto
                 $basic_fields = ['id', 'title', 'name', 'description', 'url', 'slug', 'content', 'image'];
-                
                 foreach ($basic_fields as $field) {
                     $tags[] = [
                         'name' => '{' . $fixed_prefix . 'auto_' . $endpoint_slug . '_' . $field . '}',
@@ -435,14 +439,10 @@ class BricksAPIIntegrator {
                     ];
                     $tags_generated++;
                 }
-                
-
                 continue;
             }
-            
             // Extraer campos dinámicamente
             $fields = $this->extract_fields_from_data($sample_data[0] ?? $sample_data);
-            
             if (!empty($fields)) {
                 foreach ($fields as $field => $label) {
                     $tags[] = [
@@ -452,8 +452,6 @@ class BricksAPIIntegrator {
                     ];
                     $tags_generated++;
                 }
-                
-
             }
         }
         
@@ -589,15 +587,31 @@ class BricksAPIIntegrator {
                     }
                     break;
                 case 'basic':
-                    if (!empty($endpoint_config['auth_username']) && !empty($endpoint_config['auth_password'])) {
-                        $args['headers']['Authorization'] = 'Basic ' . base64_encode($endpoint_config['auth_username'] . ':' . $endpoint_config['auth_password']);
+                    // Compatibilidad con ambos nombres de campo
+                    $username = $endpoint_config['basic_user'] ?? $endpoint_config['auth_username'] ?? '';
+                    $password = $endpoint_config['basic_password'] ?? $endpoint_config['auth_password'] ?? '';
+                    if (!empty($username) && !empty($password)) {
+                        $args['headers']['Authorization'] = 'Basic ' . base64_encode($username . ':' . $password);
                     }
                     break;
             }
         }
         
+        // LOG: Registrar URL y headers antes de la petición
+        if (defined('WP_DEBUG') && WP_DEBUG) {
+            error_log('API DEBUG - URL: ' . $url);
+            error_log('API DEBUG - Headers: ' . print_r($args['headers'], true));
+        }
         // Realizar petición
         $response = wp_remote_get($url, $args);
+
+        // LOG: Registrar código de estado y cuerpo de la respuesta
+        if (defined('WP_DEBUG') && WP_DEBUG) {
+            $status_code = wp_remote_retrieve_response_code($response);
+            error_log('API DEBUG - Status Code: ' . $status_code);
+            $body = is_wp_error($response) ? $response->get_error_message() : wp_remote_retrieve_body($response);
+            error_log('API DEBUG - Body: ' . (is_string($body) ? substr($body, 0, 1000) : print_r($body, true)));
+        }
         
         // Verificar errores
         if (is_wp_error($response)) {
@@ -656,9 +670,11 @@ class BricksAPIIntegrator {
             try {
                 // Obtener datos con la URL completa
                 $test_data = $this->get_api_data_with_cache($test_url, $endpoint, $force_refresh);
-                
                 if (!empty($test_data)) {
-
+                    // NUEVO: Si el endpoint tiene items_path, extraer el array anidado
+                    if (!empty($endpoint['items_path'])) {
+                        $test_data = $this->extract_nested_items($test_data, $endpoint['items_path']);
+                    }
                     return $test_data;
                 } else {
 
@@ -862,8 +878,11 @@ class BricksAPIIntegrator {
                     }
                     break;
                 case 'basic':
-                    if (!empty($endpoint['auth_username']) && !empty($endpoint['auth_password'])) {
-                        $headers['Authorization'] = 'Basic ' . base64_encode($endpoint['auth_username'] . ':' . $endpoint['auth_password']);
+                    // Compatibilidad con ambos nombres de campo
+                    $username = $endpoint_config['basic_user'] ?? $endpoint_config['auth_username'] ?? '';
+                    $password = $endpoint_config['basic_password'] ?? $endpoint_config['auth_password'] ?? '';
+                    if (!empty($username) && !empty($password)) {
+                        $headers['Authorization'] = 'Basic ' . base64_encode($username . ':' . $password);
                     }
                     break;
             }
@@ -1550,8 +1569,12 @@ class BricksAPIIntegrator {
         if (strpos($hook, 'bricks-api-integrator') === false) {
             return;
         }
-        
         bricks_api_integrator_assets();
+        // Pasar variables globales al JS principal
+        wp_localize_script('bricks-api-integrator-js', 'bricksApiIntegrator', [
+            'ajaxUrl' => admin_url('admin-ajax.php'),
+            'saveSingleApiEndpointNonce' => wp_create_nonce('save_single_api_endpoint'),
+        ]);
     }
     
     /**
@@ -1646,8 +1669,20 @@ class BricksAPIIntegrator {
             // Mostrar información de depuración
 
             
+            // LOG: Registrar URL y headers antes de la petición
+            if (defined('WP_DEBUG') && WP_DEBUG) {
+                error_log('API TEST DEBUG - URL: ' . $test_url);
+                error_log('API TEST DEBUG - Headers: ' . print_r($args['headers'], true));
+            }
             // Realizar la petición a la API
             $response = wp_remote_get($test_url, $args);
+            // LOG: Registrar código de estado y cuerpo de la respuesta
+            if (defined('WP_DEBUG') && WP_DEBUG) {
+                $status_code = wp_remote_retrieve_response_code($response);
+                error_log('API TEST DEBUG - Status Code: ' . $status_code);
+                $body = is_wp_error($response) ? $response->get_error_message() : wp_remote_retrieve_body($response);
+                error_log('API TEST DEBUG - Body: ' . (is_string($body) ? substr($body, 0, 1000) : print_r($body, true)));
+            }
             
             if (is_wp_error($response)) {
                 wp_send_json_error([
@@ -2889,17 +2924,82 @@ class BricksAPIIntegrator {
         
         return $data;
     }
+
+    /**
+     * Guardar un solo endpoint vía AJAX
+     */
+    public function ajax_save_single_api_endpoint() {
+        if (defined('WP_DEBUG') && WP_DEBUG) {
+            error_log('AJAX SAVE ENDPOINT - POST: ' . print_r($_POST, true));
+        }
+        if (!current_user_can('manage_options')) {
+            if (defined('WP_DEBUG') && WP_DEBUG) {
+                error_log('AJAX SAVE ENDPOINT - Error: No tienes permisos suficientes.');
+            }
+            wp_send_json_error(['message' => 'No tienes permisos suficientes.']);
+        }
+        check_ajax_referer('save_single_api_endpoint', 'nonce');
+
+        $index = isset($_POST['index']) ? intval($_POST['index']) : -1;
+        if ($index < 0) {
+            if (defined('WP_DEBUG') && WP_DEBUG) {
+                error_log('AJAX SAVE ENDPOINT - Error: Índice de endpoint inválido.');
+            }
+            wp_send_json_error(['message' => 'Índice de endpoint inválido.']);
+        }
+
+        $endpoints = get_option('bricks_api_endpoints', []);
+        if (!isset($endpoints[$index])) {
+            if (defined('WP_DEBUG') && WP_DEBUG) {
+                error_log('AJAX SAVE ENDPOINT - Error: Endpoint no encontrado. Index: ' . $index . ' Endpoints: ' . print_r($endpoints, true));
+            }
+            wp_send_json_error(['message' => 'Endpoint no encontrado.']);
+        }
+
+        // Construir el array del endpoint con los datos recibidos
+        $dynamic_params = [];
+        $param_names = isset($_POST['param_names']) ? (array) $_POST['param_names'] : [];
+        $param_sources = isset($_POST['param_sources']) ? (array) $_POST['param_sources'] : [];
+        $param_defaults = isset($_POST['param_defaults']) ? (array) $_POST['param_defaults'] : [];
+        foreach ($param_names as $i => $name) {
+            if (!empty($name)) {
+                $dynamic_params[] = [
+                    'name' => sanitize_text_field($name),
+                    'source' => sanitize_text_field($param_sources[$i] ?? 'url'),
+                    'default' => sanitize_text_field($param_defaults[$i] ?? '')
+                ];
+            }
+        }
+
+        $endpoints[$index] = [
+            'name' => sanitize_text_field($_POST['name'] ?? ''),
+            'url' => esc_url_raw($_POST['url'] ?? ''),
+            'auth_type' => sanitize_text_field($_POST['auth_type'] ?? 'none'),
+            'token' => sanitize_text_field($_POST['token'] ?? ''),
+            'basic_user' => sanitize_text_field($_POST['basic_user'] ?? ''),
+            'basic_password' => trim($_POST['basic_password'] ?? ''),
+            'api_key' => sanitize_text_field($_POST['api_key'] ?? ''),
+            'api_key_header' => sanitize_text_field($_POST['api_key_header'] ?? 'X-API-Key'),
+            'dynamic_params' => $dynamic_params,
+            'items_path' => sanitize_text_field($_POST['items_path'] ?? ''),
+        ];
+
+        if (defined('WP_DEBUG') && WP_DEBUG) {
+            error_log('AJAX SAVE ENDPOINT - Endpoint actualizado: ' . print_r($endpoints[$index], true));
+        }
+
+        update_option('bricks_api_endpoints', $endpoints);
+        wp_send_json_success(['message' => 'Endpoint guardado correctamente.']);
+    }
 }
 
 // Compatibilidad con archivos existentes
 if (!function_exists('get_api_data')) {
     function get_api_data($endpoint_url, $endpoint_config = []) {
         static $integrator_instance = null;
-        
         if ($integrator_instance === null) {
             $integrator_instance = new BricksAPIIntegrator();
         }
-        
         return $integrator_instance->get_api_data_with_cache($endpoint_url, $endpoint_config);
     }
 }

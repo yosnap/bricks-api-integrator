@@ -36,10 +36,11 @@ if (!function_exists('render_api_endpoints_page')) {
                             'auth_type' => sanitize_text_field($endpoint['auth_type'] ?? 'none'),
                             'token' => sanitize_text_field($endpoint['token'] ?? ''),
                             'basic_user' => sanitize_text_field($endpoint['basic_user'] ?? ''),
-                            'basic_password' => sanitize_text_field($endpoint['basic_password'] ?? ''),
+                            'basic_password' => trim($endpoint['basic_password'] ?? ''),
                             'api_key' => sanitize_text_field($endpoint['api_key'] ?? ''),
                             'api_key_header' => sanitize_text_field($endpoint['api_key_header'] ?? 'X-API-Key'),
-                            'dynamic_params' => $dynamic_params
+                            'dynamic_params' => $dynamic_params,
+                            'items_path' => sanitize_text_field($endpoint['items_path'] ?? ''),
                         ];
                     }
                 }
@@ -117,6 +118,15 @@ if (!function_exists('render_api_endpoints_page')) {
                                         </select>
                                     </td>
                                 </tr>
+                                <tr>
+                                    <th><label>Ruta de Elementos (items_path)</label></th>
+                                    <td>
+                                        <input type="text" name="endpoints[<?php echo $index; ?>][items_path]" 
+                                               value="<?php echo esc_attr($endpoint['items_path'] ?? ''); ?>" 
+                                               class="regular-text" placeholder="Ej: items o data.items">
+                                        <p class="description">Opcional. Si tu array principal está anidado, indica la ruta (ejemplo: <code>items</code> o <code>data.items</code>).</p>
+                                    </td>
+                                </tr>
                             </table>
                             
                             <!-- Campos de Autenticación Dinámicos -->
@@ -153,50 +163,53 @@ if (!function_exists('render_api_endpoints_page')) {
                                 <?php endif; ?>
                             </div>
                             
-                            <!-- Parámetros Dinámicos Existentes (del endpoint-card) -->
-                            <?php if (!empty($endpoint['dynamic_params'])): ?>
-                                <table class="form-table">
-                                    <tr>
-                                        <th><label>Parámetros Configurados</label></th>
-                                        <td>
-                                            <?php foreach ($endpoint['dynamic_params'] as $param_index => $param): ?>
-                                                <div class="dynamic-param-row" style="margin-bottom: 10px; padding: 10px; background: #f9f9f9; border-radius: 3px;">
-                                                    <input type="text" name="endpoints[<?php echo $index; ?>][param_names][]" 
-                                                           placeholder="Nombre del parámetro (ej: id, slug)" 
-                                                           class="regular-text" 
-                                                           value="<?php echo esc_attr($param['name']); ?>" style="width: 200px;">
-                                                    
-                                                    <select name="endpoints[<?php echo $index; ?>][param_sources][]" style="width: 180px;">
-                                                        <option value="url" <?php selected($param['source'], 'url'); ?>>Parámetro URL (?id=123)</option>
-                                                        <option value="post" <?php selected($param['source'], 'post'); ?>>ID del Post Actual</option>
-                                                        <option value="post_slug" <?php selected($param['source'], 'post_slug'); ?>>Slug del Post Actual</option>
-                                                        <option value="user" <?php selected($param['source'], 'user'); ?>>ID del Usuario Actual</option>
-                                                        <option value="meta" <?php selected($param['source'], 'meta'); ?>>Meta Field del Post</option>
-                                                        <option value="static" <?php selected($param['source'], 'static'); ?>>Valor Estático</option>
-                                                    </select>
-                                                    
-                                                    <input type="text" name="endpoints[<?php echo $index; ?>][param_defaults][]" 
-                                                           placeholder="Valor por defecto" 
-                                                           class="regular-text" 
-                                                           value="<?php echo esc_attr($param['default']); ?>" style="width: 150px;">
-                                                    
-                                                    <button type="button" class="button remove-param" style="color: #a00;">Eliminar</button>
-                                                </div>
-                                            <?php endforeach; ?>
-                                            <button type="button" class="button add-param" data-endpoint="<?php echo $index; ?>">➕ Añadir Parámetro</button>
-                                            <p class="description" style="margin-top: 10px;">
-                                                <strong>Para páginas de detalle:</strong> Configura parámetros como "id" o "slug" que se tomarán de la URL actual o del post.<br>
-                                                <strong>Ejemplo:</strong> Si tu API necesita <code>?id=123</code>, agrega parámetro "id" con fuente "Parámetro URL".
-                                            </p>
-                                        </td>
-                                    </tr>
-                                </table>
-                            <?php endif; ?>
+                            <!-- Parámetros Dinámicos (siempre visible) -->
+                            <table class="form-table">
+                                <tr>
+                                    <th><label>Parámetros Configurados</label></th>
+                                    <td>
+                                        <div class="dynamic-params-container" id="dynamic-params-container-<?php echo $index; ?>">
+                                            <?php if (!empty($endpoint['dynamic_params'])): ?>
+                                                <?php foreach ($endpoint['dynamic_params'] as $param_index => $param): ?>
+                                                    <div class="dynamic-param-row" style="margin-bottom: 10px; padding: 10px; background: #f9f9f9; border-radius: 3px;">
+                                                        <input type="text" name="endpoints[<?php echo $index; ?>][param_names][]"
+                                                               placeholder="Nombre del parámetro (ej: id, slug)"
+                                                               class="regular-text"
+                                                               value="<?php echo esc_attr($param['name']); ?>" style="width: 200px;">
+                                                        <select name="endpoints[<?php echo $index; ?>][param_sources][]" style="width: 180px;">
+                                                            <option value="url" <?php selected($param['source'], 'url'); ?>>Parámetro URL (?id=123)</option>
+                                                            <option value="post" <?php selected($param['source'], 'post'); ?>>ID del Post Actual</option>
+                                                            <option value="post_slug" <?php selected($param['source'], 'post_slug'); ?>>Slug del Post Actual</option>
+                                                            <option value="user" <?php selected($param['source'], 'user'); ?>>ID del Usuario Actual</option>
+                                                            <option value="meta" <?php selected($param['source'], 'meta'); ?>>Meta Field del Post</option>
+                                                            <option value="static" <?php selected($param['source'], 'static'); ?>>Valor Estático</option>
+                                                        </select>
+                                                        <input type="text" name="endpoints[<?php echo $index; ?>][param_defaults][]"
+                                                               placeholder="Valor por defecto"
+                                                               class="regular-text"
+                                                               value="<?php echo esc_attr($param['default']); ?>" style="width: 150px;">
+                                                        <button type="button" class="button remove-param" style="color: #a00;">Eliminar</button>
+                                                    </div>
+                                                <?php endforeach; ?>
+                                            <?php endif; ?>
+                                        </div>
+                                        <button type="button" class="button add-param" data-endpoint="<?php echo $index; ?>">➕ Añadir Parámetro</button>
+                                        <p class="description" style="margin-top: 10px;">
+                                            <strong>Para páginas de detalle:</strong> Configura parámetros como "id" o "slug" que se tomarán de la URL actual o del post.<br>
+                                            <strong>Ejemplo:</strong> Si tu API necesita <code>?id=123</code>, agrega parámetro "id" con fuente "Parámetro URL".
+                                        </p>
+                                    </td>
+                                </tr>
+                            </table>
                             
-                            <button type="button" class="button test-endpoint" data-index="<?php echo $index; ?>">🧪 Test API</button>
-                            <button type="button" class="button show-dynamic-tags" data-index="<?php echo $index; ?>">🏷️ Ver Dynamic Tags</button>
-                            <button type="button" class="button refresh-endpoint-data" data-index="<?php echo $index; ?>" style="background: #28a745; color: white; margin-left: 5px;">🔄 Actualizar Datos</button>
-                            <button type="button" class="button button-link-delete remove-endpoint" data-index="<?php echo $index; ?>" style="color: #a00;">🗑️ Eliminar</button>
+                            <div class="endpoint-actions" style="display: flex; gap: 8px; align-items: center; margin-top: 15px; margin-bottom: 10px; flex-wrap: wrap;">
+                                <button type="button" class="test-endpoint button button-secondary" data-index="<?php echo $index; ?>">�� Test API</button>
+                                <button type="button" class="show-dynamic-tags button button-warning" data-index="<?php echo $index; ?>">🏷️ Ver Dynamic Tags</button>
+                                <button type="button" class="refresh-endpoint-data button button-success" data-index="<?php echo $index; ?>">🔄 Actualizar Datos</button>
+                                <button type="button" class="button button-link-delete remove-endpoint" data-index="<?php echo $index; ?>" style="color: #a00;">🗑️ Eliminar</button>
+                                <button type="button" class="button save-endpoint" data-index="<?php echo $index; ?>" style="background: #0073aa; color: #fff;">💾 Guardar este endpoint</button>
+                            </div>
+                            <div class="save-endpoint-result" id="save-endpoint-result-<?php echo $index; ?>" style="margin-top: 8px;"></div>
                             
                             <!-- Accordion para Dynamic Tags -->
                             <div class="dynamic-tags-accordion" id="dynamic-tags-<?php echo $index; ?>" style="display: none; margin-top: 15px;">
@@ -329,10 +342,14 @@ if (!function_exists('render_api_endpoints_page')) {
                             </tr>
                         </table>
                         
-                        <button type="button" class="button test-endpoint" data-index="${endpointCounter}">🧪 Test API</button>
-                        <button type="button" class="button show-dynamic-tags" data-index="${endpointCounter}">🏷️ Ver Dynamic Tags</button>
-                        <button type="button" class="button refresh-endpoint-data" data-index="${endpointCounter}" style="background: #28a745; color: white; margin-left: 5px;">🔄 Actualizar Datos</button>
-                        <button type="button" class="button button-link-delete remove-endpoint" data-index="${endpointCounter}" style="color: #a00;">🗑️ Eliminar</button>
+                        <div class="endpoint-actions" style="display: flex; gap: 8px; align-items: center; margin-top: 15px; margin-bottom: 10px; flex-wrap: wrap;">
+                            <button type="button" class="test-endpoint button button-secondary" data-index="${endpointCounter}">�� Test API</button>
+                            <button type="button" class="show-dynamic-tags button button-warning" data-index="${endpointCounter}">🏷️ Ver Dynamic Tags</button>
+                            <button type="button" class="refresh-endpoint-data button button-success" data-index="${endpointCounter}">🔄 Actualizar Datos</button>
+                            <button type="button" class="button button-link-delete remove-endpoint" data-index="${endpointCounter}" style="color: #a00;">��️ Eliminar</button>
+                            <button type="button" class="button save-endpoint" data-index="${endpointCounter}" style="background: #0073aa; color: #fff;">💾 Guardar este endpoint</button>
+                        </div>
+                        <div class="save-endpoint-result" id="save-endpoint-result-${endpointCounter}" style="margin-top: 8px;"></div>
                         
                         <!-- Accordion para Dynamic Tags -->
                         <div class="dynamic-tags-accordion" id="dynamic-tags-${endpointCounter}" style="display: none; margin-top: 15px;">
@@ -434,10 +451,13 @@ if (!function_exists('render_api_endpoints_page')) {
                             </tr>
                         </table>
                         
-                        <button type="button" class="button test-endpoint" data-index="${endpointCounter}">🧪 Test API</button>
-                        <button type="button" class="button show-dynamic-tags" data-index="${endpointCounter}" style="margin-left: 10px;">🏷️ Ver Dynamic Tags</button>
-                        <button type="button" class="button refresh-endpoint-data" data-index="${endpointCounter}" style="background: #28a745; color: white; margin-left: 5px;">🔄 Actualizar Datos</button>
-                        <button type="button" class="button button-link-delete remove-endpoint" data-index="${endpointCounter}" style="color: #a00; margin-left: 10px;">🗑️ Eliminar</button>
+                        <div class="endpoint-actions" style="display: flex; gap: 8px; align-items: center; margin-top: 15px; margin-bottom: 10px; flex-wrap: wrap;">
+                            <button type="button" class="test-endpoint button button-secondary" data-index="${endpointCounter}">�� Test API</button>
+                            <button type="button" class="show-dynamic-tags button button-warning" data-index="${endpointCounter}" style="margin-left: 10px;">🏷️ Ver Dynamic Tags</button>
+                            <button type="button" class="refresh-endpoint-data button button-success" data-index="${endpointCounter}" style="background: #28a745; color: white; margin-left: 5px;">🔄 Actualizar Datos</button>
+                            <button type="button" class="button button-link-delete remove-endpoint" data-index="${endpointCounter}" style="color: #a00; margin-left: 10px;">🗑️ Eliminar</button>
+                        </div>
+                        <div class="save-endpoint-result" id="save-endpoint-result-${endpointCounter}" style="margin-top: 8px;"></div>
                         
                         <!-- Accordion para Dynamic Tags -->
                         <div class="dynamic-tags-accordion" id="dynamic-tags-${endpointCounter}" style="display: none; margin-top: 15px;">
@@ -640,7 +660,8 @@ if (!function_exists('render_api_endpoints_page')) {
                         
                         <input type="text" name="endpoints[${endpointIndex}][param_defaults][]" 
                                placeholder="Valor por defecto" 
-                               class="regular-text" style="width: 150px;">
+                               class="regular-text" 
+                               value="<?php echo esc_attr($param['default']); ?>" style="width: 150px;">
                         
                         <button type="button" class="button remove-param" style="color: #a00;">Eliminar</button>
                     </div>
@@ -1236,6 +1257,44 @@ if (!function_exists('render_api_endpoints_page')) {
                 
                 authContainer.innerHTML = authHTML;
             };
+
+            $(document).on('click', '.save-endpoint', function() {
+                var index = $(this).data('index');
+                var $form = $(this).closest('form');
+                var $endpoint = $('#endpoint-content-' + index);
+                var $result = $('#save-endpoint-result-' + index);
+                $result.html('<span style="color: #0073aa;">Guardando...</span>');
+
+                // Recopilar los datos de los campos de este endpoint
+                var data = {
+                    action: 'save_single_api_endpoint',
+                    nonce: bricksApiIntegrator.saveSingleApiEndpointNonce,
+                    index: index,
+                    name: $endpoint.find('input[name="endpoints[' + index + '][name]"]').val(),
+                    url: $endpoint.find('input[name="endpoints[' + index + '][url]"]').val(),
+                    auth_type: $endpoint.find('select[name="endpoints[' + index + '][auth_type]"]').val(),
+                    token: $endpoint.find('input[name="endpoints[' + index + '][token]"]').val(),
+                    basic_user: $endpoint.find('input[name="endpoints[' + index + '][basic_user]"]').val(),
+                    basic_password: $endpoint.find('input[name="endpoints[' + index + '][basic_password]"]').val(),
+                    api_key: $endpoint.find('input[name="endpoints[' + index + '][api_key]"]').val(),
+                    api_key_header: $endpoint.find('input[name="endpoints[' + index + '][api_key_header]"]').val(),
+                    items_path: $endpoint.find('input[name="endpoints[' + index + '][items_path]"]').val(),
+                    param_names: $endpoint.find('input[name="endpoints[' + index + '][param_names][]"]:not(:last)').map(function() { return $(this).val(); }).get(),
+                    param_sources: $endpoint.find('select[name="endpoints[' + index + '][param_sources][]"]:not(:last)').map(function() { return $(this).val(); }).get(),
+                    param_defaults: $endpoint.find('input[name="endpoints[' + index + '][param_defaults][]"]:not(:last)').map(function() { return $(this).val(); }).get()
+                };
+
+                // Enviar los datos por AJAX
+                $.post(bricksApiIntegrator.ajaxUrl, data, function(response) {
+                    if (response.success) {
+                        $result.html('<div style="color: green; background: #f0f8ff; padding: 10px; border-radius: 3px;">✅ Endpoint guardado correctamente</div>');
+                    } else {
+                        $result.html('<div style="color: red; background: #ffeaea; padding: 10px; border-radius: 3px;">❌ Error al guardar el endpoint</div>');
+                    }
+                }).fail(function() {
+                    $result.html('<div style="color: red; background: #ffeaea; padding: 10px; border-radius: 3px;">❌ Error de conexión</div>');
+                });
+            });
         });
         </script>
         
@@ -1262,6 +1321,9 @@ if (!function_exists('render_api_endpoints_page')) {
                 border-radius: 5px;
                 overflow: hidden;
                 margin-top: 15px;
+                overflow-x: auto;
+                max-width: 100%;
+                box-sizing: border-box;
             }
             
             .dynamic-tags-content {
@@ -1340,6 +1402,14 @@ if (!function_exists('render_api_endpoints_page')) {
                 }
             }
         </style>
-        <?php
+        </form>
+    </div>
+    <script>
+    window.bricksApiIntegrator = {
+      ajaxUrl: '<?php echo admin_url('admin-ajax.php'); ?>',
+      saveSingleApiEndpointNonce: '<?php echo wp_create_nonce('save_single_api_endpoint'); ?>'
+    };
+    </script>
+<?php
     }
 }

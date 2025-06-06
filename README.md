@@ -217,3 +217,31 @@ Este proyecto está bajo la licencia GPL v2. Ver [LICENSE](LICENSE) para más de
 **Desarrollado con ❤️ por [sn4p.dev](https://sn4p.dev)**
 
 ¿Te gusta el plugin? ⭐ **Dale una estrella** en GitHub y **comparte** con la comunidad.
+
+## Uso de Endpoints con Arrays Anidados
+
+Si tu API devuelve un array anidado (por ejemplo, `data.memes`), debes:
+
+1. Crear el endpoint normalmente y poner el `items_path` (ej: `data.memes`).
+2. Para usar el array en un Query Loop de Bricks, crea un **Source manual**:
+   - Asocia el endpoint.
+   - Pon el mismo `items_path`.
+   - Guarda el Source.
+3. En Bricks, selecciona el Query Type generado por el Source manual (ej: `source_memes_api`).
+4. Usa los dynamic tags generados para mostrar los campos.
+
+### Diferencia entre AUTO y MANUAL
+- **AUTO:** Para respuestas planas o de detalle (un solo objeto o array raíz).
+- **MANUAL (Source):** Para arrays anidados, listados o estructuras complejas.
+
+### Ejemplo
+```json
+{
+  "success": true,
+  "data": {
+    "memes": [ ... ]
+  }
+}
+```
+- `items_path`: `data.memes`
+- Query Type: Source manual asociado al endpoint.
