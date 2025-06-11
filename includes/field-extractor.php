@@ -238,3 +238,68 @@ trait FieldExtractor {
         return sanitize_text_field((string) $value);
     }
 }
+
+// === UTILIDAD GLOBAL PARA SLUG ===
+if (!function_exists('bricks_api_normalize_slug')) {
+    /**
+     * Normaliza un string a slug: minúsculas, guiones, sin tildes ni caracteres especiales
+     * @param string $text
+     * @return string
+     */
+    function bricks_api_normalize_slug($text) {
+        // Eliminar tildes y caracteres especiales
+        $text = iconv('UTF-8', 'ASCII//TRANSLIT', $text);
+        $text = strtolower($text);
+        $text = preg_replace('/[^a-z0-9\s-]/', '', $text); // Solo letras, números, espacios y guiones
+        $text = preg_replace('/[\s_]+/', '-', $text); // Espacios y guiones bajos a guiones
+        $text = preg_replace('/-+/', '-', $text); // Varios guiones seguidos a uno solo
+        $text = trim($text, '-');
+        return $text;
+    }
+}
+
+/**
+ * Extrae todos los tags posibles de un ejemplo de datos, usando notación de punto para subcampos
+ * @param mixed $data El ejemplo de datos (array u objeto)
+ * @param string $prefix Prefijo del tag (ej: 'snap')
+ * @param string $path Path actual (para recursividad)
+ * @param int $max_depth Profundidad máxima
+ * @return array Lista de tags: [ ['tag' => '{snap_path}', 'field' => 'path', 'example' => valor, 'type' => tipo], ... ]
+ */
+function bricks_api_extract_tags_recursive($data, $prefix = 'snap', $path = '', $max_depth = 5) {
+    $tags = [];
+    if ($max_depth < 0) return $tags;
+    if (is_object($data)) $data = (array)$data;
+    if (!is_array($data)) return $tags;
+    foreach ($data as $key => $value) {
+        $new_path = $path === '' ? $key : $path . '.' . $key;
+        $tag = '{' . $prefix . '_' . $new_path . '}';
+        $type = gettype($value);
+        if (is_array($value)) {
+            if (array_keys($value) === range(0, count($value) - 1)) {
+                // Array indexado
+                if (count($value) > 0) {
+                    // Tag para el array completo
+                    $tags[] = [ 'tag' => $tag, 'field' => $new_path, 'example' => json_encode($value), 'type' => 'array' ];
+                    // Tag para el primer elemento
+                    $tags[] = [ 'tag' => '{' . $prefix . '_' . $new_path . '.0}', 'field' => $new_path . '.0', 'example' => is_scalar($value[0]) ? $value[0] : json_encode($value[0]), 'type' => gettype($value[0]) ];
+                    // Recursivo para el primer elemento si es array/objeto
+                    if (is_array($value[0]) || is_object($value[0])) {
+                        $tags = array_merge($tags, bricks_api_extract_tags_recursive($value[0], $prefix, $new_path . '.0', $max_depth - 1));
+                    }
+                }
+            } else {
+                // Array asociativo
+                $tags[] = [ 'tag' => $tag, 'field' => $new_path, 'example' => json_encode($value), 'type' => 'object' ];
+                $tags = array_merge($tags, bricks_api_extract_tags_recursive($value, $prefix, $new_path, $max_depth - 1));
+            }
+        } elseif (is_object($value)) {
+            $tags[] = [ 'tag' => $tag, 'field' => $new_path, 'example' => json_encode($value), 'type' => 'object' ];
+            $tags = array_merge($tags, bricks_api_extract_tags_recursive($value, $prefix, $new_path, $max_depth - 1));
+        } else {
+            // Escalar
+            $tags[] = [ 'tag' => $tag, 'field' => $new_path, 'example' => $value, 'type' => $type ];
+        }
+    }
+    return $tags;
+}

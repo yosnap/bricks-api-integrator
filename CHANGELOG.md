@@ -394,3 +394,27 @@ Este rediseño completo mejora significativamente la experiencia del usuario, el
 - Documentación ampliada sobre el uso de endpoints con arrays anidados (`items_path`), diferenciando entre Query Type AUTO y MANUAL.
 - Aclarado que para arrays anidados (ej: `data.memes`) es necesario crear un Source manual para que el Query Loop de Bricks funcione correctamente.
 - Mejoras visuales y de usabilidad en la gestión de endpoints y parámetros dinámicos.
+
+## [v0.2.0-beta] - 2025-06-11
+
+### Added
+- Generación manual de Query Types y Dynamic Tags desde la UI.
+- Visualización avanzada de estructura, ejemplo y tags generados.
+- Botón para copiar tag completo y valor de ejemplo.
+- Soporte para tags anidados y arrays en la respuesta de la API.
+- Selección y guardado de tags habilitados/deshabilitados.
+- Renderizado de tags anidados en Bricks, tanto en arrays como en objetos únicos.
+- Eliminación y recreación de tags/query type desde la UI.
+- Visualización automática de tags al editar/cargar endpoint.
+
+### Changed
+- Los tags ahora usan el formato `{snap_{slug}_{campo}}` para evitar colisiones y mejorar la compatibilidad.
+- Refactor de la lógica de generación y renderizado de tags.
+
+### Fixed
+- Problemas de renderizado de tags en endpoints con objeto único.
+- Sincronización de la UI y el backend para la gestión de tags.
+
+### Removed
+- Generación automática de tags/query types al guardar endpoint.
+- Lógica antigua de tags automáticos/manuales.

@@ -1,11 +1,57 @@
-# Bricks API Integrator v2.1.5
+# Bricks API Integrator (v0.2.0-beta)
 
-> Sistema completo para integrar APIs externas con Bricks Builder - Ahora con sistema diferenciado AUTO/MANUAL para máxima flexibilidad.
+**Integración avanzada de APIs externas en Bricks Builder**
 
-[![WordPress](https://img.shields.io/badge/WordPress-5.0+-blue.svg)]()
-[![Bricks Builder](https://img.shields.io/badge/Bricks%20Builder-1.8+-green.svg)]()
-[![PHP](https://img.shields.io/badge/PHP-7.4+-purple.svg)]()
-[![License](https://img.shields.io/badge/License-GPL%202-red.svg)]()
+---
+
+## 🚀 Novedades principales (v0.2.0-beta)
+
+- **Generación manual** de Query Types y Dynamic Tags desde la UI del plugin.
+- **Estructura de tags:** `{snap_{slug}_{campo}}` (ej: `{snap_countries-europe_name.common}`) con soporte para notación de punto en campos anidados.
+- **Visualización avanzada**: muestra la estructura, ejemplo y lista de tags generados, con opción de copiar el tag completo o el valor de ejemplo.
+- **Selección de tags habilitados/deshabilitados** y guardado persistente por endpoint.
+- **Renderizado de tags anidados** en Bricks, tanto para arrays como para objetos únicos.
+- **Eliminación y recreación** de tags/query type desde la UI.
+- **UX mejorada**: visualización automática de tags al editar/cargar endpoint, feedback claro y control total.
+
+---
+
+## 🛠️ Cómo funciona el nuevo flujo
+
+1. **Añade o edita un endpoint** en la sección "API Endpoints".
+2. Pulsa **"Generar Query Type y Tags Dinámicos"** para analizar la respuesta de la API y generar los tags.
+3. Visualiza la estructura, ejemplo y lista de tags generados. Puedes deshabilitar los que no necesites.
+4. Usa el botón **"Copiar tag"** para pegarlo directamente en Bricks.
+5. Elige el Query Type generado en el Query Loop de Bricks y usa los tags en tus elementos.
+6. Si la API cambia, puedes eliminar y regenerar los tags fácilmente.
+
+---
+
+## 🧩 Ejemplo de uso de tags
+
+- Para un endpoint llamado "Countries Europe":
+  - Tag para el nombre común: `{snap_countries-europe_name.common}`
+  - Tag para el símbolo de la moneda: `{snap_countries-europe_currencies.CZK.symbol}`
+
+---
+
+## ⚠️ Notas importantes
+
+- **Solo se generan y usan los tags habilitados** en la UI.
+- El plugin detecta automáticamente si la respuesta es un array o un objeto único y lo adapta para Bricks.
+- Si tienes endpoints antiguos, regenera los tags para usar el nuevo formato.
+- El sistema sigue en **versión beta**: reporta cualquier bug o sugerencia internamente.
+
+---
+
+## 📋 Roadmap inmediato
+- Integración avanzada de Sources: endpoints relacionados y arrays anidados.
+- Mejoras en la documentación y ejemplos visuales.
+
+---
+
+## 👨‍💻 Equipo y soporte
+Este repositorio es privado y en beta. Para dudas, mejoras o bugs, contacta directamente con el equipo de desarrollo.
 
 ## 🎯 ¿Qué es Bricks API Integrator?
 
@@ -18,7 +64,7 @@
 - ✅ **Arrays anidados** con Items Path para estructuras complejas
 - ✅ **Interfaz moderna** con sistema explicativo y guías paso a paso
 
-## 🆕 **Novedades v2.1.5**
+## 🆕 **Novedades v0.1-beta**
 
 ### **🚀 Optimización de Rendimiento**
 - **Eliminación de logs de inicialización**: Reducción significativa de la escritura en logs durante la inicialización del plugin

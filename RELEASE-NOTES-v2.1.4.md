@@ -128,3 +128,5 @@ Gracias por reportar este issue que afectaba la experiencia de usuario. Esta cor
 **🎉 ¡Disfruta de la nueva versión sin formularios duplicados!**
 
 Para más información técnica, consulta el [CHANGELOG.md](./CHANGELOG.md) y la documentación completa.
+
+### **v0.1-beta**
