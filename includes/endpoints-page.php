@@ -191,42 +191,42 @@ if (!function_exists('render_api_endpoints_page')) {
               <h2 id="endpoint-form-title">Añadir nuevo endpoint</h2>
               <form id="endpoint-form" method="post">
                 <?php wp_nonce_field('save_endpoints'); ?>
-                <table class="form-table">
-                  <tr>
+                        <table class="form-table">
+                            <tr>
                     <th><label for="endpoint_name">Nombre del Endpoint</label></th>
                     <td><input type="text" id="endpoint_name" name="endpoint_name" class="regular-text" required></td>
-                  </tr>
-                  <tr>
+                            </tr>
+                            <tr>
                     <th><label for="endpoint_url">URL del Endpoint</label></th>
                     <td><input type="url" id="endpoint_url" name="endpoint_url" class="regular-text" required></td>
-                  </tr>
-                  <tr>
+                            </tr>
+                            <tr>
                     <th><label for="auth_type">Autenticación</label></th>
-                    <td>
+                                <td>
                       <select id="auth_type" name="auth_type">
-                        <option value="none">Sin Autenticación</option>
-                        <option value="token">Bearer Token</option>
-                        <option value="basic">Basic Auth</option>
-                        <option value="api_key">API Key</option>
-                      </select>
-                    </td>
-                  </tr>
+                                        <option value="none">Sin Autenticación</option>
+                                        <option value="token">Bearer Token</option>
+                                        <option value="basic">Basic Auth</option>
+                                        <option value="api_key">API Key</option>
+                                    </select>
+                                </td>
+                            </tr>
                   <tr id="auth-fields-row" style="display:none;">
                     <th><label>Datos de autenticación</label></th>
                     <td id="auth-fields-container"></td>
                   </tr>
-                  <tr>
-                    <th><label>Parámetros Dinámicos</label></th>
-                    <td>
+                            <tr>
+                                <th><label>Parámetros Dinámicos</label></th>
+                                <td>
                       <div id="dynamic-params-container"></div>
                       <button type="button" class="button" id="add-param-btn">Añadir Parámetro</button>
-                    </td>
-                  </tr>
-                </table>
+                                </td>
+                            </tr>
+                        </table>
                 <div style="margin-top: 18px;">
                   <button type="submit" class="button button-primary" id="save-endpoint-btn">Guardar Endpoint</button>
                   <button type="button" class="button" id="cancel-edit-btn" style="display:none;">Cancelar</button>
-                </div>
+                                </div>
               </form>
               <!-- Botones de acción debajo del formulario -->
               <div class="endpoint-actions" style="margin-top: 18px;">
@@ -235,11 +235,11 @@ if (!function_exists('render_api_endpoints_page')) {
                 <button type="button" class="button button-create-tags" id="generate-tags-btn">⚡ Generar Query Type y Tags Dinámicos</button>
                 <button type="button" class="button button-view-tags" id="view-tags-btn" style="display:none;">🏷️ Ver Dynamic Tags</button>
                 <button type="button" class="button button-delete-tags" id="delete-tags-btn" style="display:none;background:#dc3232;color:#fff;">🗑️ Eliminar tags y query type</button>
-              </div>
+                                </div>
               <div id="endpoint-test-result" style="margin-top: 15px;"></div>
               <div id="endpoint-form-message" style="margin-top: 10px;"></div>
-            </div>
-            
+                        </div>
+                        
             <!-- Tabla de endpoints configurados -->
             <h2 style="margin-top: 40px;">Endpoints configurados</h2>
             <table class="wp-list-table widefat fixed striped" id="endpoints-table">
@@ -250,7 +250,7 @@ if (!function_exists('render_api_endpoints_page')) {
                   <th>Autenticación</th>
                   <th>Parámetros</th>
                   <th style="text-align:center;">Acciones</th>
-                </tr>
+                            </tr>
               </thead>
               <tbody>
                 <?php foreach ($endpoints as $index => $endpoint): ?>
@@ -264,16 +264,16 @@ if (!function_exists('render_api_endpoints_page')) {
                       <?php else: ?>
                         <em>—</em>
                       <?php endif; ?>
-                    </td>
+                                </td>
                     <td style="text-align:center;">
                       <button class="button button-small button-edit">Editar</button>
                       <button class="button button-small button-delete">Eliminar</button>
-                    </td>
-                  </tr>
+                                </td>
+                            </tr>
                 <?php endforeach; ?>
               </tbody>
-            </table>
-        </div>
+                        </table>
+                                        </div>
         
         <script>
         jQuery(document).ready(function($) {
@@ -378,7 +378,7 @@ if (!function_exists('render_api_endpoints_page')) {
                     $container.append('<input type="text" class="regular-text" id="api_key" placeholder="API Key"> ' +
                                       '<input type="text" class="regular-text" id="api_key_header" placeholder="Header (X-API-Key)" value="X-API-Key">');
                     $row.show();
-                } else {
+                    } else {
                     $row.hide();
                 }
             });
@@ -386,6 +386,21 @@ if (!function_exists('render_api_endpoints_page')) {
             // --- Guardar/Actualizar endpoint ---
             $('#endpoint-form').submit(function(e){
                 e.preventDefault();
+                // Validación: no permitir parámetros dinámicos sin nombre
+                let hasEmptyParam = false;
+                $('#dynamic-params-container .dynamic-param-row').each(function(){
+                    const name = $(this).find('.param-name').val().trim();
+                    if (!name) {
+                        hasEmptyParam = true;
+                        $(this).find('.param-name').css('border','2px solid #dc3232');
+                    } else {
+                        $(this).find('.param-name').css('border','');
+                    }
+                });
+                if (hasEmptyParam) {
+                    showMessage('No puedes guardar parámetros dinámicos sin nombre. Corrige los campos en rojo.', 'error');
+                    return;
+                }
                 const data = {
                     action: 'save_api_endpoint',
                     nonce: '<?php echo wp_create_nonce('save_api_endpoint'); ?>',
@@ -489,7 +504,7 @@ if (!function_exists('render_api_endpoints_page')) {
                                 }, function(resp2){
                                     if (resp2.success) {
                                         showMessage('Selección de tags guardada.', 'success');
-                                    } else {
+                } else {
                                         showMessage('Error al guardar la selección de tags.', 'error');
                                     }
                                 });
@@ -517,7 +532,7 @@ if (!function_exists('render_api_endpoints_page')) {
                         renderTable();
                         resetForm();
                         showMessage('Endpoint eliminado.', 'success');
-                    } else {
+                            } else {
                         showMessage(resp.data || 'Error al eliminar', 'error');
                     }
                 });
@@ -540,7 +555,7 @@ if (!function_exists('render_api_endpoints_page')) {
                 $.post(ajaxurl, data, function(resp){
                     if (resp.success) {
                         showTestResult(resp.data.html);
-                    } else {
+                                    } else {
                         showTestResult('<span style="color:#a71d2a">'+(resp.data||'Error al probar el endpoint')+'</span>');
                     }
                 });
@@ -573,7 +588,7 @@ if (!function_exists('render_api_endpoints_page')) {
                         const tags = resp.data.tags || [];
                         const example = resp.data.example || {};
                         const exampleJson = resp.data.example_json || '';
-                        let html = '';
+                let html = '';
                         // 1. JSON formateado
                         html += `<div style="margin-bottom:18px;"><strong>📦 Respuesta de la API (primer registro o detalle):</strong><pre style="background:#f8f9fa;padding:10px;border-radius:5px;max-height:300px;overflow:auto;font-size:13px;">${exampleJson}</pre></div>`;
                         // 2. Estructura detectada
@@ -618,12 +633,12 @@ if (!function_exists('render_api_endpoints_page')) {
                             }, function(resp2){
                                 if (resp2.success) {
                                     showMessage('Selección de tags guardada.', 'success');
-                                } else {
+                } else {
                                     showMessage('Error al guardar la selección de tags.', 'error');
                                 }
                             });
-                        });
-                    } else {
+                    });
+                } else {
                         showTestResult('<span style="color:#a71d2a">'+(resp.data||'Error al generar tags')+'</span>');
                     }
                 });
@@ -660,7 +675,7 @@ if (!function_exists('render_api_endpoints_page')) {
                         showMessage('Tags y query type eliminados.', 'success');
                         showTagsButton(false);
                         $('#endpoint-test-result').html('');
-                    } else {
+                } else {
                         showMessage(resp.data || 'Error al eliminar tags y query type.', 'error');
                     }
                 });
@@ -792,7 +807,7 @@ if (!function_exists('render_api_endpoints_page')) {
       saveSingleApiEndpointNonce: '<?php echo wp_create_nonce('save_single_api_endpoint'); ?>'
     };
     </script>
-<?php
+        <?php
     }
 }
 
@@ -800,7 +815,23 @@ if (!function_exists('render_api_endpoints_page')) {
 add_action('wp_ajax_save_api_endpoint', function() {
     check_ajax_referer('save_api_endpoint', 'nonce');
     $endpoints = get_option('bricks_api_endpoints', []);
-    $index = isset($_POST['index']) && $_POST['index'] !== '' ? intval($_POST['index']) : null;
+    $index = isset($_POST['index']) ? intval($_POST['index']) : null;
+    $dynamic_params = [];
+    if (!empty($_POST['dynamic_params']) && is_array($_POST['dynamic_params'])) {
+        foreach ($_POST['dynamic_params'] as $param) {
+            if (!empty($param['name'])) {
+                $dynamic_params[] = [
+                    'name' => sanitize_text_field($param['name']),
+                    'source' => sanitize_text_field($param['source'] ?? 'url'),
+                    'default' => sanitize_text_field($param['default'] ?? '')
+                ];
+            }
+        }
+    }
+    // Si estamos editando y no se envían parámetros, mantener los existentes
+    if ($index !== null && empty($dynamic_params) && isset($endpoints[$index]['dynamic_params'])) {
+        $dynamic_params = $endpoints[$index]['dynamic_params'];
+    }
     $data = [
         'name' => sanitize_text_field($_POST['name'] ?? ''),
         'url' => esc_url_raw($_POST['url'] ?? ''),
@@ -810,19 +841,8 @@ add_action('wp_ajax_save_api_endpoint', function() {
         'basic_password' => trim($_POST['basic_password'] ?? ''),
         'api_key' => sanitize_text_field($_POST['api_key'] ?? ''),
         'api_key_header' => sanitize_text_field($_POST['api_key_header'] ?? 'X-API-Key'),
-        'dynamic_params' => [],
+        'dynamic_params' => $dynamic_params,
     ];
-    if (!empty($_POST['dynamic_params']) && is_array($_POST['dynamic_params'])) {
-        foreach ($_POST['dynamic_params'] as $param) {
-            if (!empty($param['name'])) {
-                $data['dynamic_params'][] = [
-                    'name' => sanitize_text_field($param['name']),
-                    'source' => sanitize_text_field($param['source'] ?? 'url'),
-                    'default' => sanitize_text_field($param['default'] ?? '')
-                ];
-            }
-        }
-    }
     if ($index !== null && isset($endpoints[$index])) {
         $endpoints[$index] = $data;
     } else {

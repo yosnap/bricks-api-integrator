@@ -65,7 +65,7 @@ function render_api_sources_page() {
             <!-- Add New Query Type Form -->
             <div class="api-source-form-container">
                 <h2><?php echo $editing ? esc_html__('Editar Query Type', 'bricks-api-integrator') : esc_html__('Añadir Nuevo Query Type', 'bricks-api-integrator'); ?></h2>
-                <form method="post" action="">
+                <form id="source-form" method="post" action="">
                     <?php wp_nonce_field('bricks_api_source_nonce'); ?>
                     
                     <table class="form-table">
@@ -119,7 +119,7 @@ function render_api_sources_page() {
                                 </div>
                                 
                                 <?php if ($editing && !empty($source_to_edit['endpoint_id'])): ?>
-                                <div class="items-path-filter" style="margin-top: 10px; display: flex; gap: 10px;">
+                                <div class="items-path-filter" style="margin-top: 10px; display: none; gap: 10px;">
                                     <input type="text" id="filter_field" placeholder="<?php esc_attr_e('Campo de filtro (ej: estado)', 'bricks-api-integrator'); ?>" class="regular-text" style="flex: 1;">
                                     <input type="text" id="filter_value" placeholder="<?php esc_attr_e('Valor (ej: true)', 'bricks-api-integrator'); ?>" class="regular-text" style="flex: 1;">
                                 </div>
@@ -195,7 +195,15 @@ function render_api_sources_page() {
                     <p class="submit">
                         <input type="submit" name="submit_api_source" class="button button-primary" value="<?php echo $editing ? esc_attr__('Actualizar Query Type', 'bricks-api-integrator') : esc_attr__('Guardar Query Type', 'bricks-api-integrator'); ?>">
                     </p>
+                    <div class="source-actions" style="display:flex;gap:8px;align-items:center;margin-top:18px;">
+                        <button type="button" class="button button-test-source" id="test-source-btn">🧪 Test Source</button>
+                        <button type="button" class="button button-refresh-source" id="refresh-source-btn">🔄 Actualizar datos</button>
+                        <button type="button" class="button button-create-tags" id="generate-source-tags-btn">⚡ Crear tags y query types dinámicos</button>
+                        <button type="button" class="button button-view-tags" id="view-source-tags-btn" style="display:none;">🏷️ Ver Dynamic Tags</button>
+                        <button type="button" class="button button-delete-tags" id="delete-source-tags-btn" style="display:none;background:#dc3232;color:#fff;">🗑️ Eliminar tags y query type</button>
+                    </div>
                 </form>
+                <div id="source-test-result" style="margin-top:30px;"></div>
             </div>
             
             <!-- Existing Query Types List -->
@@ -251,147 +259,337 @@ function render_api_sources_page() {
             </div>
         <?php endif; ?>
     </div>
-    
+    <?php $bricks_api_source_nonce = wp_create_nonce('bricks_api_source'); ?>
     <script>
-    // Pass nonce to JavaScript
-    var bricksApiPreviewNonce = '<?php echo wp_create_nonce('bricks_api_preview'); ?>';
-    
-    jQuery(document).ready(function($) {
-        // Show/hide pagination fields based on pagination type
-        $('#pagination_type').on('change', function() {
-            var paginationType = $(this).val();
-            if (paginationType === 'none') {
-                $('.pagination-param-row, .per-page-param-row').hide();
-            } else {
-                $('.pagination-param-row, .per-page-param-row').show();
-            }
-        });
-        
-        // Handle dynamic parameters
-        $('#add-param').on('click', function() {
-            var newRow = $('<div class="dynamic-param-row"></div>');
-            newRow.html(
-                '<input type="text" name="param_names[]" placeholder="Nombre del Parámetro (ej. id)" class="regular-text">' +
-                '<select name="param_sources[]">' +
-                '  <option value="url">Parámetro URL</option>' +
-                '  <option value="post">ID del Post</option>' +
-                '  <option value="user">ID del Usuario</option>' +
-                '  <option value="static">Valor Estático</option>' +
-                '</select>' +
-                '<input type="text" name="param_defaults[]" placeholder="Valor por Defecto (opcional)" class="regular-text">' +
-                '<button type="button" class="button remove-param">Eliminar</button>'
+    window.bricksApiSourceNonce = '<?php echo esc_js($bricks_api_source_nonce); ?>';
+    </script>
+    <script>
+    jQuery(document).ready(function($){
+        // --- Parámetros dinámicos ---
+        function addParamRow(name='', source='url', def='') {
+            const row = $(
+                `<div class="dynamic-param-row" style="margin-bottom:6px;display:flex;gap:6px;align-items:center;">
+                    <input type="text" class="regular-text param-name" placeholder="Nombre" value="${name}">
+                    <select class="param-source">
+                        <option value="url" ${source==='url'?'selected':''}>Parámetro URL</option>
+                        <option value="post" ${source==='post'?'selected':''}>ID Post</option>
+                        <option value="user" ${source==='user'?'selected':''}>ID Usuario</option>
+                        <option value="static" ${source==='static'?'selected':''}>Valor Estático</option>
+                    </select>
+                    <input type="text" class="regular-text param-default" placeholder="Valor por defecto" value="${def}">
+                    <button type="button" class="button button-delete-param" style="background:#dc3232;color:#fff;">Eliminar</button>
+                </div>`
             );
-            $('#dynamic-params-container').append(newRow);
-        });
-        
-        // Remove parameter row
-        $(document).on('click', '.remove-param', function() {
-            $(this).closest('.dynamic-param-row').remove();
-        });
-        
-        // Handle Query Type Preview buttons
-        $('.query-type-preview-btn').on('click', function(e) {
-            e.preventDefault();
-            
-            var $btn = $(this);
-            var sourceId = $btn.data('source-id');
-            var sourceName = $btn.data('source-name');
-            
-            // Create query type string for manual source
-            var queryType = 'source_' + sourceName.toLowerCase().replace(/[^a-z0-9]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '');
-            
-            console.log('Preview clicked for:', queryType);
-            
-            // Show loading state
-            $btn.prop('disabled', true).text('⏳ Cargando...');
-            
-            // Make AJAX request
-            $.post(ajaxurl, {
-                action: 'preview_query_type',
-                query_type: queryType,
-                limit: 1,
-                nonce: bricksApiPreviewNonce
-            }, function(response) {
-                if (response.success && response.data.preview_data && response.data.preview_data.length > 0) {
-                    showPreviewModal(response.data, sourceName);
-                } else {
-                    alert('Error: ' + (response.data ? response.data.message : 'No se encontraron datos'));
+            row.find('.button-delete-param').click(function(){ row.remove(); });
+            $('#dynamic-params-container').append(row);
+        }
+        $('#add-param').click(function(){ addParamRow(); });
+        // --- Mostrar/ocultar campos de paginación ---
+        function togglePaginationFields() {
+            const type = $('#pagination_type').val();
+            $('.pagination-param-row').toggle(type !== 'none');
+            $('.per-page-param-row').toggle(type !== 'none');
+        }
+        $('#pagination_type').change(togglePaginationFields);
+        togglePaginationFields();
+        // --- Botones de acción alineados ---
+        $('.source-actions').css({display:'flex',gap:'8px',alignItems:'center'});
+        // --- Mostrar tags y botón eliminar al editar si existen ---
+        function autoShowTagsIfExist() {
+            var sourceId = $('input[name="source_id"]').val() || $('#source_name').val().toLowerCase().replace(/\s+/g,'_');
+            $.post(ajaxurl, {action:'get_source_tags', source_id:sourceId, nonce: window.bricksApiSourceNonce}, function(res){
+                if(res.success && res.data.tags && res.data.tags.length){
+                    $('#view-source-tags-btn').show();
+                    $('#delete-source-tags-btn').show();
+                    // Mostrar tabla avanzada automáticamente
+                    renderTagsTable(res, sourceId);
+            } else {
+                    $('#view-source-tags-btn').hide();
+                    $('#delete-source-tags-btn').hide();
                 }
-            }).fail(function() {
-                alert('Error de conexión al servidor');
-            }).always(function() {
-                // Restore button
-                $btn.prop('disabled', false).text('🔍 Preview');
             });
-        });
-        
-        // Function to show preview modal
-        function showPreviewModal(data, sourceName) {
-            // Remove existing modal
-            $('#query-type-preview-modal').remove();
-            
-            var item = data.preview_data[0];
-            var modalHtml = '<div id="query-type-preview-modal" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 999999; display: flex; align-items: center; justify-content: center;">';
-            modalHtml += '<div style="background: white; border-radius: 8px; max-width: 800px; max-height: 80vh; overflow: auto; box-shadow: 0 10px 30px rgba(0,0,0,0.3);">';
-            modalHtml += '<div style="background: #f8f9fa; padding: 15px 20px; border-bottom: 1px solid #dee2e6; display: flex; justify-content: space-between; align-items: center;">';
-            modalHtml += '<h3 style="margin: 0; color: #343a40;">🔍 Preview: ' + sourceName + '</h3>';
-            modalHtml += '<button onclick="jQuery(this).closest(\'#query-type-preview-modal\').remove()" style="background: #dc3545; color: white; border: none; width: 30px; height: 30px; border-radius: 50%; cursor: pointer;">✕</button>';
-            modalHtml += '</div>';
-            modalHtml += '<div style="padding: 20px;">';
-            modalHtml += '<h4 style="color: #007cba; margin-top: 0;">📊 Primer elemento encontrado:</h4>';
-            modalHtml += '<div style="background: #f8f9fa; border-radius: 6px; padding: 15px;">';
-            
-            // Show item fields
-            Object.keys(item).forEach(function(key) {
-                var value = item[key];
-                var displayValue = '';
-                
-                if (value === null || value === undefined) {
-                    displayValue = '<em style="color: #6c757d;">null</em>';
-                } else if (Array.isArray(value)) {
-                    displayValue = '<span style="color: #17a2b8;">[Array con ' + value.length + ' elementos]</span>';
-                } else if (typeof value === 'object') {
-                    displayValue = '<span style="color: #ffc107;">[Objeto con ' + Object.keys(value).length + ' propiedades]</span>';
-                } else {
-                    var strValue = String(value);
-                    displayValue = strValue.length > 100 ? strValue.substring(0, 97) + '...' : strValue;
+        }
+        // Llamar al cargar si estamos editando
+        if ($('input[name="source_id"]').length) {
+            autoShowTagsIfExist();
+        }
+        // --- Mejorar visualización de tags dinámicos ---
+        function renderTagsTable(res, sourceId) {
+            // Obtener el primer item de ejemplo para las secciones avanzadas
+            $.post(ajaxurl, {action:'preview_source_api', source_id:sourceId, nonce: window.bricksApiSourceNonce}, function(previewRes){
+                var example = {};
+                var exampleJson = '';
+                if(previewRes.success && previewRes.data && previewRes.data.preview){
+                    var preview = previewRes.data.preview;
+                    if(Array.isArray(preview)){
+                        example = preview[0] || {};
+                    } else if(typeof preview === 'object'){
+                        example = preview;
+                    } else if(typeof preview === 'string'){
+                        try { example = JSON.parse(preview); } catch(e) { example = {}; }
+                    }
+                    try { exampleJson = JSON.stringify(example, null, 2); } catch(e) { exampleJson = ''; }
                 }
-                
-                modalHtml += '<div style="display: grid; grid-template-columns: 150px 1fr; gap: 10px; padding: 8px 0; border-bottom: 1px solid #e9ecef;">';
-                modalHtml += '<div style="font-weight: 600; color: #495057; font-size: 13px;">' + key + '</div>';
-                modalHtml += '<div style="font-size: 13px; color: #212529; word-break: break-word;">' + displayValue + '</div>';
-                modalHtml += '</div>';
-            });
-            
-            modalHtml += '</div>';
-            
-            // Show dynamic tags if available
-            if (data.sample_tags && data.sample_tags.length > 0) {
-                modalHtml += '<h4 style="color: #007cba; margin: 20px 0 10px 0;">🏷️ Dynamic Tags disponibles:</h4>';
-                modalHtml += '<div style="background: #e7f3ff; border-radius: 6px; padding: 15px; font-family: monospace; font-size: 12px; line-height: 1.5;">';
-                data.sample_tags.slice(0, 10).forEach(function(tag) {
-                    modalHtml += '<div style="background: white; padding: 4px 8px; margin: 2px 0; border-radius: 3px; cursor: pointer;" onclick="navigator.clipboard.writeText(\'' + tag + '\').then(() => alert(\'Tag copiado: ' + tag + '\'))">' + tag + '</div>';
+                // 1. Respuesta de la API
+                var html = '<div style="margin-bottom:18px;"><strong>📦 Respuesta de la API (primer registro o detalle):</strong><pre style="background:#f8f9fa;padding:10px;border-radius:5px;max-height:300px;overflow:auto;font-size:13px;">'+exampleJson+'</pre></div>';
+                // 2. Estructura detectada (tabla recursiva)
+                function renderStructure(obj, prefix='') {
+                    let rows = '';
+                    Object.entries(obj).forEach(function([key, value]){
+                        let tipo = Array.isArray(value) ? 'Array' : typeof value;
+                        let valEjemplo = (typeof value === 'object' && value !== null)
+                            ? JSON.stringify(value, null, 2)
+                            : value;
+                        let fullKey = prefix ? prefix+'.'+key : key;
+                        rows += '<tr><td style="padding:6px 8px;border:1px solid #e3e3e3;">'+fullKey+'</td><td style="padding:6px 8px;border:1px solid #e3e3e3;">'+tipo+'</td><td style="padding:6px 8px;border:1px solid #e3e3e3;font-family:monospace;">'+valEjemplo+'</td></tr>';
+                        if(typeof value === 'object' && value !== null && !Array.isArray(value)){
+                            rows += renderStructure(value, fullKey);
+                        }
+                    });
+                    return rows;
+                }
+                html += '<div style="margin-bottom:18px;"><strong>🧩 Estructura detectada:</strong><table style="width:100%;border-collapse:collapse;font-size:13px;background:#fff;"><thead><tr style="background:#e7f3ff;"><th style="padding:6px 8px;border:1px solid #e3e3e3;">Campo</th><th style="padding:6px 8px;border:1px solid #e3e3e3;">Tipo</th><th style="padding:6px 8px;border:1px solid #e3e3e3;">Valor de ejemplo</th></tr></thead><tbody>';
+                if(example && typeof example === 'object' && Object.keys(example).length){
+                    html += renderStructure(example);
+                } else {
+                    html += '<tr><td colspan="3" style="text-align:center;">Sin datos de ejemplo</td></tr>';
+                }
+                html += '</tbody></table></div>';
+                // 3. Tags dinámicos generados
+                html += '<div style="margin-bottom:18px;"><strong>🏷️ Tags dinámicos generados:</strong><form id="tags-enable-form"><div style="display:grid;gap:8px;margin-top:10px;">';
+                res.data.tags.forEach(function(tagObj, idx){
+                    var tag = tagObj.tag;
+                    var exampleVal = tagObj.example;
+                    var checked = res.data.disabled_tags.includes(tag) ? '' : 'checked';
+                    var tagStr = '{' + tag + '}';
+                    var safeId = 'tag-enable-' + idx;
+                    html += '<div class="dynamic-tag-item" style="display:flex;align-items:center;gap:10px;background:#f8f9fa;padding:8px 12px;border-radius:5px;">';
+                    html += '<input type="checkbox" id="'+safeId+'" class="tag-enable-checkbox" data-tag="'+tag+'" '+checked+' style="margin-right:6px;">';
+                    html += '<label for="'+safeId+'" style="margin:0;cursor:pointer;">';
+                    html += '<code class="dynamic-tag" style="font-size:14px;color:#e67e22;font-weight:bold;">'+tagStr+'</code>';
+                    html += '</label>';
+                    html += '<button type="button" class="button button-small copy-tag-btn" data-copy="'+tagStr+'" style="margin-left:10px;">Copiar tag</button>';
+                    html += '<span class="arrow" style="color:#888;">→</span>';
+                    html += '<span class="dynamic-tag-value" style="font-family:monospace;background:#fff;padding:2px 6px;border-radius:3px;">'+(exampleVal||'')+'</span>';
+                    html += '<button type="button" class="button button-small copy-val-btn" data-copy="'+(exampleVal||'')+'" style="margin-left:10px;">Copiar valor</button>';
+                    html += '</div>';
                 });
-                modalHtml += '</div>';
-                modalHtml += '<p style="font-size: 12px; color: #6c757d; margin: 10px 0 0 0;">💡 Haz clic en cualquier tag para copiarlo</p>';
+                html += '</div></form></div>';
+                $('#source-test-result').html(html);
+                // --- Guardar selección de tags habilitados ---
+                $('#tags-enable-form').off('submit').on('submit', function(e){
+            e.preventDefault();
+                    const enabledTags = [];
+                    $('.tag-enable-checkbox:checked').each(function(){
+                        enabledTags.push($(this).data('tag'));
+                    });
+            $.post(ajaxurl, {
+                        action: 'save_enabled_tags_for_source',
+                        nonce: window.bricksApiSourceNonce,
+                        source_id: sourceId,
+                        enabled_tags: enabledTags
+                    }, function(resp2){
+                        if (resp2.success) {
+                            alert('Selección de tags guardada.');
+                } else {
+                            alert('Error al guardar la selección de tags.');
+                }
+            });
+        });
+            });
+        }
+        // --- Ocultar botón crear tags al crear nuevo Source ---
+        if (!$('input[name="source_id"]').length) {
+            $('#generate-source-tags-btn').hide();
+        }
+        $('#view-source-tags-btn').off('click').on('click', function(){
+          var sourceId = $('input[name="source_id"]').val() || $('#source_name').val().toLowerCase().replace(/\s+/g,'_');
+          renderAdvancedSections(sourceId);
+        });
+        // --- Copiar al portapapeles ---
+        $(document).on('click','.copy-tag-btn',function(){
+            var val = $(this).data('copy');
+            navigator.clipboard.writeText(val);
+            $(this).text('¡Copiado!');
+            var btn = $(this);
+            setTimeout(function(){ btn.text('Copiar tag'); }, 1200);
+        });
+        $(document).on('click','.copy-val-btn',function(){
+            var val = $(this).data('copy');
+            navigator.clipboard.writeText(val);
+            $(this).text('¡Copiado!');
+            var btn = $(this);
+            setTimeout(function(){ btn.text('Copiar valor'); }, 1200);
+        });
+        // --- Toggle habilitar/deshabilitar tag ---
+        $('#source-test-result').on('change','.toggle-tag',function(){
+            var sourceId = $('input[name="source_id"]').val() || $('#source_name').val().toLowerCase().replace(/\s+/g,'_');
+            var tag = $(this).data('tag');
+            var enabled = $(this).is(':checked');
+            $.post(ajaxurl, {action:'toggle_source_tag', source_id:sourceId, tag:tag, enabled:enabled, nonce: window.bricksApiSourceNonce}, function(res){
+                if(!res.success){
+                    alert('Error: '+res.data);
+                }
+            });
+        });
+        // --- Botón eliminar tags y source ---
+        $('#delete-source-tags-btn').click(function(){
+            if(!confirm('¿Seguro que quieres eliminar los tags y el query type?')) return;
+            var sourceId = $('input[name="source_id"]').val() || $('#source_name').val().toLowerCase().replace(/\s+/g,'_');
+            $.post(ajaxurl, {action:'delete_source_and_tags', source_id:sourceId, nonce: window.bricksApiSourceNonce}, function(res){
+                if(res.success){
+                    alert('Source y tags eliminados');
+                    location.reload();
+                }else{
+                    alert('Error: '+res.data);
+                }
+            });
+        });
+        // --- Botón Test Source ---
+        function getSourceFormData() {
+            const endpoint_id = $('#endpoint_id').val();
+            const items_path = $('#items_path').val();
+            const field_prefix = $('#field_prefix').val();
+            const pagination_type = $('#pagination_type').val();
+            const pagination_param = $('#pagination_param').val();
+            const per_page_param = $('#per_page_param').val();
+            // Parámetros dinámicos como arrays
+            const param_names = [];
+            const param_sources = [];
+            const param_defaults = [];
+            $('#dynamic-params-container .dynamic-param-row').each(function(){
+                const name = $(this).find('input, [name^="param_names"]').val();
+                const source = $(this).find('select, [name^="param_sources"]').val();
+                const def = $(this).find('input.param-default, [name^="param_defaults"]').val();
+                if(name) {
+                    param_names.push(name);
+                    param_sources.push(source);
+                    param_defaults.push(def);
+                }
+            });
+            return {
+                endpoint_id,
+                items_path,
+                field_prefix,
+                pagination_type,
+                pagination_param,
+                per_page_param,
+                param_names,
+                param_sources,
+                param_defaults,
+                nonce: window.bricksApiSourceNonce
+            };
+        }
+        $('#test-source-btn, #refresh-source-btn').click(function(){
+            const isRefresh = $(this).attr('id') === 'refresh-source-btn';
+            const data = getSourceFormData();
+            if(!data.endpoint_id){
+                $('#source-test-result').html('<span style="color:#c00">Selecciona un endpoint antes de testear.</span>');
+                return;
             }
-            
-            modalHtml += '</div></div></div>';
-            
-            $('body').append(modalHtml);
+            $('#source-test-result').html(isRefresh ? '<em>Actualizando datos...</em>' : '<em>Consultando API...</em>');
+            console.log('Test/Refresh AJAX nonce:', window.bricksApiSourceNonce);
+            $.post(ajaxurl, {
+                action: 'test_source_api_live',
+                ...data,
+                force_refresh: isRefresh ? 1 : 0
+            }, function(res){
+                if(res.success){
+                    var html = '<div style="background:#f8f9fa;padding:12px;border-radius:6px;margin-top:10px;">';
+                    html += '<b>Respuesta de la API'+(isRefresh?' (actualizada)':'')+':</b><br><pre style="max-height:300px;overflow:auto;">'+res.data.preview+'</pre>';
+                    if(res.data.fields && res.data.fields.length){
+                        html += '<b>Campos detectados:</b> '+res.data.fields.join(', ');
+                    }
+                    html += '</div>';
+                    $('#source-test-result').html(html);
+                }else{
+                    $('#source-test-result').html('<span style="color:#c00">'+res.data+'</span>');
+                }
+            });
+        });
+        // --- Modal Preview centrado y cierre robusto ---
+        if($('#bricks-source-preview-modal').length === 0){
+            $('body').append('<div id="bricks-source-preview-modal" style="display:none;position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.45);z-index:9999;display:flex;align-items:center;justify-content:center;"><div style="background:#fff;padding:28px 24px 18px 24px;border-radius:10px;max-width:600px;max-height:80vh;overflow:auto;position:relative;"><button id="close-source-preview-modal" style="position:absolute;top:10px;right:10px;font-size:18px;background:none;border:none;cursor:pointer;">✖</button><div id="bricks-source-preview-content"></div></div></div>');
         }
-        
-        // Check if we need to redirect after saving
-        <?php 
-        $redirect_after_save = get_option('bricks_api_redirect_after_save', false);
-        if ($redirect_after_save) {
-            // Clear the flag
-            delete_option('bricks_api_redirect_after_save');
-            echo "window.location.href = '" . admin_url('admin.php?page=bricks-api-integrator-sources') . "';";
+        // Siempre ocultar el modal al cargar la página
+        $('#bricks-source-preview-modal').hide();
+        // Mostrar modal solo si hay contenido
+        function showSourcePreviewModal(contentHtml) {
+            $('#bricks-source-preview-content').html(contentHtml);
+            $('#bricks-source-preview-modal').fadeIn(120);
         }
-        ?>
+        // Cerrar modal y limpiar contenido
+        function closeSourcePreviewModal() {
+            $('#bricks-source-preview-modal').fadeOut(120, function(){
+                $('#bricks-source-preview-content').html('');
+            });
+        }
+        $(document).on('click','#close-source-preview-modal',function(){
+            closeSourcePreviewModal();
+        });
+        // Cerrar modal al hacer click fuera del contenido
+        $(document).on('mousedown',function(e){
+            var $modal = $('#bricks-source-preview-modal');
+            if($modal.is(':visible')){
+                var $content = $modal.find('>div');
+                if(!$content.is(e.target) && $content.has(e.target).length === 0){
+                    closeSourcePreviewModal();
+                }
+            }
+        });
+        // Usar showSourcePreviewModal en vez de fadeIn directo
+        $(document).on('click','.query-type-preview-btn',function(){
+            var sourceId = $(this).data('source-id');
+            var sourceName = $(this).data('source-name');
+            showSourcePreviewModal('<em>Consultando API...</em>');
+            console.log('Preview AJAX nonce:', window.bricksApiSourceNonce);
+            $.post(ajaxurl, {action:'preview_source_api', source_id:sourceId, nonce: window.bricksApiSourceNonce}, function(res){
+                if(res.success){
+                    var html = '<h3 style="margin-top:0">Preview: '+sourceName+'</h3>';
+                    html += '<div style="background:#f8f9fa;padding:12px;border-radius:6px;margin-top:10px;">';
+                    html += '<b>Primer item:</b><br><pre style="max-height:300px;overflow:auto;">'+JSON.stringify(res.data.preview, null, 2)+'</pre>';
+                    if(res.data.fields && res.data.fields.length){
+                        html += '<b>Campos detectados:</b> '+res.data.fields.join(', ');
+                    }
+                    html += '</div>';
+                    showSourcePreviewModal(html);
+                }else{
+                    showSourcePreviewModal('<span style="color:#c00">'+res.data+'</span>');
+                }
+            });
+        });
+        // --- Botón crear tags dinámicos ---
+        $('#generate-source-tags-btn').off('click').on('click', function(){
+            var sourceId = $('input[name="source_id"]').val() || $('#source_name').val().toLowerCase().replace(/\s+/g,'_');
+            $('#generate-source-tags-btn').prop('disabled', true).text('Generando...');
+            $.post(ajaxurl, {action:'generate_source_tags', source_id:sourceId, nonce: window.bricksApiSourceNonce}, function(res){
+                $('#generate-source-tags-btn').prop('disabled', false).text('⚡ Crear tags y query types dinámicos');
+                if(res.success){
+                    alert('Tags generados correctamente');
+                    $('#view-source-tags-btn').show();
+                    $('#delete-source-tags-btn').show();
+                    // Mostrar tabla avanzada automáticamente
+                    autoShowTagsIfExist();
+                }else{
+                    alert('Error: '+res.data);
+                }
+            });
+        });
     });
     </script>
+    <style>
+    .button-create-tags { background: #ff9800 !important; color: #fff !important; border: none; }
+    .button-create-tags:hover { background: #e65100 !important; }
+    .button-view-tags { background: #00b894 !important; color: #fff !important; border: none; }
+    .button-view-tags:hover { background: #008c6e !important; }
+    .button-delete-tags { background: #dc3232 !important; color: #fff !important; border: none; }
+    .button-delete-tags:hover { background: #a71d2a !important; }
+    .button-test-source { background: #fff !important; color: #27ae60 !important; border: 1px solid #27ae60 !important; }
+    .button-test-source:hover { background: #e9fbe5 !important; }
+    .button-refresh-source { background: #fff !important; color: #2980b9 !important; border: 1px solid #2980b9 !important; }
+    .button-refresh-source:hover { background: #eaf6fb !important; }
+    .source-actions { display: flex; gap: 8px; align-items: center; margin-top: 18px; }
+    </style>
     <?php
 }
 
@@ -403,7 +601,7 @@ function save_api_source() {
     $source_name = sanitize_text_field($_POST['source_name']);
     $endpoint_id = sanitize_text_field($_POST['endpoint_id']);
     $field_prefix = sanitize_text_field($_POST['field_prefix']);
-    $items_path = sanitize_text_field($_POST['items_path']);
+    $items_path = sanitize_text_field($_POST['items_path'] ?? '');
     $pagination_type = sanitize_text_field($_POST['pagination_type']);
     $pagination_param = sanitize_text_field($_POST['pagination_param'] ?? '');
     $per_page_param = sanitize_text_field($_POST['per_page_param'] ?? '');
@@ -424,6 +622,10 @@ function save_api_source() {
                 ];
             }
         }
+    }
+    // Si estamos editando y no se envían parámetros, mantener los existentes
+    if ($editing && empty($dynamic_params) && isset($api_sources[$source_id]['dynamic_params'])) {
+        $dynamic_params = $api_sources[$source_id]['dynamic_params'];
     }
     
     // Get existing sources
@@ -902,9 +1104,6 @@ function register_api_source_query_class() {
                 $page = isset($query_args['page']) ? intval($query_args['page']) : 1;
             }
             
-            // Build request URL with pagination parameters
-            $request_url = $endpoint_url;
-            
             // Process dynamic parameters from source configuration
             $dynamic_params = isset($source['dynamic_params']) ? $source['dynamic_params'] : [];
             if (!empty($dynamic_params)) {
@@ -1012,6 +1211,38 @@ function register_api_source_query_class() {
             error_log('Source ID: ' . $source_id);
             error_log('Source Config: ' . print_r($source, true));
             error_log('Query Args: ' . print_r($query_args, true));
+            
+            // --- NUEVO: Construcción de URL dinámica y paginación centralizada ---
+            if (!trait_exists('APIManager')) {
+                require_once __DIR__ . '/api-manager.php';
+            }
+            // Instanciar trait (usando $this si la clase lo usa, si no, crear helper temporal)
+            $api_manager = $this;
+            // Preparar overrides desde query_args
+            $overrides = [];
+            if (isset($query_args['dynamic_params']) && is_array($query_args['dynamic_params'])) {
+                foreach ($query_args['dynamic_params'] as $param) {
+                    if (isset($param['param_name']) && isset($param['param_value'])) {
+                        $overrides[$param['param_name']] = $param['param_value'];
+                    }
+                }
+            }
+            // Configuración de paginación
+            $pagination_config = [
+                'type' => $pagination_type,
+                'param' => $pagination_param,
+                'per_page_param' => $per_page_param,
+                'page' => $page,
+                'per_page' => $items_per_page
+            ];
+            // Construir la URL final
+            $request_url = $api_manager->build_dynamic_api_url(
+                $endpoint_url,
+                $dynamic_params,
+                $pagination_config,
+                $overrides
+            );
+            // --- FIN NUEVO ---
             
             // Make the API request
             $response = wp_remote_get($request_url, $args);
@@ -1299,3 +1530,461 @@ function get_api_source_sample_data($results, $query_obj) {
         'items' => $items,
     ];
 }
+
+// === FORMULARIO DE SOURCES AVANZADO ===
+function render_sources_page() {
+    $endpoints = get_option('bricks_api_endpoints', []);
+    ?>
+    <div class="wrap">
+        <h1>🔗 API Sources</h1>
+        <p>Gestiona tus fuentes de datos avanzadas para Bricks Builder. Los Query Types y Dynamic Tags se generan automáticamente.</p>
+        <style>
+        .source-form-container {
+          background: none;
+          border: none;
+          border-radius: 0;
+          padding: 0;
+          margin-bottom: 32px;
+          box-shadow: none;
+          max-width: 100%;
+        }
+        #source-form-title {
+          margin-top: 0;
+          margin-bottom: 18px;
+          color: #222;
+          font-size: 1.3em;
+          font-weight: 600;
+        }
+        #source-form {
+          width: 100%;
+          max-width: 100%;
+        }
+        .form-table {
+          width: 100%;
+          max-width: 100%;
+          background: none;
+          border: none;
+        }
+        .form-table th, .form-table td {
+          padding: 8px 6px;
+          vertical-align: middle;
+          border: none;
+        }
+        #dynamic-params-container {
+          margin-bottom: 8px;
+        }
+        .source-actions {
+          margin-top: 18px;
+          display: flex;
+          gap: 8px;
+          flex-wrap: wrap;
+          align-items: center;
+        }
+        #source-test-result, #source-form-message {
+          margin-top: 15px;
+          max-width: 100%;
+        }
+        #sources-table {
+          background: #fff;
+          border-radius: 8px;
+          overflow: hidden;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.03);
+          max-width: 100%;
+          width: 100%;
+        }
+        #sources-table th, #sources-table td {
+          padding: 12px 10px;
+          vertical-align: middle;
+        }
+        #sources-table th {
+          background: #f8f9fa;
+          color: #333;
+          font-weight: 600;
+          border-bottom: 2px solid #e5e5e5;
+        }
+        #sources-table tr {
+          border-bottom: 1px solid #f0f0f0;
+        }
+        #sources-table tr:last-child {
+          border-bottom: none;
+        }
+        .button-edit {
+          background: #0073aa !important;
+          color: #fff !important;
+          border: none;
+          margin-right: 4px;
+        }
+        .button-edit:hover {
+          background: #005177 !important;
+        }
+        .button-delete {
+          background: #dc3232 !important;
+          color: #fff !important;
+          border: none;
+          margin-right: 4px;
+        }
+        .button-delete:hover {
+          background: #a71d2a !important;
+        }
+        .button-create-tags {
+          background: #ff9800 !important;
+          color: #fff !important;
+          border: none;
+          margin-right: 4px;
+        }
+        .button-create-tags:hover {
+          background: #e65100 !important;
+        }
+        .button-view-tags {
+          background: #00b894 !important;
+          color: #fff !important;
+          border: none;
+        }
+        .button-view-tags:hover {
+          background: #008c6e !important;
+        }
+        #add-param-btn {
+          margin-top: 8px;
+        }
+        #source-form-message.success {
+          background: #e9fbe5;
+          color: #256029;
+          border: 1px solid #b6e2b3;
+        }
+        #source-form-message.error {
+          background: #ffeaea;
+          color: #a71d2a;
+          border: 1px solid #f5c6cb;
+        }
+        </style>
+        <!-- Formulario de alta/edición de Source -->
+        <div class="source-form-container">
+          <h2 id="source-form-title">Añadir nuevo Source</h2>
+          <form id="source-form" method="post">
+            <table class="form-table">
+              <tr>
+                <th><label for="source_name">Nombre del Source</label></th>
+                <td><input type="text" id="source_name" name="source_name" class="regular-text" required></td>
+              </tr>
+              <tr>
+                <th><label for="source_endpoint">Endpoint principal</label></th>
+                <td><input type="text" id="source_endpoint" name="source_endpoint" class="regular-text" required></td>
+              </tr>
+              <tr>
+                <th><label>Parámetros Dinámicos</label></th>
+                <td>
+                  <div id="dynamic-params-container"></div>
+                  <button type="button" class="button" id="add-param-btn">Añadir Parámetro</button>
+                </td>
+              </tr>
+            </table>
+            <div style="margin-top: 18px;">
+              <button type="submit" class="button button-primary" id="save-source-btn">Guardar Source</button>
+              <button type="button" class="button" id="cancel-edit-btn" style="display:none;">Cancelar</button>
+            </div>
+          </form>
+          <!-- Botones de acción debajo del formulario -->
+          <div class="source-actions" style="margin-top: 18px;">
+            <button type="button" class="button button-secondary" id="test-source-btn">🧪 Test Source</button>
+            <button type="button" class="button button-success" id="refresh-source-btn">🔄 Actualizar Datos</button>
+            <button type="button" class="button button-create-tags" id="generate-tags-btn">⚡ Generar Query Type y Tags Dinámicos</button>
+            <button type="button" class="button button-view-tags" id="view-tags-btn" style="display:none;">🏷️ Ver Dynamic Tags</button>
+            <button type="button" class="button button-delete-tags" id="delete-tags-btn" style="display:none;background:#dc3232;color:#fff;">🗑️ Eliminar tags y query type</button>
+          </div>
+          <div id="source-test-result" style="margin-top: 15px;"></div>
+          <div id="source-form-message" style="margin-top: 10px;"></div>
+        </div>
+        <!-- Tabla de Sources configurados -->
+        <h2 style="margin-top: 40px;">Sources configurados</h2>
+        <table class="wp-list-table widefat fixed striped" id="sources-table">
+          <thead>
+            <tr>
+              <th>Nombre</th>
+              <th>Endpoint</th>
+              <th>Parámetros</th>
+              <th style="text-align:center;">Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            <!-- Aquí se poblarán los Sources vía JS -->
+          </tbody>
+        </table>
+    </div>
+    <?php
+}
+
+// --- AJAX para guardar Source ---
+add_action('wp_ajax_save_api_source', function() {
+    check_ajax_referer('save_api_source', 'nonce');
+    require_once __DIR__ . '/field-extractor.php';
+    $name = sanitize_text_field($_POST['name'] ?? '');
+    $slug = bricks_api_normalize_slug($name);
+    $endpoint = sanitize_text_field($_POST['endpoint'] ?? '');
+    $items_path = sanitize_text_field($_POST['items_path'] ?? '');
+    $params = $_POST['dynamic_params'] ?? [];
+    $related = $_POST['related_endpoints'] ?? [];
+    if (!$name || !$endpoint) {
+        wp_send_json_error('Nombre y endpoint principal son obligatorios.');
+    }
+    $sources = get_option('bricks_api_sources', []);
+    $sources[$slug] = [
+        'name' => $name,
+        'endpoint' => $endpoint,
+        'items_path' => $items_path,
+        'dynamic_params' => $params,
+        'related_endpoints' => $related
+    ];
+    update_option('bricks_api_sources', $sources);
+    wp_send_json_success(['sources' => $sources]);
+});
+
+// --- LÓGICA AJAX PARA TAGS DINÁMICOS DE SOURCES ---
+add_action('wp_ajax_generate_source_tags', function() {
+    if (!current_user_can('manage_options')) {
+        wp_send_json_error('No autorizado');
+    }
+    $source_id = sanitize_text_field($_POST['source_id'] ?? '');
+    $sources = get_option('bricks_api_sources', []);
+    if (empty($source_id) || !isset($sources[$source_id])) {
+        wp_send_json_error('Source no encontrado');
+    }
+    $source = $sources[$source_id];
+    // --- Generación real de tags dinámicos con valores de ejemplo ---
+    if (!trait_exists('APIManager')) {
+        require_once __DIR__ . '/api-manager.php';
+    }
+    $api_manager = new class { public static $api_cache = []; use APIManager; };
+    $items = $api_manager->get_api_data_by_source_id($source_id);
+    if (empty($items) || !is_array($items)) {
+        wp_send_json_error('No se pudo obtener datos de la API o el array de items está vacío.');
+    }
+    $first_item = is_array($items) && isset($items[0]) && is_array($items[0]) ? $items[0] : (is_array($items) ? $items : []);
+    if (empty($first_item) || !is_array($first_item)) {
+        wp_send_json_error('No se pudo extraer ningún campo del primer item de la API.');
+    }
+    // Recursivo: extraer todos los paths y valores
+    function extract_tags_with_examples($item, $prefix = '') {
+        $tags = [];
+        foreach ($item as $key => $value) {
+            $path = $prefix ? $prefix . '.' . $key : $key;
+            if (is_array($value) && !empty($value) && array_keys($value) !== range(0, count($value) - 1)) {
+                // Es un objeto asociativo
+                $tags = array_merge($tags, extract_tags_with_examples($value, $path));
+            } else if (is_array($value) && !empty($value)) {
+                // Es un array indexado, tomar el primer item si es objeto
+                if (is_array($value[0] ?? null)) {
+                    $tags = array_merge($tags, extract_tags_with_examples($value[0], $path . '[0]'));
+                } else {
+                    $tags[] = ['tag' => $path, 'example' => json_encode($value)];
+                }
+            } else {
+                $tags[] = ['tag' => $path, 'example' => is_scalar($value) ? $value : json_encode($value)];
+            }
+        }
+        return $tags;
+    }
+    $tags_with_examples = extract_tags_with_examples($first_item);
+    $source['tags'] = $tags_with_examples;
+    $source['disabled_tags'] = $source['disabled_tags'] ?? [];
+    $sources[$source_id] = $source;
+    update_option('bricks_api_sources', $sources);
+    wp_send_json_success(['tags' => $tags_with_examples, 'disabled_tags' => $source['disabled_tags']]);
+});
+add_action('wp_ajax_get_source_tags', function() {
+    if (!current_user_can('manage_options')) {
+        wp_send_json_error('No autorizado');
+    }
+    $source_id = sanitize_text_field($_POST['source_id'] ?? '');
+    $sources = get_option('bricks_api_sources', []);
+    if (empty($source_id) || !isset($sources[$source_id])) {
+        wp_send_json_error('Source no encontrado');
+    }
+    $source = $sources[$source_id];
+    $tags = $source['tags'] ?? [];
+    $disabled = $source['disabled_tags'] ?? [];
+    wp_send_json_success(['tags' => $tags, 'disabled_tags' => $disabled]);
+});
+add_action('wp_ajax_toggle_source_tag', function() {
+    if (!current_user_can('manage_options')) {
+        wp_send_json_error('No autorizado');
+    }
+    $source_id = sanitize_text_field($_POST['source_id'] ?? '');
+    $tag = sanitize_text_field($_POST['tag'] ?? '');
+    $enabled = $_POST['enabled'] === 'true';
+    $sources = get_option('bricks_api_sources', []);
+    if (empty($source_id) || !isset($sources[$source_id])) {
+        wp_send_json_error('Source no encontrado');
+    }
+    $source = $sources[$source_id];
+    $disabled = $source['disabled_tags'] ?? [];
+    if ($enabled) {
+        $disabled = array_diff($disabled, [$tag]);
+    } else {
+        if (!in_array($tag, $disabled)) $disabled[] = $tag;
+    }
+    $source['disabled_tags'] = array_values($disabled);
+    $sources[$source_id] = $source;
+    update_option('bricks_api_sources', $sources);
+    wp_send_json_success(['disabled_tags' => $source['disabled_tags']]);
+});
+add_action('wp_ajax_delete_source_and_tags', function() {
+    if (!current_user_can('manage_options')) {
+        wp_send_json_error('No autorizado');
+    }
+    $source_id = sanitize_text_field($_POST['source_id'] ?? '');
+    $sources = get_option('bricks_api_sources', []);
+    if (empty($source_id) || !isset($sources[$source_id])) {
+        wp_send_json_error('Source no encontrado');
+    }
+    unset($sources[$source_id]);
+    update_option('bricks_api_sources', $sources);
+    wp_send_json_success();
+});
+
+// --- LÓGICA AJAX PARA TEST Y REFRESH DE SOURCE ---
+add_action('wp_ajax_test_source_api', function() {
+    if (!current_user_can('manage_options')) {
+        wp_send_json_error('No autorizado');
+    }
+    $source_id = sanitize_text_field($_POST['source_id'] ?? '');
+    $force_refresh = !empty($_POST['force_refresh']);
+    $sources = get_option('bricks_api_sources', []);
+    if (empty($source_id) || !isset($sources[$source_id])) {
+        wp_send_json_error('Source no encontrado');
+    }
+    $source = $sources[$source_id];
+    if (!trait_exists('APIManager')) {
+        require_once __DIR__ . '/api-manager.php';
+    }
+    $api_manager = new class { public static $api_cache = []; use APIManager; };
+    $items = $api_manager->get_api_data_by_source_id($source_id);
+    if ($force_refresh) {
+        // Forzar refresh de caché
+        $endpoints = get_option('bricks_api_endpoints', []);
+        $endpoint_id = $source['endpoint_id'] ?? '';
+        $endpoint = $endpoints[$endpoint_id] ?? [];
+        $url = $endpoint['url'] ?? '';
+        $api_manager->get_api_data_with_cache($url, $endpoint, true); // true = forzar refresh
+        $items = $api_manager->get_api_data_by_source_id($source_id); // Recargar
+    }
+    if (empty($items) || !is_array($items)) {
+        wp_send_json_error('No se pudo obtener datos de la API o el array de items está vacío.');
+    }
+    $first_item = is_array($items) && isset($items[0]) && is_array($items[0]) ? $items[0] : (is_array($items) ? $items : []);
+    $fields = is_array($first_item) ? array_keys($first_item) : [];
+    $preview = esc_html(print_r($first_item, true));
+    wp_send_json_success(['fields' => $fields, 'preview' => $preview]);
+});
+
+// --- LÓGICA AJAX PARA TEST Y REFRESH DE SOURCE EN VIVO ---
+add_action('wp_ajax_test_source_api_live', function() {
+    if (!current_user_can('manage_options')) {
+        wp_send_json_error('No autorizado');
+    }
+    if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'bricks_api_source')) {
+        error_log('Nonce inválido en test_source_api_live: '.print_r($_POST['nonce'],true));
+        wp_send_json_error('Nonce inválido.');
+    }
+    $endpoint_id = sanitize_text_field($_POST['endpoint_id'] ?? '');
+    $items_path = sanitize_text_field($_POST['items_path'] ?? '');
+    $field_prefix = sanitize_text_field($_POST['field_prefix'] ?? '');
+    $pagination_type = sanitize_text_field($_POST['pagination_type'] ?? 'none');
+    $pagination_param = sanitize_text_field($_POST['pagination_param'] ?? '');
+    $per_page_param = sanitize_text_field($_POST['per_page_param'] ?? '');
+    // Procesar parámetros dinámicos como arrays
+    $param_names = isset($_POST['param_names']) ? (array)$_POST['param_names'] : [];
+    $param_sources = isset($_POST['param_sources']) ? (array)$_POST['param_sources'] : [];
+    $param_defaults = isset($_POST['param_defaults']) ? (array)$_POST['param_defaults'] : [];
+    $dynamic_params = [];
+    foreach ($param_names as $i => $name) {
+        if (!empty($name)) {
+            $dynamic_params[] = [
+                'name' => $name,
+                'source' => $param_sources[$i] ?? 'url',
+                'default' => $param_defaults[$i] ?? ''
+            ];
+        }
+    }
+    $force_refresh = !empty($_POST['force_refresh']);
+    $endpoints = get_option('bricks_api_endpoints', []);
+    if(!$endpoint_id || !isset($endpoints[$endpoint_id])){
+        wp_send_json_error('Endpoint no encontrado.');
+    }
+    $endpoint = $endpoints[$endpoint_id];
+    if (!trait_exists('APIManager')) {
+        require_once __DIR__ . '/api-manager.php';
+    }
+    $api_manager = new class { public static $api_cache = []; use APIManager; };
+    // Construir la URL dinámica
+    $pagination_config = [
+        'type' => $pagination_type,
+        'param' => $pagination_param,
+        'per_page_param' => $per_page_param,
+        'page' => 1,
+        'per_page' => 10
+    ];
+    $url = $api_manager->build_dynamic_api_url($endpoint['url'], $dynamic_params, $pagination_config, []);
+    // Forzar refresh de caché si se solicita
+    if($force_refresh){
+        $api_manager->get_api_data_with_cache($url, $endpoint, true);
+    }
+    $items = $api_manager->get_api_data_with_cache($url, $endpoint, false);
+    // Procesar items_path
+    if(!empty($items_path) && is_array($items)){
+        $path_parts = explode('.', $items_path);
+        foreach($path_parts as $part){
+            if(isset($items[$part])){
+                $items = $items[$part];
+            }else{
+                wp_send_json_error('Items path "'.$items_path.'" no encontrado en la respuesta.');
+            }
+        }
+    }
+    if(empty($items) || !is_array($items)){
+        wp_send_json_error('La API no devolvió datos o el array de items está vacío.');
+    }
+    $first_item = is_array($items) && isset($items[0]) && is_array($items[0]) ? $items[0] : (is_array($items) ? $items : []);
+    $fields = is_array($first_item) ? array_keys($first_item) : [];
+    $preview = esc_html(print_r($first_item, true));
+    wp_send_json_success(['fields' => $fields, 'preview' => $preview]);
+});
+
+// --- LÓGICA AJAX PARA PREVIEW DE SOURCE ---
+add_action('wp_ajax_preview_source_api', function() {
+    if (!current_user_can('manage_options')) {
+        wp_send_json_error('No autorizado');
+    }
+    if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'bricks_api_source')) {
+        error_log('Nonce inválido en preview_source_api: '.print_r($_POST['nonce'],true));
+        wp_send_json_error('Nonce inválido.');
+    }
+    $source_id = sanitize_text_field($_POST['source_id'] ?? '');
+    $sources = get_option('bricks_api_sources', []);
+    if (empty($source_id) || !isset($sources[$source_id])) {
+        wp_send_json_error('Source no encontrado');
+    }
+    $source = $sources[$source_id];
+    if (!trait_exists('APIManager')) {
+        require_once __DIR__ . '/api-manager.php';
+    }
+    $api_manager = new class { public static $api_cache = []; use APIManager; };
+    $items = $api_manager->get_api_data_by_source_id($source_id);
+    // Procesar items_path igual que en Endpoints
+    if (!empty($source['items_path']) && is_array($items)) {
+        $path_parts = explode('.', $source['items_path']);
+        foreach ($path_parts as $part) {
+            if (isset($items[$part])) {
+                $items = $items[$part];
+            } else {
+                wp_send_json_error('Items path "'.$source['items_path'].'" no encontrado en la respuesta.');
+            }
+        }
+    }
+    if (empty($items) || !is_array($items)) {
+        wp_send_json_error('La API no devolvió datos o el array de items está vacío.');
+    }
+    $first_item = is_array($items) && isset($items[0]) && is_array($items[0]) ? $items[0] : (is_array($items) ? $items : []);
+    $fields = is_array($first_item) ? array_keys($first_item) : [];
+    // Devolver el objeto real, no string
+    wp_send_json_success(['fields' => $fields, 'preview' => $first_item]);
+});

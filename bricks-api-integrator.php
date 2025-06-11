@@ -198,7 +198,7 @@ class BricksAPIIntegrator {
                 unset($control_options['queryTypes'][$key]);
             }
         }
-
+        
         // Registrar solo los query types generados manualmente
         $query_types = get_option('bricks_api_generated_query_types', []);
         if (!empty($query_types)) {
@@ -206,8 +206,8 @@ class BricksAPIIntegrator {
                 $key = 'snap_ep_' . $slug;
                 $label = $info['endpoint_name'] . ' (Endpoint)';
                 $control_options['queryTypes'][$key] = $label;
+                }
             }
-        }
         return $control_options;
     }
     
@@ -216,12 +216,12 @@ class BricksAPIIntegrator {
      */
     public function run_custom_query_dynamic($results, $query_object) {
         $object_type = $query_object->object_type ?? '';
-
+        
         // Solo procesar nuestros nuevos query types
         if (strpos($object_type, 'snap_ep_') !== 0) {
             return $results;
         }
-
+        
         $slug = str_replace('snap_ep_', '', $object_type);
         $query_types = get_option('bricks_api_generated_query_types', []);
         if (!isset($query_types[$slug])) {
@@ -231,8 +231,8 @@ class BricksAPIIntegrator {
         $endpoint_url = $query_type_info['url'] ?? '';
         if (empty($endpoint_url)) {
             return $results;
-        }
-
+            }
+            
         // Obtener datos de la API
         $response = wp_remote_get($endpoint_url);
         if (is_wp_error($response)) {
@@ -249,7 +249,7 @@ class BricksAPIIntegrator {
         } else if (!is_array($data) || array_keys($data) !== range(0, count($data) - 1)) {
             // Si es un objeto asociativo, envolverlo en un array
             $data = [$data];
-        }
+                                }
         // Convertir al formato que espera Bricks
         return $this->convert_api_data_for_bricks($data);
     }
@@ -341,9 +341,9 @@ class BricksAPIIntegrator {
                         'label' => $tag, // Puedes mejorar esto si quieres mostrar un label más bonito
                         'group' => $group_title
                     ];
+                    }
                 }
             }
-        }
         return $tags;
     }
     
@@ -795,9 +795,9 @@ class BricksAPIIntegrator {
                     $api_data = $loop_object->api_data;
                     $value = $this->get_value_by_dot_notation($api_data, $field);
                     if ($value !== '' && $value !== null) {
-                        return $this->format_field_output($value, $field);
-                    }
-                }
+                                return $this->format_field_output($value, $field);
+                            }
+                        }
                 // Si no estamos en loop, obtener datos dinámicamente
                 if ($is_auto) {
                     $value = $this->get_dynamic_field_value($identifier, $field, $post, $context);
@@ -1008,8 +1008,8 @@ class BricksAPIIntegrator {
             // Usar notación de punto para buscar el campo
             $value = $this->get_value_by_dot_notation($api_data, $field);
             if ($value !== '' && $value !== null) {
-                return $this->format_field_output($value, $field);
-            }
+                    return $this->format_field_output($value, $field);
+                }
         } catch (Exception $e) {
             if (defined('WP_DEBUG') && WP_DEBUG) {
                 error_log("Error al obtener datos dinámicos: " . $e->getMessage());
