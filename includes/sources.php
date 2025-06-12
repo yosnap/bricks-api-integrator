@@ -151,7 +151,7 @@ function render_api_sources_page() {
                                                     <option value="static" <?php selected($param['source'], 'static'); ?>><?php esc_html_e('Valor Estático', 'bricks-api-integrator'); ?></option>
                                                 </select>
                                                 <input type="text" name="param_defaults[]" placeholder="<?php esc_attr_e('Valor por Defecto (opcional)', 'bricks-api-integrator'); ?>" class="regular-text" value="<?php echo esc_attr($param['default']); ?>">
-                                                <button type="button" class="button remove-param"><?php esc_html_e('Eliminar', 'bricks-api-integrator'); ?></button>
+                                                <button type="button" class="button button-delete-param" style="background:#dc3232;color:#fff;"><?php esc_html_e('Eliminar', 'bricks-api-integrator'); ?></button>
                                             </div>
                                         <?php endforeach; ?>
                                     <?php endif; ?>
@@ -194,6 +194,9 @@ function render_api_sources_page() {
                     
                     <p class="submit">
                         <input type="submit" name="submit_api_source" class="button button-primary" value="<?php echo $editing ? esc_attr__('Actualizar Query Type', 'bricks-api-integrator') : esc_attr__('Guardar Query Type', 'bricks-api-integrator'); ?>">
+                        <?php if ($editing): ?>
+                            <a href="<?php echo esc_url(admin_url('admin.php?page=bricks-api-integrator-sources')); ?>" class="button" style="margin-left: 10px;"><?php esc_html_e('Cancelar', 'bricks-api-integrator'); ?></a>
+                        <?php endif; ?>
                     </p>
                     <div class="source-actions" style="display:flex;gap:8px;align-items:center;margin-top:18px;">
                         <button type="button" class="button button-test-source" id="test-source-btn">🧪 Test Source</button>
@@ -259,7 +262,7 @@ function render_api_sources_page() {
             </div>
         <?php endif; ?>
     </div>
-    <?php $bricks_api_source_nonce = wp_create_nonce('bricks_api_source'); ?>
+    <?php $bricks_api_source_nonce = wp_create_nonce('bricks_api_source_nonce'); ?>
     <script>
     window.bricksApiSourceNonce = '<?php echo esc_js($bricks_api_source_nonce); ?>';
     </script>
@@ -284,6 +287,12 @@ function render_api_sources_page() {
             $('#dynamic-params-container').append(row);
         }
         $('#add-param').click(function(){ addParamRow(); });
+        
+        // Asegurarse de que los botones "Eliminar" existentes funcionen
+        $('.button-delete-param').click(function(){ 
+            $(this).closest('.dynamic-param-row').remove(); 
+        });
+        
         // --- Mostrar/ocultar campos de paginación ---
         function togglePaginationFields() {
             const type = $('#pagination_type').val();
@@ -315,118 +324,198 @@ function render_api_sources_page() {
         }
         // --- Mejorar visualización de tags dinámicos ---
         function renderTagsTable(res, sourceId) {
-            // Obtener el primer item de ejemplo para las secciones avanzadas
-            $.post(ajaxurl, {action:'preview_source_api', source_id:sourceId, nonce: window.bricksApiSourceNonce}, function(previewRes){
-                var example = {};
-                var exampleJson = '';
-                if(previewRes.success && previewRes.data && previewRes.data.preview){
-                    var preview = previewRes.data.preview;
-                    if(Array.isArray(preview)){
-                        example = preview[0] || {};
-                    } else if(typeof preview === 'object'){
-                        example = preview;
-                    } else if(typeof preview === 'string'){
-                        try { example = JSON.parse(preview); } catch(e) { example = {}; }
-                    }
-                    try { exampleJson = JSON.stringify(example, null, 2); } catch(e) { exampleJson = ''; }
-                }
-                // 1. Respuesta de la API
-                var html = '<div style="margin-bottom:18px;"><strong>📦 Respuesta de la API (primer registro o detalle):</strong><pre style="background:#f8f9fa;padding:10px;border-radius:5px;max-height:300px;overflow:auto;font-size:13px;">'+exampleJson+'</pre></div>';
-                // 2. Estructura detectada (tabla recursiva)
-                function renderStructure(obj, prefix='') {
-                    let rows = '';
-                    Object.entries(obj).forEach(function([key, value]){
-                        let tipo = Array.isArray(value) ? 'Array' : typeof value;
-                        let valEjemplo = (typeof value === 'object' && value !== null)
-                            ? JSON.stringify(value, null, 2)
-                            : value;
-                        let fullKey = prefix ? prefix+'.'+key : key;
-                        rows += '<tr><td style="padding:6px 8px;border:1px solid #e3e3e3;">'+fullKey+'</td><td style="padding:6px 8px;border:1px solid #e3e3e3;">'+tipo+'</td><td style="padding:6px 8px;border:1px solid #e3e3e3;font-family:monospace;">'+valEjemplo+'</td></tr>';
-                        if(typeof value === 'object' && value !== null && !Array.isArray(value)){
-                            rows += renderStructure(value, fullKey);
+            // Usar los datos de ejemplo proporcionados por el servidor o hacer una solicitud adicional
+            var example = res.data.example || {};
+            var exampleJson = res.data.example_json || '';
+            
+            // Si no tenemos datos de ejemplo, intentar obtenerlos
+            if (!example || Object.keys(example).length === 0) {
+                $.post(ajaxurl, {action:'preview_source_api', source_id:sourceId, nonce: window.bricksApiSourceNonce}, function(previewRes){
+                    if(previewRes.success && previewRes.data && previewRes.data.preview){
+                        var preview = previewRes.data.preview;
+                        if(Array.isArray(preview)){
+                            example = preview[0] || {};
+                        } else if(typeof preview === 'object'){
+                            example = preview;
+                        } else if(typeof preview === 'string'){
+                            try { example = JSON.parse(preview); } catch(e) { example = {}; }
                         }
-                    });
-                    return rows;
-                }
-                html += '<div style="margin-bottom:18px;"><strong>🧩 Estructura detectada:</strong><table style="width:100%;border-collapse:collapse;font-size:13px;background:#fff;"><thead><tr style="background:#e7f3ff;"><th style="padding:6px 8px;border:1px solid #e3e3e3;">Campo</th><th style="padding:6px 8px;border:1px solid #e3e3e3;">Tipo</th><th style="padding:6px 8px;border:1px solid #e3e3e3;">Valor de ejemplo</th></tr></thead><tbody>';
-                if(example && typeof example === 'object' && Object.keys(example).length){
-                    html += renderStructure(example);
-                } else {
-                    html += '<tr><td colspan="3" style="text-align:center;">Sin datos de ejemplo</td></tr>';
-                }
-                html += '</tbody></table></div>';
-                // 3. Tags dinámicos generados
-                html += '<div style="margin-bottom:18px;"><strong>🏷️ Tags dinámicos generados:</strong><form id="tags-enable-form"><div style="display:grid;gap:8px;margin-top:10px;">';
-                res.data.tags.forEach(function(tagObj, idx){
-                    var tag = tagObj.tag;
-                    var exampleVal = tagObj.example;
-                    var checked = res.data.disabled_tags.includes(tag) ? '' : 'checked';
-                    var tagStr = '{' + tag + '}';
-                    var safeId = 'tag-enable-' + idx;
-                    html += '<div class="dynamic-tag-item" style="display:flex;align-items:center;gap:10px;background:#f8f9fa;padding:8px 12px;border-radius:5px;">';
-                    html += '<input type="checkbox" id="'+safeId+'" class="tag-enable-checkbox" data-tag="'+tag+'" '+checked+' style="margin-right:6px;">';
-                    html += '<label for="'+safeId+'" style="margin:0;cursor:pointer;">';
-                    html += '<code class="dynamic-tag" style="font-size:14px;color:#e67e22;font-weight:bold;">'+tagStr+'</code>';
-                    html += '</label>';
-                    html += '<button type="button" class="button button-small copy-tag-btn" data-copy="'+tagStr+'" style="margin-left:10px;">Copiar tag</button>';
-                    html += '<span class="arrow" style="color:#888;">→</span>';
-                    html += '<span class="dynamic-tag-value" style="font-family:monospace;background:#fff;padding:2px 6px;border-radius:3px;">'+(exampleVal||'')+'</span>';
-                    html += '<button type="button" class="button button-small copy-val-btn" data-copy="'+(exampleVal||'')+'" style="margin-left:10px;">Copiar valor</button>';
-                    html += '</div>';
+                        try { exampleJson = JSON.stringify(example, null, 2); } catch(e) { exampleJson = ''; }
+                        // Continuar con la renderización después de obtener los datos
+                        renderTagsTableContent(res, example, exampleJson);
+                    }
                 });
-                html += '</div></form></div>';
-                $('#source-test-result').html(html);
-                // --- Guardar selección de tags habilitados ---
-                $('#tags-enable-form').off('submit').on('submit', function(e){
-            e.preventDefault();
-                    const enabledTags = [];
-                    $('.tag-enable-checkbox:checked').each(function(){
-                        enabledTags.push($(this).data('tag'));
-                    });
-            $.post(ajaxurl, {
-                        action: 'save_enabled_tags_for_source',
-                        nonce: window.bricksApiSourceNonce,
-                        source_id: sourceId,
-                        enabled_tags: enabledTags
-                    }, function(resp2){
-                        if (resp2.success) {
-                            alert('Selección de tags guardada.');
-                } else {
-                            alert('Error al guardar la selección de tags.');
-                }
+            } else {
+                // Si ya tenemos los datos, renderizar directamente
+                renderTagsTableContent(res, example, exampleJson);
+            }
+        }
+        
+        function renderTagsTableContent(res, example, exampleJson) {
+            // 1. Respuesta de la API
+            var html = '<div style="margin-bottom:18px;"><strong>📦 Respuesta de la API (primer registro o detalle):</strong><pre style="background:#f8f9fa;padding:10px;border-radius:5px;max-height:300px;overflow:auto;font-size:13px;">'+exampleJson+'</pre></div>';
+            
+            // 2. Estructura detectada (tabla recursiva)
+            function renderStructure(obj, prefix='') {
+                let rows = '';
+                Object.entries(obj).forEach(function([key, value]){
+                    let tipo = Array.isArray(value) ? 'Array' : typeof value;
+                    let valEjemplo = (typeof value === 'object' && value !== null)
+                        ? JSON.stringify(value, null, 2)
+                        : value;
+                    let fullKey = prefix ? prefix+'.'+key : key;
+                    rows += '<tr><td style="padding:6px 8px;border:1px solid #e3e3e3;">'+fullKey+'</td><td style="padding:6px 8px;border:1px solid #e3e3e3;">'+tipo+'</td><td style="padding:6px 8px;border:1px solid #e3e3e3;font-family:monospace;">'+valEjemplo+'</td></tr>';
+                    if(typeof value === 'object' && value !== null && !Array.isArray(value)){
+                        rows += renderStructure(value, fullKey);
+                    }
+                });
+                return rows;
+            }
+            
+            html += '<div style="margin-bottom:18px;"><strong>🧩 Estructura detectada:</strong><table style="width:100%;border-collapse:collapse;font-size:13px;background:#fff;"><thead><tr style="background:#e7f3ff;"><th style="padding:6px 8px;border:1px solid #e3e3e3;">Campo</th><th style="padding:6px 8px;border:1px solid #e3e3e3;">Tipo</th><th style="padding:6px 8px;border:1px solid #e3e3e3;">Valor de ejemplo</th></tr></thead><tbody>';
+            
+            if(example && typeof example === 'object' && Object.keys(example).length){
+                html += renderStructure(example);
+            } else {
+                html += '<tr><td colspan="3" style="text-align:center;">Sin datos de ejemplo</td></tr>';
+            }
+            
+            html += '</tbody></table></div>';
+            
+            // 3. Tags dinámicos generados
+            html += '<div style="margin-bottom:18px;"><strong>🏷️ Tags dinámicos generados:</strong><form id="tags-enable-form"><div style="display:grid;gap:8px;margin-top:10px;">';
+            
+            // Asegurarse de que res.data.tags es un array
+            var tags = Array.isArray(res.data.tags) ? res.data.tags : [];
+            var disabledTags = Array.isArray(res.data.disabled_tags) ? res.data.disabled_tags : [];
+            
+            tags.forEach(function(tagObj, idx){
+                var tag = typeof tagObj === 'object' ? tagObj.tag : tagObj;
+                var exampleVal = typeof tagObj === 'object' ? tagObj.example : '';
+                var checked = disabledTags.includes(tag) ? '' : 'checked';
+                var tagStr = '{' + tag + '}';
+                var safeId = 'tag-enable-' + idx;
+                
+                html += '<div class="dynamic-tag-item" style="display:flex;align-items:center;gap:10px;background:#f8f9fa;padding:8px 12px;border-radius:5px;">';
+                html += '<input type="checkbox" id="'+safeId+'" class="tag-enable-checkbox" data-tag="'+tag+'" '+checked+' style="margin-right:6px;">';
+                html += '<label for="'+safeId+'" style="margin:0;cursor:pointer;">';
+                html += '<code class="dynamic-tag" style="font-size:14px;color:#e67e22;font-weight:bold;">'+tagStr+'</code>';
+                html += '</label>';
+                html += '<button type="button" class="button button-small copy-tag-btn" data-copy="'+tagStr+'" style="margin-left:10px;">Copiar tag</button>';
+                html += '<span class="arrow" style="color:#888;">→</span>';
+                html += '<span class="dynamic-tag-value" style="font-family:monospace;background:#fff;padding:2px 6px;border-radius:3px;">'+(exampleVal||'')+'</span>';
+                // Botón "Copiar valor" eliminado
+                html += '</div>';
             });
-        });
+            
+            html += '</div></form></div>';
+            
+            // Mostrar el resultado en el contenedor
+            $('#source-test-result').html(html);
+            
+            // --- Guardar selección de tags habilitados ---
+            $('#tags-enable-form').off('submit').on('submit', function(e){
+                e.preventDefault();
+                const enabledTags = [];
+                $('.tag-enable-checkbox:checked').each(function(){
+                    enabledTags.push($(this).data('tag'));
+                });
+                
+                $.post(ajaxurl, {
+                    action: 'save_enabled_tags_for_source',
+                    nonce: window.bricksApiSourceNonce,
+                    source_id: sourceId,
+                    enabled_tags: enabledTags
+                }, function(resp2){
+                    if (resp2.success) {
+                        alert('Selección de tags guardada.');
+                    } else {
+                        alert('Error al guardar la selección de tags.');
+                    }
+                });
             });
         }
         // --- Ocultar botón crear tags al crear nuevo Source ---
         if (!$('input[name="source_id"]').length) {
             $('#generate-source-tags-btn').hide();
         }
+        
+        // Función para obtener y mostrar los tags desde el servidor
+        function renderAdvancedSections(sourceId) {
+            // Obtener los tags directamente desde el servidor
+            $.post(ajaxurl, {
+                action: 'get_source_tags',
+                source_id: sourceId,
+                nonce: window.bricksApiSourceNonce
+            }, function(res) {
+                if (res.success && res.data && res.data.tags) {
+                    // Obtener datos de ejemplo para las secciones avanzadas
+                    $.post(ajaxurl, {
+                        action: 'preview_source_api',
+                        source_id: sourceId,
+                        nonce: window.bricksApiSourceNonce
+                    }, function(previewRes) {
+                        renderTagsTable(res, sourceId);
+                    });
+                }
+            });
+        }
+        
+        // --- Ver tags dinámicos ---
         $('#view-source-tags-btn').off('click').on('click', function(){
-          var sourceId = $('input[name="source_id"]').val() || $('#source_name').val().toLowerCase().replace(/\s+/g,'_');
-          renderAdvancedSections(sourceId);
+            var sourceId = $('input[name="source_id"]').val() || $('#source_name').val().toLowerCase().replace(/\s+/g,'_');
+            var sourceName = $('#source_name').val();
+            
+            // Cargar los tags dinámicamente desde el servidor con toda la información
+            $.post(ajaxurl, {
+                action: 'get_tags_for_source',
+                nonce: window.bricksApiSourceNonce,
+                source_id: sourceId,
+                source_name: sourceName,
+                full_info: true // Solicitar información completa
+            }, function(resp) {
+                if (resp.success && resp.data) {
+                    // Mostrar la información completa (3 secciones)
+                    renderTagsTable(resp, sourceId);
+                } else {
+                    // Intentar con la función anterior como fallback
+                    renderAdvancedSections(sourceId);
+                }
+            }).fail(function() {
+                // Si falla la petición AJAX, intentar con la función anterior
+                renderAdvancedSections(sourceId);
+            });
         });
+        
         // --- Copiar al portapapeles ---
-        $(document).on('click','.copy-tag-btn',function(){
+        $(document).on('click', '.copy-tag-btn', function(){
             var val = $(this).data('copy');
             navigator.clipboard.writeText(val);
             $(this).text('¡Copiado!');
             var btn = $(this);
             setTimeout(function(){ btn.text('Copiar tag'); }, 1200);
         });
-        $(document).on('click','.copy-val-btn',function(){
+        
+        $(document).on('click', '.copy-val-btn', function(){
             var val = $(this).data('copy');
             navigator.clipboard.writeText(val);
             $(this).text('¡Copiado!');
             var btn = $(this);
             setTimeout(function(){ btn.text('Copiar valor'); }, 1200);
         });
+        
         // --- Toggle habilitar/deshabilitar tag ---
-        $('#source-test-result').on('change','.toggle-tag',function(){
+        $('#source-test-result').on('change', '.tag-enable-checkbox', function(){
             var sourceId = $('input[name="source_id"]').val() || $('#source_name').val().toLowerCase().replace(/\s+/g,'_');
             var tag = $(this).data('tag');
             var enabled = $(this).is(':checked');
-            $.post(ajaxurl, {action:'toggle_source_tag', source_id:sourceId, tag:tag, enabled:enabled, nonce: window.bricksApiSourceNonce}, function(res){
+            $.post(ajaxurl, {
+                action: 'toggle_source_tag', 
+                source_id: sourceId, 
+                tag: tag, 
+                enabled: enabled, 
+                nonce: window.bricksApiSourceNonce
+            }, function(res){
                 if(!res.success){
                     alert('Error: '+res.data);
                 }
@@ -562,7 +651,12 @@ function render_api_sources_page() {
         $('#generate-source-tags-btn').off('click').on('click', function(){
             var sourceId = $('input[name="source_id"]').val() || $('#source_name').val().toLowerCase().replace(/\s+/g,'_');
             $('#generate-source-tags-btn').prop('disabled', true).text('Generando...');
-            $.post(ajaxurl, {action:'generate_source_tags', source_id:sourceId, nonce: window.bricksApiSourceNonce}, function(res){
+            
+            $.post(ajaxurl, {
+                action: 'generate_source_tags', 
+                source_id: sourceId, 
+                nonce: window.bricksApiSourceNonce
+            }, function(res){
                 $('#generate-source-tags-btn').prop('disabled', false).text('⚡ Crear tags y query types dinámicos');
                 if(res.success){
                     alert('Tags generados correctamente');
@@ -570,8 +664,8 @@ function render_api_sources_page() {
                     $('#delete-source-tags-btn').show();
                     // Mostrar tabla avanzada automáticamente
                     autoShowTagsIfExist();
-                }else{
-                    alert('Error: '+res.data);
+                } else {
+                    alert('Error: ' + res.data);
                 }
             });
         });
@@ -623,10 +717,6 @@ function save_api_source() {
             }
         }
     }
-    // Si estamos editando y no se envían parámetros, mantener los existentes
-    if ($editing && empty($dynamic_params) && isset($api_sources[$source_id]['dynamic_params'])) {
-        $dynamic_params = $api_sources[$source_id]['dynamic_params'];
-    }
     
     // Get existing sources
     $api_sources = get_option('bricks_api_sources', []);
@@ -634,6 +724,11 @@ function save_api_source() {
     // Check if we're editing an existing query type
     $editing = isset($_POST['source_id']) && !empty($_POST['source_id']);
     $source_id = $editing ? sanitize_text_field($_POST['source_id']) : 'query_type_' . time();
+    
+    // Si estamos editando y no se envían parámetros, mantener los existentes
+    if ($editing && empty($dynamic_params) && isset($api_sources[$source_id]['dynamic_params'])) {
+        $dynamic_params = $api_sources[$source_id]['dynamic_params'];
+    }
     
     // Si estamos creando un nuevo query type, limpiar cualquier dato residual
     if (!$editing) {
@@ -1743,6 +1838,10 @@ add_action('wp_ajax_generate_source_tags', function() {
     if (!current_user_can('manage_options')) {
         wp_send_json_error('No autorizado');
     }
+    
+    // Verificar nonce
+    check_ajax_referer('bricks_api_source_nonce', 'nonce');
+    
     $source_id = sanitize_text_field($_POST['source_id'] ?? '');
     $sources = get_option('bricks_api_sources', []);
     if (empty($source_id) || !isset($sources[$source_id])) {
@@ -1790,6 +1889,119 @@ add_action('wp_ajax_generate_source_tags', function() {
     update_option('bricks_api_sources', $sources);
     wp_send_json_success(['tags' => $tags_with_examples, 'disabled_tags' => $source['disabled_tags']]);
 });
+add_action('wp_ajax_get_tags_for_source', function() {
+    if (!current_user_can('manage_options')) {
+        wp_send_json_error('No autorizado');
+    }
+    
+    check_ajax_referer('bricks_api_source_nonce', 'nonce');
+    $source_id = sanitize_text_field($_POST['source_id'] ?? '');
+    $source_name = sanitize_text_field($_POST['source_name'] ?? '');
+    $full_info = isset($_POST['full_info']) && $_POST['full_info'];
+    
+    $sources = get_option('bricks_api_sources', []);
+    if (empty($source_id) || !isset($sources[$source_id])) {
+        wp_send_json_error('Source no encontrado');
+        return;
+    }
+    
+    $source = $sources[$source_id];
+    $tags = $source['tags'] ?? [];
+    $disabled = $source['disabled_tags'] ?? [];
+    
+    // Si se solicita información completa, preparar los datos adicionales
+    if ($full_info) {
+        $example = [];
+        $example_json = '';
+        
+        // Obtener datos de ejemplo de la API
+        $endpoint_id = $source['endpoint_id'] ?? '';
+        
+        if ($endpoint_id) {
+            $endpoints = get_option('bricks_api_endpoints', []);
+            if (isset($endpoints[$endpoint_id])) {
+                $endpoint = $endpoints[$endpoint_id];
+                $url = $endpoint['url'] ?? '';
+                
+                if ($url) {
+                    // Intentar obtener datos de ejemplo de la caché primero
+                    $cached_preview = get_transient('bricks_api_source_preview_' . $source_id);
+                    
+                    if ($cached_preview) {
+                        $example = $cached_preview;
+                    } else {
+                        // Hacer una solicitud a la API para obtener datos de ejemplo
+                        $args = [];
+                        if (!empty($endpoint['headers'])) {
+                            $headers = [];
+                            foreach ($endpoint['headers'] as $header) {
+                                if (!empty($header['name']) && !empty($header['value'])) {
+                                    $headers[$header['name']] = $header['value'];
+                                }
+                            }
+                            if (!empty($headers)) {
+                                $args['headers'] = $headers;
+                            }
+                        }
+                        
+                        $response = wp_remote_get($url, $args);
+                        if (!is_wp_error($response)) {
+                            $body = wp_remote_retrieve_body($response);
+                            $data = json_decode($body, true);
+                            
+                            // Determinar si es un array de objetos o un objeto único
+                            if (is_array($data) && isset($data[0]) && is_array($data[0])) {
+                                $example = $data[0];
+                            } elseif (is_array($data)) {
+                                $example = $data;
+                            }
+                            
+                            // Si hay una ruta de items específica, intentar usarla
+                            $items_path = $source['items_path'] ?? '';
+                            if ($items_path && !empty($example)) {
+                                $path_parts = explode('.', $items_path);
+                                $current = $data; // Usar $data completo, no $example
+                                foreach ($path_parts as $part) {
+                                    if (isset($current[$part])) {
+                                        $current = $current[$part];
+                                    } else {
+                                        $current = [];
+                                        break;
+                                    }
+                                }
+                                if (!empty($current)) {
+                                    if (is_array($current) && isset($current[0])) {
+                                        $example = $current[0];
+                                    } else {
+                                        $example = $current;
+                                    }
+                                }
+                            }
+                            
+                            // Guardar en caché para futuras solicitudes
+                            set_transient('bricks_api_source_preview_' . $source_id, $example, HOUR_IN_SECONDS);
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Generar JSON formateado
+        if (!empty($example)) {
+            $example_json = json_encode($example, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+        }
+        
+        wp_send_json_success([
+            'tags' => $tags,
+            'disabled_tags' => $disabled,
+            'example' => $example,
+            'example_json' => $example_json
+        ]);
+    } else {
+        wp_send_json_success(['tags' => $tags, 'disabled_tags' => $disabled]);
+    }
+});
+
 add_action('wp_ajax_get_source_tags', function() {
     if (!current_user_can('manage_options')) {
         wp_send_json_error('No autorizado');

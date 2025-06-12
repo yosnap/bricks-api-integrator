@@ -188,7 +188,9 @@ if (!function_exists('render_api_endpoints_page')) {
             
             <!-- Formulario de alta/edición de endpoint -->
             <div class="endpoint-form-container">
-              <h2 id="endpoint-form-title">Añadir nuevo endpoint</h2>
+              <div style="margin-bottom: 15px;">
+                <h2 id="endpoint-form-title" style="margin: 0;">Añadir nuevo endpoint</h2>
+              </div>
               <form id="endpoint-form" method="post">
                 <?php wp_nonce_field('save_endpoints'); ?>
                         <table class="form-table">
@@ -223,9 +225,8 @@ if (!function_exists('render_api_endpoints_page')) {
                                 </td>
                             </tr>
                         </table>
-                <div style="margin-top: 18px;">
-                  <button type="submit" class="button button-primary" id="save-endpoint-btn">Guardar Endpoint</button>
-                  <button type="button" class="button" id="cancel-edit-btn" style="display:none;">Cancelar</button>
+                <div style="margin-top: 18px;" id="form-buttons-container">
+                  <!-- Los botones se mostrarán dinámicamente según el contexto -->
                                 </div>
               </form>
               <!-- Botones de acción debajo del formulario -->
@@ -287,11 +288,103 @@ if (!function_exists('render_api_endpoints_page')) {
                 $('#dynamic-params-container').empty();
                 $('#auth-fields-row').hide();
                 $('#auth-fields-container').empty();
-                $('#save-endpoint-btn').text('Guardar Endpoint');
-                $('#cancel-edit-btn').hide();
-                editIndex = null;
+                $('#endpoint-form-title').text('Añadir nuevo endpoint');
+                editIndex = null; // Asegurar explícitamente que editIndex sea null
                 $('#endpoint-form-message').removeClass('success error').text('');
                 $('#endpoint-test-result').html('');
+                console.log('Formulario restablecido. editIndex =', editIndex); // Debug
+                
+                // Actualizar botones según el contexto
+                updateFormButtons();
+            }
+            
+            // Función para actualizar los botones según el contexto
+            function updateFormButtons() {
+                const $container = $('#form-buttons-container');
+                $container.empty();
+                
+                if (editIndex === null) {
+                    // Modo de creación: mostrar solo el botón "+ Nuevo Endpoint"
+                    $container.append('<button type="button" class="button button-primary" id="create-endpoint-btn">+ Nuevo Endpoint</button>');
+                } else {
+                    // Modo de edición: mostrar "Guardar Endpoint" y "Cancelar"
+                    $container.append('<button type="submit" class="button button-primary" id="save-endpoint-btn">Guardar Endpoint</button> ' +
+                                     '<button type="button" class="button" id="cancel-edit-btn" style="margin-left: 10px;">Cancelar</button>');
+                    
+                    // Asignar evento al botón Cancelar
+                    $('#cancel-edit-btn').click(function(){ 
+                        resetForm(); 
+                    });
+                }
+                
+                // Asignar evento al botón "Nuevo Endpoint"
+                $('#create-endpoint-btn').off('click').on('click', function(e) {
+                    e.preventDefault();
+                    
+                    // Validación: no permitir parámetros dinámicos sin nombre
+                    let hasEmptyParam = false;
+                    $('#dynamic-params-container .dynamic-param-row').each(function(){
+                        const name = $(this).find('.param-name').val().trim();
+                        if (!name) {
+                            hasEmptyParam = true;
+                            $(this).find('.param-name').css('border','2px solid #dc3232');
+                        } else {
+                            $(this).find('.param-name').css('border','');
+                        }
+                    });
+                    if (hasEmptyParam) {
+                        showMessage('No puedes guardar parámetros dinámicos sin nombre. Corrige los campos en rojo.', 'error');
+                        return;
+                    }
+                    
+                    // Forzar la creación de un nuevo endpoint
+                    console.log('Creando nuevo endpoint, ignorando editIndex');
+                    
+                    // Obtener parámetros dinámicos de forma segura
+                    let dynamicParams = [];
+                    try {
+                        dynamicParams = getParamsFromForm() || [];
+                    } catch (paramError) {
+                        console.error('Error al obtener parámetros:', paramError);
+                        dynamicParams = [];
+                    }
+                    
+                    // Importante: NO usar la variable editIndex aquí
+                    const data = {
+                        action: 'save_api_endpoint',
+                        nonce: '<?php echo wp_create_nonce('save_api_endpoint'); ?>',
+                        // Enviar explícitamente 'new' en lugar de null o editIndex
+                        index: 'new',
+                        name: $('#endpoint_name').val().trim(),
+                        url: $('#endpoint_url').val().trim(),
+                        auth_type: $('#auth_type').val(),
+                        token: $('#token').val() || '',
+                        basic_user: $('#basic_user').val() || '',
+                        basic_password: $('#basic_password').val() || '',
+                        api_key: $('#api_key').val() || '',
+                        api_key_header: $('#api_key_header').val() || '',
+                        dynamic_params: dynamicParams
+                    };
+                    
+                    // Mostrar lo que vamos a enviar
+                    console.log('Enviando datos para nuevo endpoint:', data);
+                    
+                    $.post(ajaxurl, data, function(resp){
+                        if (resp.success) {
+                            console.log('Respuesta exitosa:', resp.data);
+                            endpoints = resp.data.endpoints;
+                            renderTable();
+                            resetForm();
+                            showMessage('¡Nuevo endpoint creado correctamente!', 'success');
+                        } else {
+                            console.error('Error en la respuesta:', resp);
+                            showMessage(resp.data || 'Error al crear el endpoint', 'error');
+                        }
+                    }).fail(function(xhr, status, error) {
+                        console.error('Error en la petición AJAX:', error);
+                        showMessage('Error en la comunicación con el servidor', 'error');
+                    });
+                });
             }
             function renderTable() {
                 const $tbody = $('#endpoints-table tbody');
@@ -383,9 +476,16 @@ if (!function_exists('render_api_endpoints_page')) {
                 }
             });
 
-            // --- Guardar/Actualizar endpoint ---
+            // --- Actualizar endpoint existente ---
             $('#endpoint-form').submit(function(e){
                 e.preventDefault();
+                
+                // Solo procesar el formulario si estamos en modo edición
+                if (editIndex === null) {
+                    console.log('No se debería enviar el formulario en modo creación');
+                    return;
+                }
+                
                 // Validación: no permitir parámetros dinámicos sin nombre
                 let hasEmptyParam = false;
                 $('#dynamic-params-container .dynamic-param-row').each(function(){
@@ -401,10 +501,14 @@ if (!function_exists('render_api_endpoints_page')) {
                     showMessage('No puedes guardar parámetros dinámicos sin nombre. Corrige los campos en rojo.', 'error');
                     return;
                 }
+                
+                // Registrar el valor actual de editIndex para depuración
+                console.log('Actualizando endpoint con editIndex =', editIndex);
+                
                 const data = {
                     action: 'save_api_endpoint',
                     nonce: '<?php echo wp_create_nonce('save_api_endpoint'); ?>',
-                    index: editIndex,
+                    index: editIndex, // Actualizar endpoint existente
                     name: $('#endpoint_name').val().trim(),
                     url: $('#endpoint_url').val().trim(),
                     auth_type: $('#auth_type').val(),
@@ -431,9 +535,14 @@ if (!function_exists('render_api_endpoints_page')) {
                 const idx = $(this).closest('tr').data('index');
                 const ep = endpoints[idx];
                 editIndex = idx;
+                console.log('Editando endpoint con índice:', editIndex); // Debug
+                $('#endpoint-form-title').text('Editar endpoint: ' + ep.name);
                 $('#endpoint_name').val(ep.name);
                 $('#endpoint_url').val(ep.url);
                 $('#auth_type').val(ep.auth_type).trigger('change');
+                
+                // Actualizar botones para modo edición
+                updateFormButtons();
                 setTimeout(function(){
                     $('#token').val(ep.token||'');
                     $('#basic_user').val(ep.basic_user||'');
@@ -483,7 +592,7 @@ if (!function_exists('render_api_endpoints_page')) {
                                     <button type="button" class="button button-small" style="margin-left:10px;" onclick="navigator.clipboard.writeText('${tagObj.tag}');this.innerText='¡Copiado!';setTimeout(()=>{this.innerText='Copiar tag';},1000);">Copiar tag</button>
                                     <span style="color:#888;">→</span>
                                     <span style="font-family:monospace;background:#fff;padding:2px 6px;border-radius:3px;">${tagObj.example}</span>
-                                    <button type="button" class="button button-small" style="margin-left:10px;" onclick="navigator.clipboard.writeText(String(${JSON.stringify(tagObj.example)}));this.innerText='¡Copiado!';setTimeout(()=>{this.innerText='Copiar valor';},1000);">Copiar valor</button>
+                                    <!-- Botón "Copiar valor" eliminado -->
                                 </div>`;
                             });
                             html += `</div><p style="font-size:12px;color:#6c757d;margin:10px 0 0 0;">💡 Puedes desmarcar los tags que no quieras usar. Haz clic en el tag o en el botón para copiar el valor de ejemplo o el tag completo.</p><button type="submit" class="button button-primary" style="margin-top:12px;">💾 Guardar selección de tags</button></form></div>`;
@@ -517,7 +626,7 @@ if (!function_exists('render_api_endpoints_page')) {
                 }
             });
             // --- Cancelar edición ---
-            $('#cancel-edit-btn').click(function(){ resetForm(); });
+            // El botón Cancelar ahora se maneja dinámicamente en updateFormButtons()
             // --- Eliminar endpoint ---
             $('#endpoints-table').on('click', '.button-delete', function(){
                 if (!confirm('¿Seguro que quieres eliminar este endpoint?')) return;
@@ -611,7 +720,7 @@ if (!function_exists('render_api_endpoints_page')) {
                                 <button type="button" class="button button-small" style="margin-left:10px;" onclick="navigator.clipboard.writeText('${tagObj.tag}');this.innerText='¡Copiado!';setTimeout(()=>{this.innerText='Copiar tag';},1000);">Copiar tag</button>
                                 <span style="color:#888;">→</span>
                                 <span style="font-family:monospace;background:#fff;padding:2px 6px;border-radius:3px;">${tagObj.example}</span>
-                                <button type="button" class="button button-small" style="margin-left:10px;" onclick="navigator.clipboard.writeText(String(${JSON.stringify(tagObj.example)}));this.innerText='¡Copiado!';setTimeout(()=>{this.innerText='Copiar valor';},1000);">Copiar valor</button>
+                                <!-- Botón "Copiar valor" eliminado -->
                             </div>`;
                         });
                         html += `</div><p style="font-size:12px;color:#6c757d;margin:10px 0 0 0;">💡 Puedes desmarcar los tags que no quieras usar. Haz clic en el tag o en el botón para copiar el valor de ejemplo o el tag completo.</p><button type="submit" class="button button-primary" style="margin-top:12px;">💾 Guardar selección de tags</button></form></div>`;
@@ -646,15 +755,120 @@ if (!function_exists('render_api_endpoints_page')) {
             // --- Ver Dynamic Tags ---
             $('#view-tags-btn').click(function(){
                 const url = $('#endpoint_url').val().trim();
-                const tags = tagsGenerated[url] || [];
-                if (!tags.length) {
-                    showTestResult('<em>No hay tags generados para este endpoint.</em>');
-                    return;
-                }
-                let html = '<div style="background:#f8f9fa;padding:12px;border-radius:6px;"><strong>Dynamic Tags generados:</strong><ul style="margin:8px 0 0 18px;">';
-                tags.forEach(tag => { html += `<li><code>${tag}</code></li>`; });
-                html += '</ul></div>';
-                showTestResult(html);
+                const name = $('#endpoint_name').val().trim();
+                
+                // Cargar los tags dinámicamente desde el servidor con toda la información
+                $.post(ajaxurl, {
+                    action: 'get_tags_for_endpoint',
+                    nonce: '<?php echo wp_create_nonce('get_tags_for_endpoint'); ?>',
+                    url: url,
+                    name: name,
+                    full_info: true // Solicitar información completa
+                }, function(resp) {
+                    if (resp.success && resp.data) {
+                        // Actualizar la variable local con los tags más recientes
+                        if (resp.data.tags && resp.data.tags.length) {
+                            tagsGenerated[url] = resp.data.tags;
+                        }
+                        
+                        // Mostrar la información completa (3 secciones)
+                        let html = '';
+                        
+                        // 1. JSON formateado
+                        if (resp.data.example_json) {
+                            html += `<div style="margin-bottom:18px;"><strong>📦 Respuesta de la API (primer registro o detalle):</strong><pre style="background:#f8f9fa;padding:10px;border-radius:5px;max-height:300px;overflow:auto;font-size:13px;">${resp.data.example_json}</pre></div>`;
+                        }
+                        
+                        // 2. Estructura detectada
+                        if (resp.data.example && Object.keys(resp.data.example).length > 0) {
+                            html += `<div style="margin-bottom:18px;"><strong>🧩 Estructura detectada:</strong><table style="width:100%;border-collapse:collapse;font-size:13px;background:#fff;"><thead><tr style="background:#e7f3ff;"><th style="padding:6px 8px;border:1px solid #e3e3e3;">Campo</th><th style="padding:6px 8px;border:1px solid #e3e3e3;">Tipo</th><th style="padding:6px 8px;border:1px solid #e3e3e3;">Valor de ejemplo</th></tr></thead><tbody>`;
+                            
+                            Object.entries(resp.data.example).forEach(([key, value]) => {
+                                let tipo = Array.isArray(value) ? 'Array' : typeof value;
+                                let valEjemplo = (typeof value === 'object' && value !== null)
+                                    ? JSON.stringify(value, null, 2)
+                                    : value;
+                                html += `<tr><td style="padding:6px 8px;border:1px solid #e3e3e3;">${key}</td><td style="padding:6px 8px;border:1px solid #e3e3e3;">${tipo}</td><td style="padding:6px 8px;border:1px solid #e3e3e3;font-family:monospace;">${valEjemplo}</td></tr>`;
+                            });
+                            
+                            html += `</tbody></table></div>`;
+                        }
+                        
+                        // 3. Tags dinámicos generados con checkboxes
+                        if (resp.data.tags && resp.data.tags.length) {
+                            const slug = resp.data.slug || '';
+                            html += `<div style="margin-bottom:18px;"><strong>🏷️ Tags dinámicos generados:</strong><form id="tags-enable-form"><div style="display:grid;gap:8px;margin-top:10px;">`;
+                            
+                            resp.data.tags.forEach(tag => {
+                                const tagObj = resp.data.tag_objects ? resp.data.tag_objects.find(t => t.tag === tag) : null;
+                                const example = tagObj && tagObj.example ? tagObj.example : '';
+                                
+                                html += `
+                                <div style="display:flex;align-items:center;">
+                                    <input type="checkbox" id="tag_${tag}" name="enabled_tags[]" value="${tag}" checked style="margin-right:8px;">
+                                    <label for="tag_${tag}" style="margin-right:auto;"><code>${tag}</code></label>
+                                    <button type="button" class="button button-small" onclick="navigator.clipboard.writeText('${tag}');this.innerText='¡Copiado!';setTimeout(()=>{this.innerText='Copiar tag';},1000);">Copiar tag</button>
+                                </div>
+                                ${example ? `<div style="margin-left:28px;margin-top:-4px;margin-bottom:8px;color:#666;font-size:12px;">Ejemplo: ${example}</div>` : ''}`;
+                            });
+                            
+                            html += `</div><div style="margin-top:15px;"><button type="button" id="save-tags-selection" class="button button-primary">Guardar selección de tags</button></div></form></div>`;
+                            
+                            // Agregar nota informativa
+                            html += `<p style="font-size:12px;color:#666;margin-top:5px;">✓ Puedes desmarcar los tags que no quieras usar. Haz clic en el botón para copiar el valor de ejemplo o el tag completo.</p>`;
+                        }
+                        
+                        if (html) {
+                            showTestResult(html);
+                            
+                            // Reiniciar el evento para guardar selección de tags
+                            $('#save-tags-selection').off('click').on('click', function() {
+                                const enabledTags = [];
+                                $('#tags-enable-form input:checked').each(function() {
+                                    enabledTags.push($(this).val());
+                                });
+                                
+                                $.post(ajaxurl, {
+                                    action: 'save_enabled_tags',
+                                    nonce: '<?php echo wp_create_nonce('save_enabled_tags'); ?>',
+                                    url: url,
+                                    name: name,
+                                    enabled_tags: enabledTags
+                                }, function(saveResp) {
+                                    if (saveResp.success) {
+                                        showMessage('Selección de tags guardada correctamente', 'success');
+                                    } else {
+                                        showMessage('Error al guardar la selección de tags', 'error');
+                                    }
+                                });
+                            });
+                        } else {
+                            showTestResult('<em>No hay información disponible para este endpoint.</em>');
+                        }
+                    } else {
+                        // Intentar con los tags almacenados localmente como fallback
+                        const localTags = tagsGenerated[url] || [];
+                        if (localTags.length) {
+                            let html = '<div style="background:#f8f9fa;padding:12px;border-radius:6px;"><strong>Dynamic Tags generados:</strong><ul style="margin:8px 0 0 18px;">';
+                            localTags.forEach(tag => { html += `<li><code>${tag}</code></li>`; });
+                            html += '</ul></div>';
+                            showTestResult(html);
+                        } else {
+                            showTestResult('<em>No hay tags generados para este endpoint.</em>');
+                        }
+                    }
+                }).fail(function() {
+                    // Si falla la petición AJAX, intentar con los tags almacenados localmente
+                    const localTags = tagsGenerated[url] || [];
+                    if (localTags.length) {
+                        let html = '<div style="background:#f8f9fa;padding:12px;border-radius:6px;"><strong>Dynamic Tags generados:</strong><ul style="margin:8px 0 0 18px;">';
+                        localTags.forEach(tag => { html += `<li><code>${tag}</code></li>`; });
+                        html += '</ul></div>';
+                        showTestResult(html);
+                    } else {
+                        showTestResult('<em>No hay tags generados para este endpoint.</em>');
+                    }
+                });
             });
             // --- Eliminar tags y query type ---
             $('#delete-tags-btn').click(function(){
@@ -684,6 +898,10 @@ if (!function_exists('render_api_endpoints_page')) {
             // --- Inicialización ---
             renderTable();
             resetForm();
+            // Asegurar que editIndex sea null al cargar la página
+            editIndex = null;
+            // Actualizar los botones del formulario
+            updateFormButtons();
         });
         </script>
         
@@ -815,7 +1033,18 @@ if (!function_exists('render_api_endpoints_page')) {
 add_action('wp_ajax_save_api_endpoint', function() {
     check_ajax_referer('save_api_endpoint', 'nonce');
     $endpoints = get_option('bricks_api_endpoints', []);
-    $index = isset($_POST['index']) ? intval($_POST['index']) : null;
+    
+    // Manejar el caso especial 'new' para crear siempre un nuevo endpoint
+    if (isset($_POST['index']) && $_POST['index'] === 'new') {
+        $index = null; // Forzar creación de nuevo endpoint
+        error_log('Recibido index=new, creando nuevo endpoint. Total endpoints antes: ' . count($endpoints));
+    } else {
+        $index = isset($_POST['index']) && $_POST['index'] !== '' ? intval($_POST['index']) : null;
+    }
+    
+    // Debug para verificar los datos recibidos
+    error_log('Saving endpoint. Index: ' . ($index === null ? 'NULL (new)' : $index) . ', Total endpoints: ' . count($endpoints));
+    
     $dynamic_params = [];
     if (!empty($_POST['dynamic_params']) && is_array($_POST['dynamic_params'])) {
         foreach ($_POST['dynamic_params'] as $param) {
@@ -832,6 +1061,7 @@ add_action('wp_ajax_save_api_endpoint', function() {
     if ($index !== null && empty($dynamic_params) && isset($endpoints[$index]['dynamic_params'])) {
         $dynamic_params = $endpoints[$index]['dynamic_params'];
     }
+    
     $data = [
         'name' => sanitize_text_field($_POST['name'] ?? ''),
         'url' => esc_url_raw($_POST['url'] ?? ''),
@@ -843,12 +1073,26 @@ add_action('wp_ajax_save_api_endpoint', function() {
         'api_key_header' => sanitize_text_field($_POST['api_key_header'] ?? 'X-API-Key'),
         'dynamic_params' => $dynamic_params,
     ];
+    
+    // Verificar si estamos editando o creando un nuevo endpoint
     if ($index !== null && isset($endpoints[$index])) {
+        // Modo edición: actualizar endpoint existente
+        error_log('Actualizando endpoint existente en índice: ' . $index);
         $endpoints[$index] = $data;
     } else {
+        // Modo creación: agregar nuevo endpoint
+        error_log('Creando nuevo endpoint. Total antes: ' . count($endpoints));
         $endpoints[] = $data;
+        error_log('Nuevo endpoint agregado. Total después: ' . count($endpoints));
     }
+    
+    // Guardar los endpoints actualizados
     update_option('bricks_api_endpoints', $endpoints);
+    
+    // Verificar que los endpoints se guardaron correctamente
+    $saved_endpoints = get_option('bricks_api_endpoints', []);
+    error_log('Endpoints guardados. Total: ' . count($saved_endpoints));
+    
     wp_send_json_success(['endpoints' => $endpoints]);
 });
 
@@ -986,6 +1230,80 @@ add_action('wp_ajax_generate_tags_for_endpoint', function() {
         ]);
     } else {
         wp_send_json_error('No se pudieron generar tags.');
+    }
+});
+
+add_action('wp_ajax_get_tags_for_endpoint', function() {
+    check_ajax_referer('get_tags_for_endpoint', 'nonce');
+    $url = isset($_POST['url']) ? sanitize_text_field($_POST['url']) : '';
+    $name = isset($_POST['name']) ? sanitize_text_field($_POST['name']) : '';
+    $full_info = isset($_POST['full_info']) && $_POST['full_info'];
+    
+    if (!$name && !$url) {
+        wp_send_json_error('Nombre o URL de endpoint no especificado');
+        return;
+    }
+    
+    // Buscar tags dinámicos para este endpoint
+    $dynamic_tags = get_option('bricks_api_generated_tags', []);
+    $query_types = get_option('bricks_api_generated_query_types', []);
+    $tags = [];
+    $slug = '';
+    $example = [];
+    $example_json = '';
+    $tag_objects = [];
+    
+    // Primero intentar buscar por nombre
+    if ($name) {
+        $slug = bricks_api_normalize_slug($name);
+        if (isset($dynamic_tags[$slug]) && !empty($dynamic_tags[$slug]['tags'])) {
+            $tags = $dynamic_tags[$slug]['tags'];
+            if ($full_info && isset($dynamic_tags[$slug]['example'])) {
+                $example = $dynamic_tags[$slug]['example'];
+            }
+        }
+    }
+    
+    // Si no se encontraron tags por nombre, intentar buscar por URL en los query types
+    if ((empty($tags) || empty($example)) && $url) {
+        foreach ($query_types as $qt_slug => $qt) {
+            if (isset($qt['url']) && $qt['url'] === $url) {
+                if (isset($dynamic_tags[$qt_slug]) && !empty($dynamic_tags[$qt_slug]['tags'])) {
+                    $tags = $dynamic_tags[$qt_slug]['tags'];
+                    $slug = $qt_slug;
+                    if ($full_info && isset($qt['example'])) {
+                        $example = $qt['example'];
+                    }
+                    break;
+                }
+            }
+        }
+    }
+    
+    if (empty($tags)) {
+        wp_send_json_error('No se encontraron tags para este endpoint');
+        return;
+    }
+    
+    // Si se solicita información completa, preparar los datos adicionales
+    if ($full_info && !empty($example)) {
+        // Generar JSON formateado
+        $example_json = json_encode($example, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+        
+        // Preparar objetos de tag con ejemplos
+        if (function_exists('bricks_api_extract_tags_recursive')) {
+            $tag_objects = bricks_api_extract_tags_recursive($example, 'snap_' . $slug);
+        }
+        
+        wp_send_json_success([
+            'tags' => $tags,
+            'example' => $example,
+            'example_json' => $example_json,
+            'tag_objects' => $tag_objects,
+            'slug' => $slug
+        ]);
+    } else {
+        wp_send_json_success(['tags' => $tags]);
     }
 });
 
