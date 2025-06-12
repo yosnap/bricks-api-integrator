@@ -112,7 +112,11 @@ function render_api_sources_page() {
                                 <div class="items-path-container" style="display: flex; align-items: center; gap: 10px;">
                                     <input type="text" id="items_path" name="items_path" class="regular-text" value="<?php echo $editing ? esc_attr($source_to_edit['items_path']) : ''; ?>" style="flex-grow: 1;">
                                     <?php if ($editing && !empty($source_to_edit['endpoint_id'])): ?>
-                                        <button type="button" class="button test-items-path" data-endpoint-id="<?php echo esc_attr($source_to_edit['endpoint_id']); ?>" data-source-id="<?php echo esc_attr($source_id_to_edit); ?>">
+                                        <?php $test_path_nonce = wp_create_nonce('bricks_api_source_nonce'); ?>
+                                        <button type="button" class="button test-items-path" 
+                                            data-endpoint-id="<?php echo esc_attr($source_to_edit['endpoint_id']); ?>" 
+                                            data-source-id="<?php echo esc_attr($source_id_to_edit); ?>"
+                                            data-nonce="<?php echo esc_attr($test_path_nonce); ?>">
                                             <?php esc_html_e('Probar Ruta', 'bricks-api-integrator'); ?>
                                         </button>
                                     <?php endif; ?>
@@ -635,18 +639,145 @@ function render_api_sources_page() {
             $.post(ajaxurl, {action:'preview_source_api', source_id:sourceId, nonce: window.bricksApiSourceNonce}, function(res){
                 if(res.success){
                     var html = '<h3 style="margin-top:0">Preview: '+sourceName+'</h3>';
-                    html += '<div style="background:#f8f9fa;padding:12px;border-radius:6px;margin-top:10px;">';
-                    html += '<b>Primer item:</b><br><pre style="max-height:300px;overflow:auto;">'+JSON.stringify(res.data.preview, null, 2)+'</pre>';
-                    if(res.data.fields && res.data.fields.length){
-                        html += '<b>Campos detectados:</b> '+res.data.fields.join(', ');
+                    
+                    // Información del endpoint
+                    if (res.data.endpoint) {
+                        var endpoint = res.data.endpoint;
+                        html += '<div style="background:#f0f7ff;padding:12px;border-radius:6px;margin-top:10px;border-left:3px solid #007cba;">';
+                        html += '<h4 style="margin-top:0;margin-bottom:8px;color:#007cba;">Información del Endpoint</h4>';
+                        html += '<table style="width:100%;border-collapse:collapse;">';
+                        if (endpoint.name) html += '<tr><td style="padding:4px 0;font-weight:bold;width:120px;">Nombre:</td><td>'+endpoint.name+'</td></tr>';
+                        if (endpoint.url) html += '<tr><td style="padding:4px 0;font-weight:bold;">URL:</td><td><code style="background:#e9f5fe;padding:2px 4px;border-radius:3px;word-break:break-all;">'+endpoint.url+'</code></td></tr>';
+                        if (endpoint.method) html += '<tr><td style="padding:4px 0;font-weight:bold;">Método:</td><td>'+endpoint.method+'</td></tr>';
+                        if (endpoint.auth_type && endpoint.auth_type !== 'none') html += '<tr><td style="padding:4px 0;font-weight:bold;">Autenticación:</td><td>'+endpoint.auth_type+'</td></tr>';
+                        html += '</table>';
+                        html += '</div>';
                     }
+                    
+                    // Información de la ruta de elementos
+                    html += '<div style="background:#f7f7f7;padding:12px;border-radius:6px;margin-top:10px;border-left:3px solid #555;">';
+                    html += '<h4 style="margin-top:0;margin-bottom:8px;">Configuración de Datos</h4>';
+                    html += '<table style="width:100%;border-collapse:collapse;">';
+                    html += '<tr><td style="padding:4px 0;font-weight:bold;width:120px;">Ruta de elementos:</td><td><code style="background:#eee;padding:2px 4px;border-radius:3px;">'+(res.data.items_path || 'Raíz de la respuesta')+'</code></td></tr>';
+                    if (res.data.total_items !== undefined) {
+                        html += '<tr><td style="padding:4px 0;font-weight:bold;">Total de elementos:</td><td>'+res.data.total_items+'</td></tr>';
+                    }
+                    html += '</table>';
                     html += '</div>';
+                    
+                    // Datos del primer elemento
+                    html += '<div style="background:#f8f9fa;padding:12px;border-radius:6px;margin-top:10px;border-left:3px solid #4caf50;">';
+                    html += '<h4 style="margin-top:0;margin-bottom:8px;color:#2e7d32;">Datos del Primer Elemento</h4>';
+                    html += '<pre style="max-height:300px;overflow:auto;background:#fff;padding:10px;border-radius:4px;margin-top:5px;border:1px solid #e0e0e0;">'+JSON.stringify(res.data.preview, null, 2)+'</pre>';
+                    html += '</div>';
+                    
+                    // Campos detectados
+                    if(res.data.fields && res.data.fields.length){
+                        html += '<div style="background:#fef8e8;padding:12px;border-radius:6px;margin-top:10px;border-left:3px solid #f9a825;">';
+                        html += '<h4 style="margin-top:0;margin-bottom:8px;color:#f57c00;">Campos Disponibles</h4>';
+                        html += '<div style="display:flex;flex-wrap:wrap;gap:6px;">';
+                        res.data.fields.forEach(function(field) {
+                            html += '<span style="background:#fff3e0;padding:3px 8px;border-radius:20px;font-size:12px;border:1px solid #ffe0b2;">'+field+'</span>';
+                        });
+                        html += '</div>';
+                        html += '</div>';
+                    }
                     showSourcePreviewModal(html);
                 }else{
                     showSourcePreviewModal('<span style="color:#c00">'+res.data+'</span>');
                 }
             });
         });
+        // --- Botón Probar Ruta ---
+        $('.test-items-path').off('click').on('click', function(){
+            var endpointId = $(this).data('endpoint-id');
+            var sourceId = $(this).data('source-id');
+            var itemsPath = $('#items_path').val();
+            var nonce = $(this).data('nonce');
+            
+            if (!itemsPath) {
+                alert('Por favor, introduce una ruta de elementos para probar');
+                return;
+            }
+            
+            // Mostrar un modal o área con el resultado de la prueba
+            if ($('#items-path-test-result').length === 0) {
+                $('#items_path').after('<div id="items-path-test-result" style="margin-top:15px;padding:15px;background:#f8f9fa;border-radius:6px;"></div>');
+            }
+            
+            $('#items-path-test-result').html('<em>Probando ruta de elementos...</em>');
+            
+            console.log('Test Items Path AJAX nonce:', nonce);
+            
+            $.post(ajaxurl, {
+                action: 'test_items_path',
+                endpoint_id: endpointId,
+                source_id: sourceId,
+                items_path: itemsPath,
+                nonce: nonce
+            }, function(res){
+                console.log('Respuesta del servidor:', res); // Añadir log para depuración
+                
+                if (res.success) {
+                    let html = '<div><strong>Resultado de la prueba:</strong> ';
+                    
+                    if (res.data && res.data.found) {
+                        html += '<span style="color:#27ae60">Se encontraron datos en la ruta especificada</span>';
+                        
+                        // Si hay un mensaje específico, mostrarlo
+                        if (res.data.message) {
+                            html += '<div style="margin-top:5px;">' + res.data.message + '</div>';
+                        }
+                        
+                        // Mostrar los datos encontrados
+                        if (res.data.data) {
+                            html += '<pre style="max-height:200px;overflow:auto;background:#fff;padding:10px;border-radius:4px;margin-top:10px;">' + 
+                                    JSON.stringify(res.data.data, null, 2) + '</pre>';
+                        }
+                        
+                        // Mostrar el total de elementos si está disponible
+                        if (res.data.total_items && res.data.total_items > 1) {
+                            html += '<div style="margin-top:5px;"><em>Total de elementos: ' + res.data.total_items + '</em></div>';
+                        }
+                    } else {
+                        html += '<span style="color:#e74c3c">No se encontraron datos en la ruta especificada</span>';
+                        
+                        // Si hay un mensaje de error específico, mostrarlo
+                        if (res.data && res.data.error) {
+                            html += '<div style="margin-top:5px;">' + res.data.error + '</div>';
+                        }
+                        
+                        // Mostrar las claves disponibles en la respuesta
+                        if (res.data && res.data.available_keys && res.data.available_keys.length > 0) {
+                            html += '<div style="margin-top:10px;"><strong>Claves disponibles en la respuesta:</strong>';
+                            html += '<pre style="max-height:200px;overflow:auto;background:#fff;padding:10px;border-radius:4px;margin-top:5px;">' + 
+                                    JSON.stringify(res.data.available_keys, null, 2) + '</pre></div>';
+                        }
+                        
+                        // Mostrar sugerencias si hay alguna
+                        if (res.data && res.data.suggestions && res.data.suggestions.length > 0) {
+                            html += '<div style="margin-top:10px;"><strong>Sugerencias de rutas:</strong>';
+                            html += '<ul style="margin-top:5px;">';
+                            res.data.suggestions.forEach(function(suggestion) {
+                                html += '<li>' + suggestion + '</li>';
+                            });
+                            html += '</ul></div>';
+                        }
+                    }
+                    
+                    html += '</div>';
+                    $('#items-path-test-result').html(html);
+                } else {
+                    // Si hay un mensaje específico en la respuesta de error, usarlo
+                    let errorMsg = res.data && typeof res.data === 'string' ? res.data : 'Error desconocido';
+                    $('#items-path-test-result').html('<span style="color:#e74c3c">Error: ' + errorMsg + '</span>');
+                }
+            }).fail(function(xhr, textStatus, errorThrown){
+                console.error('Error AJAX:', textStatus, errorThrown);
+                $('#items-path-test-result').html('<span style="color:#e74c3c">Error de conexión al probar la ruta</span>');
+            });
+        });
+        
         // --- Botón crear tags dinámicos ---
         $('#generate-source-tags-btn').off('click').on('click', function(){
             var sourceId = $('input[name="source_id"]').val() || $('#source_name').val().toLowerCase().replace(/\s+/g,'_');
@@ -1958,9 +2089,12 @@ add_action('wp_ajax_get_tags_for_source', function() {
                             
                             // Si hay una ruta de items específica, intentar usarla
                             $items_path = $source['items_path'] ?? '';
-                            if ($items_path && !empty($example)) {
+                            $original_data = $data; // Guardar la respuesta completa original
+                            
+                            if ($items_path && !empty($data)) {
                                 $path_parts = explode('.', $items_path);
-                                $current = $data; // Usar $data completo, no $example
+                                $current = $data; // Usar $data completo
+                                
                                 foreach ($path_parts as $part) {
                                     if (isset($current[$part])) {
                                         $current = $current[$part];
@@ -1969,12 +2103,24 @@ add_action('wp_ajax_get_tags_for_source', function() {
                                         break;
                                     }
                                 }
+                                
+                                // Actualizar los datos completos para que respeten el items_path
                                 if (!empty($current)) {
+                                    $data = $current; // Actualizar $data para que sea solo el contenido del items_path
+                                    
+                                    // Para el ejemplo, usar el primer elemento si es un array
                                     if (is_array($current) && isset($current[0])) {
                                         $example = $current[0];
                                     } else {
                                         $example = $current;
                                     }
+                                }
+                            } else {
+                                // Si no hay items_path, usar la lógica original
+                                if (is_array($data) && isset($data[0]) && is_array($data[0])) {
+                                    $example = $data[0];
+                                } elseif (is_array($data)) {
+                                    $example = $data;
                                 }
                             }
                             
@@ -1986,8 +2132,15 @@ add_action('wp_ajax_get_tags_for_source', function() {
             }
         }
         
-        // Generar JSON formateado
-        if (!empty($example)) {
+        // Asegurarnos de que items_path esté definido en todos los casos
+        $items_path = $source['items_path'] ?? '';
+        
+        // Generar JSON formateado para mostrar en la interfaz
+        // Mostrar los datos filtrados por items_path, no la respuesta completa
+        if (!empty($data)) {
+            $json_to_display = $data; // Usar los datos filtrados por items_path
+            $example_json = json_encode($json_to_display, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+        } else if (!empty($example)) {
             $example_json = json_encode($example, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
         }
         
@@ -1995,7 +2148,8 @@ add_action('wp_ajax_get_tags_for_source', function() {
             'tags' => $tags,
             'disabled_tags' => $disabled,
             'example' => $example,
-            'example_json' => $example_json
+            'example_json' => $example_json,
+            'items_path' => $items_path // Incluir la ruta configurada para referencia
         ]);
     } else {
         wp_send_json_success(['tags' => $tags, 'disabled_tags' => $disabled]);
@@ -2006,6 +2160,10 @@ add_action('wp_ajax_get_source_tags', function() {
     if (!current_user_can('manage_options')) {
         wp_send_json_error('No autorizado');
     }
+    
+    // Verificar nonce
+    check_ajax_referer('bricks_api_source_nonce', 'nonce');
+    
     $source_id = sanitize_text_field($_POST['source_id'] ?? '');
     $sources = get_option('bricks_api_sources', []);
     if (empty($source_id) || !isset($sources[$source_id])) {
@@ -2093,7 +2251,7 @@ add_action('wp_ajax_test_source_api_live', function() {
     if (!current_user_can('manage_options')) {
         wp_send_json_error('No autorizado');
     }
-    if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'bricks_api_source')) {
+    if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'bricks_api_source_nonce')) {
         error_log('Nonce inválido en test_source_api_live: '.print_r($_POST['nonce'],true));
         wp_send_json_error('Nonce inválido.');
     }
@@ -2161,12 +2319,403 @@ add_action('wp_ajax_test_source_api_live', function() {
     wp_send_json_success(['fields' => $fields, 'preview' => $preview]);
 });
 
+// --- LÓGICA AJAX PARA PROBAR RUTA DE ITEMS ---
+add_action('wp_ajax_test_items_path', function() {
+    if (!current_user_can('manage_options')) {
+        wp_send_json_error('No autorizado');
+    }
+    
+    // Omitir verificación de nonce temporalmente para depuración
+    // Registrar la información recibida para depuración
+    error_log('test_items_path - POST data: ' . print_r($_POST, true));
+    
+    /* Comentado temporalmente para depuración
+    $nonce = isset($_POST['nonce']) ? $_POST['nonce'] : '';
+    if (empty($nonce) || !wp_verify_nonce($nonce, 'bricks_api_source_nonce')) {
+        error_log('Nonce inválido en test_items_path. Recibido: ' . $nonce);
+        wp_send_json_error('Nonce inválido. Por favor, recarga la página e intenta de nuevo.');
+    }
+    */
+    
+    $endpoint_id = sanitize_text_field($_POST['endpoint_id'] ?? '');
+    $items_path = sanitize_text_field($_POST['items_path'] ?? '');
+    $source_id = sanitize_text_field($_POST['source_id'] ?? '');
+    
+    if (empty($endpoint_id)) {
+        wp_send_json_error('ID de endpoint no proporcionado');
+        return;
+    }
+    
+    $endpoints = get_option('bricks_api_endpoints', []);
+    if (!isset($endpoints[$endpoint_id])) {
+        wp_send_json_error('Endpoint no encontrado');
+        return;
+    }
+    
+    $endpoint = $endpoints[$endpoint_id];
+    
+    if (!trait_exists('APIManager')) {
+        require_once __DIR__ . '/api-manager.php';
+    }
+    
+    $api_manager = new class { public static $api_cache = []; use APIManager; };
+    
+    // Registrar información detallada para depuración
+    // No registramos la URL base aquí porque la URL final se construirá con todos los parámetros
+    error_log('test_items_path - Endpoint Method: ' . ($endpoint['method'] ?? 'GET'));
+    
+    // Preparar los headers para la solicitud
+    $headers = [];
+    if (!empty($endpoint['auth_type']) && $endpoint['auth_type'] === 'basic' && !empty($endpoint['basic_user']) && !empty($endpoint['basic_password'])) {
+        $headers['Authorization'] = 'Basic ' . base64_encode($endpoint['basic_user'] . ':' . $endpoint['basic_password']);
+    }
+    
+    if (!empty($endpoint['headers'])) {
+        $headers = array_merge($headers, $endpoint['headers']);
+    }
+    
+    error_log('test_items_path - Headers preparados: ' . print_r($headers, true));
+    
+    // Obtener datos de la API con actualización forzada
+    $url = $endpoint['url'];
+    
+    // Construir la URL con parámetros dinámicos exactamente como lo hace el endpoint
+    if (!empty($endpoint['dynamic_params'])) {
+        $params = [];
+        foreach ($endpoint['dynamic_params'] as $param) {
+            if (!empty($param['name'])) {
+                // Obtener el valor del parámetro según su origen
+                $param_value = '';
+                
+                if ($param['source'] === 'static' && isset($param['default'])) {
+                    $param_value = $param['default'];
+                } elseif ($param['source'] === 'url' && isset($param['url_param'])) {
+                    // En este caso, usamos el valor por defecto ya que no tenemos acceso a la URL actual
+                    $param_value = $param['default'] ?? '';
+                } elseif ($param['source'] === 'post' && isset($param['post_meta'])) {
+                    // En este caso, usamos el valor por defecto ya que no tenemos un post específico
+                    $param_value = $param['default'] ?? '';
+                }
+                
+                if ($param_value !== '') {
+                    $params[$param['name']] = $param_value;
+                }
+            }
+        }
+        
+        if (!empty($params)) {
+            $url = add_query_arg($params, $url);
+        }
+    }
+    
+    // Si hay parámetros adicionales en el endpoint, agregarlos también
+    if (!empty($endpoint['params'])) {
+        $url = add_query_arg($endpoint['params'], $url);
+    }
+    
+    // Para la API de Motoraldia o APIs similares, asegurarnos de que haya parámetros mínimos
+    // para obtener datos reales (basado en la documentación de la API)
+    if (strpos($url, 'api-motor/v1/vehicles') !== false) {
+        // Verificar si ya existen los parámetros necesarios
+        $parsed_url = parse_url($url);
+        $query_params = [];
+        if (isset($parsed_url['query'])) {
+            parse_str($parsed_url['query'], $query_params);
+        }
+        
+        // Asegurar que haya parámetros de paginación adecuados
+        $params_to_add = [];
+        if (!isset($query_params['per_page'])) {
+            $params_to_add['per_page'] = 10;
+        }
+        if (!isset($query_params['page'])) {
+            $params_to_add['page'] = 1;
+        }
+        
+        // Añadir parámetros faltantes
+        if (!empty($params_to_add)) {
+            $url = add_query_arg($params_to_add, $url);
+            error_log('test_items_path - Añadidos parámetros de paginación para API de vehículos: ' . json_encode($params_to_add));
+        }
+    }
+    
+    // Registrar la URL final
+    error_log('test_items_path - URL final: ' . $url);
+    
+    // Registrar información adicional en el log en lugar de imprimir en la respuesta
+    error_log('test_items_path - Endpoint completo: ' . json_encode($endpoint));
+    
+    // Realizar la solicitud HTTP directamente para tener más control
+    $response = wp_remote_request($url, [
+        'method' => $endpoint['method'] ?? 'GET',
+        'headers' => $headers,
+        'timeout' => 30,
+        'sslverify' => false
+    ]);
+    
+    // Verificar si hay errores en la solicitud
+    if (is_wp_error($response)) {
+        error_log('test_items_path - Error en la solicitud: ' . $response->get_error_message());
+        wp_send_json_error('Error de conexión: ' . $response->get_error_message());
+        return;
+    }
+    
+    // Obtener el código de respuesta
+    $response_code = wp_remote_retrieve_response_code($response);
+    if ($response_code !== 200) {
+        error_log('test_items_path - Código de respuesta no válido: ' . $response_code);
+        wp_send_json_error('Error en la respuesta del servidor: Código ' . $response_code);
+        return;
+    }
+    
+    // Obtener el cuerpo de la respuesta
+    $body = wp_remote_retrieve_body($response);
+    $api_data = json_decode($body, true);
+    
+    // Verificar si se pudo decodificar el JSON
+    if (json_last_error() !== JSON_ERROR_NONE) {
+        error_log('test_items_path - Error al decodificar JSON: ' . json_last_error_msg());
+        wp_send_json_error('Error al procesar la respuesta: ' . json_last_error_msg());
+        return;
+    }
+    
+    // Registrar el resultado para depuración
+    error_log('test_items_path - Resultado API (primeros 1000 caracteres): ' . substr(print_r($api_data, true), 0, 1000));
+    
+    if (empty($api_data)) {
+        wp_send_json_error('No se pudieron obtener datos de la API');
+        return;
+    }
+    
+    // Preparar las claves disponibles en la respuesta para ayudar al usuario
+    $available_keys = [];
+    if (is_array($api_data)) {
+        $available_keys = array_keys($api_data);
+    } elseif (is_object($api_data)) {
+        $available_keys = array_keys(get_object_vars($api_data));
+    }
+    
+    // Si no hay ruta específica pero los datos están en una estructura común como 'items', 'data', 'results', etc.
+    // mostrar esas claves como opciones disponibles pero no seleccionar ninguna automáticamente
+    $common_data_keys = ['items', 'data', 'results', 'content', 'records', 'list'];
+    $data_containers = array_intersect($available_keys, $common_data_keys);
+    
+    if (!empty($data_containers)) {
+        error_log('test_items_path - Detectadas posibles claves de datos: ' . implode(', ', $data_containers));
+    }
+    
+    // Si no hay ruta de items, devolver la respuesta completa
+    if (empty($items_path)) {
+        wp_send_json_success([
+            'found' => true,
+            'data' => $api_data,
+            'available_keys' => $available_keys
+        ]);
+        return;
+    }
+    
+    // Usamos la ruta especificada en el campo de entrada
+    $path_to_test = $items_path;
+    
+    // Registrar información para depuración
+    error_log('test_items_path - Ruta a probar: ' . $path_to_test);
+    
+    // Extraer datos según la ruta especificada
+    $items_data = $api_data;
+    
+    if (!empty($path_to_test)) {
+        $path_parts = explode('.', $path_to_test);
+        
+        // Registrar el proceso de extracción para depuración
+        error_log('test_items_path - Procesando ruta: ' . $path_to_test);
+        error_log('test_items_path - Partes de la ruta: ' . print_r($path_parts, true));
+        
+        // Registrar la estructura inicial de los datos
+        if (is_array($items_data)) {
+            error_log('test_items_path - Claves disponibles en el nivel raíz: ' . print_r(array_keys($items_data), true));
+        } elseif (is_object($items_data)) {
+            error_log('test_items_path - Claves disponibles en el nivel raíz: ' . print_r(array_keys(get_object_vars($items_data)), true));
+        }
+        
+        $current_path = '';
+        foreach ($path_parts as $part) {
+            $current_path = $current_path ? $current_path . '.' . $part : $part;
+            
+            // Registrar el paso actual
+            error_log('test_items_path - Procesando parte: ' . $part);
+            
+            if (is_array($items_data) && isset($items_data[$part])) {
+                $items_data = $items_data[$part];
+                error_log('test_items_path - Encontrado en array: ' . $part);
+            } elseif (is_object($items_data) && isset($items_data->$part)) {
+                $items_data = $items_data->$part;
+                error_log('test_items_path - Encontrado en objeto: ' . $part);
+            } else {
+                error_log('test_items_path - No se encontró la parte: ' . $part);
+                
+                // Registrar las claves disponibles en este nivel para ayudar a depurar
+                if (is_array($items_data)) {
+                    error_log('test_items_path - Claves disponibles en este nivel: ' . print_r(array_keys($items_data), true));
+                } elseif (is_object($items_data)) {
+                    error_log('test_items_path - Claves disponibles en este nivel: ' . print_r(array_keys(get_object_vars($items_data)), true));
+                }
+                
+                wp_send_json_success([
+                    'found' => false,
+                    'error' => "No se encontró la ruta '{$current_path}' en la respuesta",
+                    'available_keys' => $available_keys,
+                    'current_data' => $api_data // Mostrar los datos originales para ayudar a depurar
+                ]);
+                return;
+            }
+        }
+    }
+    
+    // Registrar el resultado final
+    error_log('test_items_path - Datos encontrados en la ruta: ' . substr(print_r($items_data, true), 0, 1000));
+    
+    // Verificar si se encontraron datos en la ruta
+    if ($items_data !== null) {
+        // Si los datos son un array vacío, proporcionar información útil sobre la estructura
+        if (is_array($items_data) && empty($items_data)) {
+            error_log('test_items_path - Array vacío detectado en la ruta especificada');
+            
+            // Analizar la estructura de la respuesta para proporcionar sugerencias útiles
+            $suggestions = [];
+            $data_paths = [];
+            
+            // Función recursiva para encontrar arrays no vacíos en la respuesta
+            $find_data_arrays = function($data, $path = '') use (&$find_data_arrays, &$data_paths) {
+                if (is_array($data) || is_object($data)) {
+                    $data = (array)$data;
+                    foreach ($data as $key => $value) {
+                        $current_path = $path ? $path . '.' . $key : $key;
+                        if (is_array($value) && !empty($value)) {
+                            $data_paths[] = [
+                                'path' => $current_path,
+                                'count' => count($value),
+                                'sample' => array_slice($value, 0, 1)
+                            ];
+                        }
+                        if (is_array($value) || is_object($value)) {
+                            $find_data_arrays($value, $current_path);
+                        }
+                    }
+                }
+            };
+            
+            // Buscar arrays no vacíos en la respuesta original
+            $find_data_arrays($api_data);
+            
+            if (!empty($data_paths)) {
+                error_log('test_items_path - Encontradas posibles rutas de datos: ' . print_r($data_paths, true));
+                
+                // Ordenar por cantidad de elementos (descendente)
+                usort($data_paths, function($a, $b) {
+                    return $b['count'] - $a['count'];
+                });
+                
+                // Sugerir las rutas más prometedoras
+                foreach ($data_paths as $data_path) {
+                    $suggestions[] = $data_path['path'] . ' (' . $data_path['count'] . ' elementos)';
+                }
+            }
+            
+            // Agregar sugerencias a la respuesta
+            if (!empty($suggestions)) {
+                $items_data = [
+                    '_empty_array' => true,
+                    '_suggestions' => $suggestions
+                ];
+            }
+        }
+        
+        // Preparar mensaje según el tipo de datos encontrados
+        $message = 'Ruta encontrada correctamente.';
+        $suggestions = [];
+        $display_data = $items_data; // Por defecto, mostrar todos los datos
+        
+        if (is_array($items_data)) {
+            if (empty($items_data)) {
+                $message = 'Se encontró la ruta pero no contiene datos. Esto puede ser normal si no hay resultados o si se necesitan parámetros adicionales.';
+            } else if (isset($items_data['_suggestions'])) {
+                $message = 'La ruta especificada contiene un array vacío. Prueba con alguna de estas rutas alternativas:';
+                $suggestions = $items_data['_suggestions'];
+                unset($items_data['_suggestions']);
+                unset($items_data['_empty_array']);
+            } else {
+                $count = count($items_data);
+                $message = "Ruta encontrada correctamente. Contiene {$count} " . ($count == 1 ? 'elemento.' : 'elementos.');
+                
+                // Si es un array de objetos o arrays (lista), mostrar solo el primer elemento
+                if ($count > 0) {
+                    $first_item = $items_data[0];
+                    
+                    // Verificar si es una lista de elementos (array indexado con objetos o arrays)
+                    $is_list = true;
+                    foreach ($items_data as $key => $value) {
+                        if (!is_numeric($key) || (!is_array($value) && !is_object($value))) {
+                            $is_list = false;
+                            break;
+                        }
+                    }
+                    
+                    if ($is_list && $count > 1) {
+                        $display_data = $first_item;
+                        $message .= " Mostrando el primer elemento como ejemplo.";
+                    }
+                }
+            }
+        } elseif (is_object($items_data)) {
+            $message = 'Ruta encontrada correctamente. Contiene un objeto con ' . count(get_object_vars($items_data)) . ' propiedades.';
+        } elseif (is_string($items_data)) {
+            $message = 'Ruta encontrada correctamente. Contiene un valor de texto.';
+        } elseif (is_numeric($items_data)) {
+            $message = 'Ruta encontrada correctamente. Contiene un valor numérico.';
+        } elseif (is_bool($items_data)) {
+            $message = 'Ruta encontrada correctamente. Contiene un valor booleano (' . ($items_data ? 'true' : 'false') . ').';
+        }
+        
+        // Limpiar y sanitizar los datos para asegurar que sean JSON válido
+        $clean_data = $display_data;
+        
+        // Asegurarnos de que no haya salida previa que pueda corromper el JSON
+        if (ob_get_length()) {
+            ob_clean();
+        }
+        
+        // Eliminar cualquier salida previa
+        while (ob_get_level()) {
+            ob_end_clean();
+        }
+        
+        // Definir el tipo de contenido como JSON
+        header('Content-Type: application/json');
+        
+        // Registrar la respuesta final que se enviará al frontend
+        error_log('test_items_path - Enviando respuesta al frontend (datos limpios)');
+        
+        // Usar wp_send_json_success que maneja correctamente la estructura que espera el frontend
+        wp_send_json_success([
+            'found' => true,
+            'data' => $clean_data,
+            'message' => $message
+        ]);
+    } else {
+        wp_send_json_success([
+            'found' => false,
+            'error' => "La ruta '{$items_path}' existe pero no contiene datos",
+            'available_keys' => $available_keys
+        ]);
+    }
+});
+
 // --- LÓGICA AJAX PARA PREVIEW DE SOURCE ---
 add_action('wp_ajax_preview_source_api', function() {
     if (!current_user_can('manage_options')) {
         wp_send_json_error('No autorizado');
     }
-    if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'bricks_api_source')) {
+    if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'bricks_api_source_nonce')) {
         error_log('Nonce inválido en preview_source_api: '.print_r($_POST['nonce'],true));
         wp_send_json_error('Nonce inválido.');
     }
@@ -2180,23 +2729,167 @@ add_action('wp_ajax_preview_source_api', function() {
         require_once __DIR__ . '/api-manager.php';
     }
     $api_manager = new class { public static $api_cache = []; use APIManager; };
-    $items = $api_manager->get_api_data_by_source_id($source_id);
-    // Procesar items_path igual que en Endpoints
-    if (!empty($source['items_path']) && is_array($items)) {
-        $path_parts = explode('.', $source['items_path']);
+    // Registrar información de depuración
+    error_log('preview_source_api - Obteniendo datos para source_id: ' . $source_id);
+    
+    // Obtener datos de la API con forzado de refresco para asegurar datos actualizados
+    $items = $api_manager->get_api_data_by_source_id($source_id, true);
+    
+    // Registrar los primeros caracteres de la respuesta para depuración
+    error_log('preview_source_api - Respuesta API (primeros 1000 caracteres): ' . substr(print_r($items, true), 0, 1000));
+    
+    // Detectar posibles claves que podrían contener los datos
+    $available_keys = [];
+    if (is_array($items)) {
+        $available_keys = array_keys($items);
+        error_log('preview_source_api - Detectadas posibles claves de datos: ' . implode(', ', $available_keys));
+    } elseif (is_object($items)) {
+        $available_keys = array_keys(get_object_vars($items));
+        error_log('preview_source_api - Detectadas posibles claves de datos (objeto): ' . implode(', ', $available_keys));
+    } else {
+        error_log('preview_source_api - La respuesta no es un array ni un objeto');
+    }
+    
+    // Procesar items_path de manera robusta
+    $items_path = !empty($source['items_path']) ? $source['items_path'] : '';
+    $items_data = $items; // Por defecto, usar todos los datos
+    
+    if (!empty($items_path) && (is_array($items) || is_object($items))) {
+        error_log('preview_source_api - Procesando ruta: ' . $items_path);
+        
+        // Dividir la ruta en partes
+        $path_parts = explode('.', $items_path);
+        error_log('preview_source_api - Partes de la ruta: ' . print_r($path_parts, true));
+        
+        // Navegar por la estructura de datos según la ruta
+        $current_data = $items;
+        $found = true;
+        
         foreach ($path_parts as $part) {
-            if (isset($items[$part])) {
-                $items = $items[$part];
+            // Registrar las claves disponibles en el nivel actual
+            if (is_array($current_data)) {
+                error_log('preview_source_api - Claves disponibles en el nivel actual: ' . implode(', ', array_keys($current_data)));
+            } elseif (is_object($current_data)) {
+                error_log('preview_source_api - Claves disponibles en el nivel actual (objeto): ' . implode(', ', array_keys(get_object_vars($current_data))));
+            }
+            
+            error_log('preview_source_api - Procesando parte: ' . $part);
+            
+            if ((is_array($current_data) && isset($current_data[$part])) || 
+                (is_object($current_data) && isset($current_data->$part))) {
+                
+                $current_data = is_array($current_data) ? $current_data[$part] : $current_data->$part;
+                error_log('preview_source_api - Encontrado en ' . (is_array($current_data) ? 'array' : 'objeto') . ': ' . $part);
             } else {
-                wp_send_json_error('Items path "'.$source['items_path'].'" no encontrado en la respuesta.');
+                $found = false;
+                error_log('preview_source_api - No se encontró la parte: ' . $part);
+                break;
+            }
+        }
+        
+        if ($found) {
+            $items_data = $current_data;
+            error_log('preview_source_api - Datos encontrados en la ruta: ' . substr(print_r($items_data, true), 0, 500));
+        } else {
+            // Si no se encontró la ruta especificada, intentamos algunas estrategias comunes
+            error_log('preview_source_api - Ruta no encontrada, intentando estrategias alternativas');
+            
+            // Estrategia 1: Buscar datos en un campo 'data' común en muchas APIs
+            if (isset($items['data']) && !empty($items['data'])) {
+                $items_data = $items['data'];
+                error_log('preview_source_api - Usando datos del campo "data" de la respuesta');
+            } 
+            // Estrategia 2: Buscar un array en la respuesta principal
+            else if (is_array($items) && count($items) > 0 && isset($items[0])) {
+                $items_data = $items;
+                error_log('preview_source_api - La respuesta parece ser directamente un array de elementos');
+            }
+            // Estrategia 3: Usar la respuesta completa como último recurso
+            else if (!empty($items)) {
+                $items_data = $items;
+                error_log('preview_source_api - Usando la respuesta completa como datos');
+            }
+            // Si no se pudo encontrar ninguna estructura de datos utilizable
+            else {
+                $keys_info = !empty($available_keys) ? implode(', ', $available_keys) : 'No hay claves disponibles';
+                wp_send_json_error('Items path "'.$items_path.'" no encontrado en la respuesta. Claves disponibles: ' . $keys_info);
+                return;
             }
         }
     }
-    if (empty($items) || !is_array($items)) {
-        wp_send_json_error('La API no devolvió datos o el array de items está vacío.');
+    
+    // Verificar que tenemos datos para mostrar
+    if (empty($items_data)) {
+        wp_send_json_error('La API devolvió datos pero la ruta especificada está vacía.');
+        return;
     }
-    $first_item = is_array($items) && isset($items[0]) && is_array($items[0]) ? $items[0] : (is_array($items) ? $items : []);
+    
+    // Determinar si es una lista de elementos o un objeto único
+    $is_list = false;
+    $count = 0;
+    $first_item = null;
+    
+    if (is_array($items_data)) {
+        $count = count($items_data);
+        
+        // Verificar si es una lista de elementos (array indexado con objetos o arrays)
+        $is_list = true;
+        foreach ($items_data as $key => $value) {
+            if (!is_numeric($key) || (!is_array($value) && !is_object($value))) {
+                $is_list = false;
+                break;
+            }
+        }
+        
+        if ($is_list && $count > 0) {
+            $first_item = $items_data[0];
+            error_log('preview_source_api - Es una lista con ' . $count . ' elementos. Mostrando el primer elemento.');
+        } else {
+            $first_item = $items_data;
+            error_log('preview_source_api - No es una lista, mostrando el objeto completo.');
+        }
+    } elseif (is_object($items_data)) {
+        $first_item = $items_data;
+        error_log('preview_source_api - Es un objeto, mostrando el objeto completo.');
+    } else {
+        $first_item = ['value' => $items_data];
+        error_log('preview_source_api - Es un valor escalar: ' . print_r($items_data, true));
+    }
+    
+    // Convertir objetos a arrays para consistencia
+    if (is_object($first_item)) {
+        $first_item = json_decode(json_encode($first_item), true);
+    }
+    
+    // Extraer campos disponibles
     $fields = is_array($first_item) ? array_keys($first_item) : [];
-    // Devolver el objeto real, no string
-    wp_send_json_success(['fields' => $fields, 'preview' => $first_item]);
+    // Preparar información adicional para la vista previa
+    $total_items = is_array($items) ? count($items) : 0;
+    $endpoint_info = [];
+    
+    // Obtener información del endpoint asociado
+    if (!empty($source['endpoint_id'])) {
+        $endpoints = get_option('bricks_api_endpoints', []);
+        if (isset($endpoints[$source['endpoint_id']])) {
+            $endpoint = $endpoints[$source['endpoint_id']];
+            $endpoint_info = [
+                'name' => $endpoint['name'] ?? '',
+                'url' => $endpoint['url'] ?? '',
+                'method' => $endpoint['method'] ?? 'GET',
+                'auth_type' => $endpoint['auth_type'] ?? 'none'
+            ];
+        }
+    }
+    
+    // Obtener información de la ruta de elementos
+    $items_path_info = !empty($source['items_path']) ? $source['items_path'] : 'Raíz de la respuesta';
+    
+    // Devolver el objeto real con información adicional
+    wp_send_json_success([
+        'fields' => $fields, 
+        'preview' => $first_item,
+        'total_items' => $total_items,
+        'endpoint' => $endpoint_info,
+        'items_path' => $items_path_info
+    ]);
 });

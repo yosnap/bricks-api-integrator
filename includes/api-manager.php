@@ -33,11 +33,12 @@ trait APIManager {
     /**
      * Obtener datos de API por source ID
      */
-    public function get_api_data_by_source_id($source_id) {
+    public function get_api_data_by_source_id($source_id, $force_refresh = false) {
         $sources = get_option('bricks_api_sources', []);
         $endpoints = get_option('bricks_api_endpoints', []);
         
         if (!isset($sources[$source_id])) {
+            error_log("API Manager: Source ID '$source_id' no encontrado");
             return [];
         }
         
@@ -45,26 +46,62 @@ trait APIManager {
         $endpoint_id = $source['endpoint_id'] ?? '';
         
         if (!isset($endpoints[$endpoint_id])) {
+            error_log("API Manager: Endpoint ID '$endpoint_id' no encontrado para source '$source_id'");
             return [];
         }
         
         $endpoint = $endpoints[$endpoint_id];
-        $data = $this->get_api_data_with_cache($endpoint['url'], $endpoint);
+        $url = $endpoint['url'];
+        
+        // Verificar si la URL ya tiene parámetros de paginación básicos
+        // Esto es útil para APIs que requieren paginación pero no lo especificamos en la URL
+        $params_to_add = [];
+        
+        // Añadir parámetros de paginación genéricos si no existen
+        if (strpos($url, 'per_page=') === false && strpos($url, 'limit=') === false && strpos($url, 'size=') === false) {
+            $params_to_add['per_page'] = 10; // Parámetro común para WordPress y muchas otras APIs
+        }
+        
+        if (strpos($url, 'page=') === false && strpos($url, 'offset=') === false) {
+            $params_to_add['page'] = 1; // Parámetro común para paginación
+        }
+        
+        if (!empty($params_to_add)) {
+            $url = add_query_arg($params_to_add, $url);
+            error_log("API Manager: Añadidos parámetros de paginación genéricos: " . json_encode($params_to_add));
+            error_log("API Manager: URL final: $url");
+            
+            // Actualizar la URL en el endpoint para la llamada
+            $endpoint['url'] = $url;
+        }
+        
+        // Obtener datos de la API
+        $data = $this->get_api_data_with_cache($url, $endpoint, $force_refresh);
+        error_log("API Manager: Datos obtenidos de la API: " . substr(print_r($data, true), 0, 500));
         
         // Procesar items_path si está configurado
         if (!empty($source['items_path']) && !empty($data)) {
             $path_parts = explode('.', $source['items_path']);
             $processed_data = $data;
             
+            error_log("API Manager: Procesando items_path: " . $source['items_path']);
+            
             foreach ($path_parts as $part) {
+                error_log("API Manager: Procesando parte: $part");
+                
                 if (isset($processed_data[$part])) {
                     $processed_data = $processed_data[$part];
+                    error_log("API Manager: Parte encontrada");
                 } else {
+                    error_log("API Manager: Parte '$part' no encontrada. Claves disponibles: " . 
+                              implode(', ', is_array($processed_data) ? array_keys($processed_data) : ['<no es array>']));
                     return [];
                 }
             }
             
-            return is_array($processed_data) ? $processed_data : [$processed_data];
+            $result = is_array($processed_data) ? $processed_data : [$processed_data];
+            error_log("API Manager: Datos procesados: " . substr(print_r($result, true), 0, 500));
+            return $result;
         }
         
         return $data;
@@ -76,16 +113,20 @@ trait APIManager {
     public function get_api_data_with_cache($url, $endpoint_config = [], $force_refresh = false) {
         $cache_key = 'api_data_' . md5($url . serialize($endpoint_config));
         
-        // Cache estático
+        error_log("API Manager: Obteniendo datos para URL: $url");
+        
+        // Cache estático - saltamos si se fuerza el refresco
         if (!$force_refresh && isset(self::$api_cache[$cache_key])) {
+            error_log("API Manager: Usando datos de cache estático");
             return self::$api_cache[$cache_key];
         }
         
-        // Cache de WordPress (solo si no está deshabilitado)
+        // Cache de WordPress - saltamos si se fuerza el refresco
         $cache_duration = get_option('bricks_api_cache_duration', 300);
         if (!$force_refresh && $cache_duration > 0) {
             $cached_data = get_transient($cache_key);
             if ($cached_data !== false) {
+                error_log("API Manager: Usando datos de cache de WordPress");
                 self::$api_cache[$cache_key] = $cached_data;
                 return $cached_data;
             }
@@ -93,31 +134,95 @@ trait APIManager {
         
         // Procesar URL dinámica
         $processed_url = $this->process_dynamic_url($url);
+        error_log("API Manager: URL procesada: $processed_url");
         
         // Si contiene parámetros no resueltos, devolver vacío
         if (strpos($processed_url, '{') !== false) {
+            error_log("API Manager: La URL contiene parámetros no resueltos: $processed_url");
             return [];
         }
         
-        // Preparar headers
+        // Preparar headers y opciones de la petición
         $headers = $this->prepare_request_headers($endpoint_config);
-        
-        // Realizar petición
-        $response = wp_remote_get($processed_url, [
+        $request_options = [
             'headers' => $headers,
             'timeout' => 30
-        ]);
+        ];
         
-        if (is_wp_error($response) || wp_remote_retrieve_response_code($response) !== 200) {
+        // Configurar autenticación básica si está definida y no está ya configurada
+        if (empty($headers['Authorization']) && isset($endpoint_config['auth_type']) && $endpoint_config['auth_type'] === 'basic') {
+            $username = $endpoint_config['username'] ?? '';
+            $password = $endpoint_config['password'] ?? '';
+            
+            if (!empty($username) && !empty($password)) {
+                $request_options['headers']['Authorization'] = 'Basic ' . base64_encode($username . ':' . $password);
+                error_log("API Manager: Autenticación básica configurada");
+            }
+        }
+        
+        // Determinar el método HTTP a usar (GET por defecto)
+        $method = isset($endpoint_config['method']) ? strtoupper($endpoint_config['method']) : 'GET';
+        error_log("API Manager: Método HTTP: $method");
+        
+        // Realizar petición según el método
+        if ($method === 'GET') {
+            $response = wp_remote_get($processed_url, $request_options);
+        } elseif ($method === 'POST') {
+            $response = wp_remote_post($processed_url, $request_options);
+        } else {
+            $request_options['method'] = $method;
+            $response = wp_remote_request($processed_url, $request_options);
+        }
+        
+        // Verificar si hay errores en la respuesta
+        if (is_wp_error($response)) {
+            error_log("API Manager: Error en la petición: " . $response->get_error_message());
             return [];
         }
         
+        $status_code = wp_remote_retrieve_response_code($response);
+        error_log("API Manager: Código de estado HTTP: $status_code");
+        
+        if ($status_code !== 200) {
+            error_log("API Manager: La petición no devolvió un código 200. Código: $status_code");
+            return [];
+        }
+        
+        // Obtener y procesar el cuerpo de la respuesta
         $body = wp_remote_retrieve_body($response);
+        error_log("API Manager: Primeros 200 caracteres del body: " . substr($body, 0, 200));
+        
+        // Intentar decodificar como JSON
         $data = json_decode($body, true);
         
-        if (json_last_error() !== JSON_ERROR_NONE || empty($data)) {
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            error_log("API Manager: Error al decodificar JSON: " . json_last_error_msg());
             return [];
         }
+        
+        if (empty($data)) {
+            error_log("API Manager: Los datos decodificados están vacíos");
+            return [];
+        }
+        
+        // Detectar formato común de respuesta con wrapper de estado y datos
+        // Muchas APIs usan este formato: {status: "success", data: [...]}
+        if (isset($data['status']) && ($data['status'] === 'success' || $data['status'] === 'ok') && isset($data['data'])) {
+            error_log("API Manager: Detectado formato de respuesta con wrapper, extrayendo datos del campo 'data'");
+            $data = $data['data'];
+        }
+        
+        // Guardar en cache
+        self::$api_cache[$cache_key] = $data;
+        
+        // Guardar en transient si la caché está habilitada
+        if ($cache_duration > 0) {
+            set_transient($cache_key, $data, $cache_duration);
+            error_log("API Manager: Datos guardados en cache por $cache_duration segundos");
+        }
+        
+        error_log("API Manager: Datos obtenidos correctamente: " . substr(print_r($data, true), 0, 200) . "...");
+        return $data;
         
         // Convertir a array si no lo es
         if (!is_array($data)) {
