@@ -318,15 +318,26 @@ function render_api_sources_page() {
         // --- Mostrar tags y botón eliminar al editar si existen ---
         function autoShowTagsIfExist() {
             var sourceId = $('input[name="source_id"]').val() || $('#source_name').val().toLowerCase().replace(/\s+/g,'_');
+            
+            // Primero verificar si el source tiene tags generados
             $.post(ajaxurl, {action:'get_source_tags', source_id:sourceId, nonce: window.bricksApiSourceNonce}, function(res){
                 if(res.success && res.data.tags && res.data.tags.length){
                     $('#view-source-tags-btn').show();
                     $('#delete-source-tags-btn').show();
-                    // Mostrar tabla avanzada automáticamente
-                    renderTagsTable(res, sourceId);
-            } else {
-                    $('#view-source-tags-btn').hide();
-                    $('#delete-source-tags-btn').hide();
+                    console.log('Source tiene tags:', res.data.tags.length);
+                } else {
+                    // Si no hay tags en el source, verificar en las opciones globales
+                    $.post(ajaxurl, {action:'get_tags_for_source', source_id:sourceId, source_name:$('#source_name').val(), nonce: window.bricksApiSourceNonce}, function(res2){
+                        if(res2.success && res2.data.tags && res2.data.tags.length){
+                            $('#view-source-tags-btn').show();
+                            $('#delete-source-tags-btn').show();
+                            console.log('Source tiene tags globales:', res2.data.tags.length);
+                        } else {
+                            $('#view-source-tags-btn').hide();
+                            $('#delete-source-tags-btn').hide();
+                            console.log('Source no tiene tags');
+                        }
+                    });
                 }
             });
         }
@@ -800,8 +811,15 @@ function render_api_sources_page() {
                 $('#generate-source-tags-btn').prop('disabled', false).text('⚡ Crear tags y query types dinámicos');
                 if(res.success){
                     alert('Tags generados correctamente');
+                    // Mostrar botones de forma persistente
                     $('#view-source-tags-btn').show();
                     $('#delete-source-tags-btn').show();
+                    // Forzar que se mantengan visibles
+                    setTimeout(function(){
+                        $('#view-source-tags-btn').show();
+                        $('#delete-source-tags-btn').show();
+                        console.log('Botones forzados a permanecer visibles');
+                    }, 1000);
                     // Mostrar tabla avanzada automáticamente
                     autoShowTagsIfExist();
                 } else {
@@ -2155,6 +2173,20 @@ add_action('wp_ajax_generate_source_tags', function() {
     ];
     update_option('bricks_api_generated_query_types', $query_types);
     update_option('bricks_api_generated_tags', $tags_data);
+    
+    // NUEVO: También guardar los tags en el source específico para mostrar botones
+    $sources = get_option('bricks_api_sources', []);
+    if (isset($sources[$source_id])) {
+        $sources[$source_id]['tags'] = $tags_final;
+        $sources[$source_id]['tags_generated'] = true;
+        $sources[$source_id]['last_tag_generation'] = current_time('mysql');
+        update_option('bricks_api_sources', $sources);
+        
+        if (defined('WP_DEBUG') && WP_DEBUG) {
+            error_log('GENERATE TAGS DEBUG - Tags guardados en source específico');
+        }
+    }
+    
     wp_send_json_success(['tags' => $tags_final]);
 });
 add_action('wp_ajax_get_tags_for_source', function() {
