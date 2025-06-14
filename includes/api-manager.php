@@ -31,7 +31,7 @@ trait APIManager {
     }
     
     /**
-     * Obtener datos de API por source ID
+     * Obtener datos de API por source ID - CORREGIDO FINAL
      */
     public function get_api_data_by_source_id($source_id, $force_refresh = false) {
         $sources = get_option('bricks_api_sources', []);
@@ -51,59 +51,74 @@ trait APIManager {
         }
         
         $endpoint = $endpoints[$endpoint_id];
+        
+        error_log("API Manager: Procesando source '$source_id' con endpoint '{$endpoint['name']}'");
+        error_log("API Manager: Items path configurado: " . ($source['items_path'] ?? 'ninguno'));
+        
+        // Añadir parámetros de paginación por defecto si no existen en la URL
         $url = $endpoint['url'];
-        
-        // Verificar si la URL ya tiene parámetros de paginación básicos
-        // Esto es útil para APIs que requieren paginación pero no lo especificamos en la URL
-        $params_to_add = [];
-        
-        // Añadir parámetros de paginación genéricos si no existen
-        if (strpos($url, 'per_page=') === false && strpos($url, 'limit=') === false && strpos($url, 'size=') === false) {
-            $params_to_add['per_page'] = 10; // Parámetro común para WordPress y muchas otras APIs
+        $parsed_url = parse_url($url);
+        $query_params = [];
+        if (isset($parsed_url['query'])) {
+            parse_str($parsed_url['query'], $query_params);
         }
         
-        if (strpos($url, 'page=') === false && strpos($url, 'offset=') === false) {
-            $params_to_add['page'] = 1; // Parámetro común para paginación
+        // Añadir parámetros necesarios para obtener datos
+        if (!isset($query_params['per_page'])) {
+            $url = add_query_arg('per_page', 10, $url);
+        }
+        if (!isset($query_params['page'])) {
+            $url = add_query_arg('page', 1, $url);
         }
         
-        if (!empty($params_to_add)) {
-            $url = add_query_arg($params_to_add, $url);
-            error_log("API Manager: Añadidos parámetros de paginación genéricos: " . json_encode($params_to_add));
-            error_log("API Manager: URL final: $url");
-            
-            // Actualizar la URL en el endpoint para la llamada
-            $endpoint['url'] = $url;
-        }
+        error_log("API Manager: Original URL: " . $endpoint['url']);
+        error_log("API Manager: URL with params: " . $url);
         
-        // Obtener datos de la API
+        // Usar get_api_data_with_cache que ya maneja autenticación correctamente
         $data = $this->get_api_data_with_cache($url, $endpoint, $force_refresh);
+        
+        if (empty($data)) {
+            error_log("API Manager: No se obtuvieron datos de la API");
+            return [];
+        }
+        
         error_log("API Manager: Datos obtenidos de la API: " . substr(print_r($data, true), 0, 500));
         
-        // Procesar items_path si está configurado
-        if (!empty($source['items_path']) && !empty($data)) {
+        // Procesar items_path si está configurado - LÓGICA CORREGIDA
+        if (!empty($source['items_path'])) {
             $path_parts = explode('.', $source['items_path']);
             $processed_data = $data;
             
             error_log("API Manager: Procesando items_path: " . $source['items_path']);
+            error_log("API Manager: Path parts: " . print_r($path_parts, true));
+            error_log("API Manager: Initial data keys: " . print_r(is_array($data) ? array_keys($data) : 'not array', true));
             
             foreach ($path_parts as $part) {
                 error_log("API Manager: Procesando parte: $part");
                 
-                if (isset($processed_data[$part])) {
+                if (is_array($processed_data) && isset($processed_data[$part])) {
                     $processed_data = $processed_data[$part];
-                    error_log("API Manager: Parte encontrada");
+                    error_log("API Manager: Parte encontrada en array");
+                    if (is_array($processed_data)) {
+                        error_log("API Manager: Nueva data count: " . count($processed_data));
+                    }
+                } elseif (is_object($processed_data) && isset($processed_data->$part)) {
+                    $processed_data = $processed_data->$part;
+                    error_log("API Manager: Parte encontrada en objeto");
                 } else {
                     error_log("API Manager: Parte '$part' no encontrada. Claves disponibles: " . 
-                              implode(', ', is_array($processed_data) ? array_keys($processed_data) : ['<no es array>']));
+                              implode(', ', is_array($processed_data) ? array_keys($processed_data) : 
+                              (is_object($processed_data) ? array_keys(get_object_vars($processed_data)) : ['<no es array ni objeto>'])));
                     return [];
                 }
             }
             
             $result = is_array($processed_data) ? $processed_data : [$processed_data];
-            error_log("API Manager: Datos procesados: " . substr(print_r($result, true), 0, 500));
+            error_log("API Manager: Datos procesados exitosamente, count: " . count($result));
             return $result;
         }
         
+        error_log("API Manager: Retornando datos sin procesar items_path");
         return $data;
     }
     

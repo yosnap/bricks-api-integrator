@@ -273,87 +273,27 @@ class BricksAPIIntegrator {
             $endpoints = get_option('bricks_api_endpoints', []);
             
             if (defined('WP_DEBUG') && WP_DEBUG) {
-                error_log('QUERY LOOP DEBUG - Processing source: ' . $slug);
-                error_log('QUERY LOOP DEBUG - Source endpoint_id: ' . $endpoint_id);
-                error_log('QUERY LOOP DEBUG - Available endpoints: ' . print_r(array_keys($endpoints), true));
+                error_log('QUERY LOOP DEBUG - source endpoint_id: ' . $endpoint_id);
+                error_log('QUERY LOOP DEBUG - available endpoints: ' . print_r(array_keys($endpoints), true));
             }
             
             if (!isset($endpoints[$endpoint_id])) {
                 if (defined('WP_DEBUG') && WP_DEBUG) {
-                    error_log('QUERY LOOP DEBUG - Endpoint not found for id: ' . $endpoint_id);
+                    error_log('QUERY LOOP DEBUG - endpoint not found for id: ' . $endpoint_id);
                 }
                 return $results;
             }
             
             $endpoint = $endpoints[$endpoint_id];
-            
-            // Añadir parámetros de paginación por defecto si no existen en la URL - MISMA LÓGICA
-            $url = $endpoint['url'];
-            $parsed_url = parse_url($url);
-            $query_params = [];
-            if (isset($parsed_url['query'])) {
-                parse_str($parsed_url['query'], $query_params);
-            }
-            
-            // Añadir parámetros necesarios para obtener datos
-            if (!isset($query_params['per_page'])) {
-                $url = add_query_arg('per_page', 10, $url);
-            }
-            if (!isset($query_params['page'])) {
-                $url = add_query_arg('page', 1, $url);
-            }
-            
-            if (defined('WP_DEBUG') && WP_DEBUG) {
-                error_log('QUERY LOOP DEBUG - Original URL: ' . $endpoint['url']);
-                error_log('QUERY LOOP DEBUG - URL with params: ' . $url);
-            }
-            
-            // Configurar headers de autenticación si es necesario
-            $args = [
-                'timeout' => 30,
-                'headers' => [
-                    'User-Agent' => 'Bricks API Integrator/2.1.1'
-                ]
-            ];
-            
-            // Añadir autenticación básica si está configurada
-            if (!empty($endpoint['auth_type']) && $endpoint['auth_type'] === 'basic') {
-                $username = $endpoint['basic_user'] ?? $endpoint['auth_username'] ?? '';
-                $password = $endpoint['basic_password'] ?? $endpoint['auth_password'] ?? '';
-                if (!empty($username) && !empty($password)) {
-                    $args['headers']['Authorization'] = 'Basic ' . base64_encode($username . ':' . $password);
-                }
-            }
-            
-            $response = wp_remote_get($url, $args);
+            $response = wp_remote_get($endpoint['url']);
             if (is_wp_error($response)) {
                 if (defined('WP_DEBUG') && WP_DEBUG) {
                     error_log('QUERY LOOP DEBUG - API error: ' . $response->get_error_message());
                 }
                 return $results;
             }
-            
-            $status_code = wp_remote_retrieve_response_code($response);
-            if ($status_code !== 200) {
-                if (defined('WP_DEBUG') && WP_DEBUG) {
-                    error_log('QUERY LOOP DEBUG - HTTP error: ' . $status_code);
-                }
-                return $results;
-            }
-            
             $body = wp_remote_retrieve_body($response);
             $raw_data = json_decode($body, true);
-            
-            if (json_last_error() !== JSON_ERROR_NONE) {
-                if (defined('WP_DEBUG') && WP_DEBUG) {
-                    error_log('QUERY LOOP DEBUG - JSON error: ' . json_last_error_msg());
-                }
-                return $results;
-            }
-            
-            if (defined('WP_DEBUG') && WP_DEBUG) {
-                error_log('QUERY LOOP DEBUG - Raw data keys: ' . print_r(is_array($raw_data) ? array_keys($raw_data) : 'not array', true));
-            }
             
             // ✅ APLICAR items_path para sources
             $sources = get_option('bricks_api_sources', []);
@@ -373,44 +313,22 @@ class BricksAPIIntegrator {
             }
             
             if (defined('WP_DEBUG') && WP_DEBUG) {
-                error_log('QUERY LOOP DEBUG - Source config found: ' . ($source_config ? 'yes' : 'no'));
+                error_log('QUERY LOOP DEBUG - source_config found: ' . ($source_config ? 'yes' : 'no'));
                 if ($source_config) {
-                    error_log('QUERY LOOP DEBUG - Items path: ' . ($source_config['items_path'] ?? 'empty'));
+                    error_log('QUERY LOOP DEBUG - items_path: ' . ($source_config['items_path'] ?? 'empty'));
                 }
             }
             
             if ($source_config && !empty($source_config['items_path'])) {
                 $data = $this->extract_nested_items($raw_data, $source_config['items_path']);
                 if (defined('WP_DEBUG') && WP_DEBUG) {
-                    error_log('QUERY LOOP DEBUG - Extracted data count: ' . (is_array($data) ? count($data) : 'not array'));
+                    error_log('QUERY LOOP DEBUG - extracted data count: ' . (is_array($data) ? count($data) : 'not array'));
                 }
             } else {
                 $data = $raw_data;
                 if (defined('WP_DEBUG') && WP_DEBUG) {
-                    error_log('QUERY LOOP DEBUG - Using raw data, count: ' . (is_array($data) ? count($data) : 'not array'));
+                    error_log('QUERY LOOP DEBUG - using raw data, count: ' . (is_array($data) ? count($data) : 'not array'));
                 }
-            }
-            
-            // Verificar que tenemos datos válidos
-            if (empty($data)) {
-                if (defined('WP_DEBUG') && WP_DEBUG) {
-                    error_log('QUERY LOOP DEBUG - No data after processing');
-                }
-                return $results;
-            }
-            
-            // Asegurar que tenemos un array de items
-            if (!is_array($data)) {
-                $data = [$data];
-            }
-            
-            // Si es un array asociativo pero no de items, convertir a array de items
-            if (is_array($data) && !isset($data[0]) && !empty($data)) {
-                $data = [$data];
-            }
-            
-            if (defined('WP_DEBUG') && WP_DEBUG) {
-                error_log('QUERY LOOP DEBUG - Final data count before conversion: ' . count($data));
             }
         }
         
@@ -430,7 +348,7 @@ class BricksAPIIntegrator {
     }
     
     /**
-     * Extraer ítems anidados usando items_path - CORREGIDO
+     * Extraer ítems anidados usando items_path
      */
     private function extract_nested_items($data, $items_path) {
         if (empty($items_path) || empty($data)) {
@@ -440,55 +358,24 @@ class BricksAPIIntegrator {
         $path_parts = explode('.', $items_path);
         $current_data = $data;
         
-        if (defined('WP_DEBUG') && WP_DEBUG) {
-            error_log('EXTRACT DEBUG - Starting with path: ' . $items_path);
-            error_log('EXTRACT DEBUG - Path parts: ' . print_r($path_parts, true));
-            error_log('EXTRACT DEBUG - Initial data keys: ' . print_r(is_array($data) ? array_keys($data) : 'not array', true));
-        }
-        
         foreach ($path_parts as $part) {
             if (is_array($current_data) && isset($current_data[$part])) {
                 $current_data = $current_data[$part];
-                if (defined('WP_DEBUG') && WP_DEBUG) {
-                    error_log('EXTRACT DEBUG - Found array part: ' . $part);
-                    error_log('EXTRACT DEBUG - New data type: ' . gettype($current_data));
-                    if (is_array($current_data)) {
-                        error_log('EXTRACT DEBUG - New data count: ' . count($current_data));
-                    }
-                }
             } elseif (is_object($current_data) && isset($current_data->$part)) {
                 $current_data = $current_data->$part;
-                if (defined('WP_DEBUG') && WP_DEBUG) {
-                    error_log('EXTRACT DEBUG - Found object part: ' . $part);
-                }
             } else {
-                if (defined('WP_DEBUG') && WP_DEBUG) {
-                    error_log('EXTRACT DEBUG - Part not found: ' . $part);
-                    $available_keys = is_array($current_data) ? array_keys($current_data) : 
-                                     (is_object($current_data) ? array_keys(get_object_vars($current_data)) : 'not array or object');
-                    error_log('EXTRACT DEBUG - Available keys: ' . print_r($available_keys, true));
-                }
                 return [];
             }
         }
         
-        $result = is_array($current_data) ? $current_data : [$current_data];
-        
-        if (defined('WP_DEBUG') && WP_DEBUG) {
-            error_log('EXTRACT DEBUG - Final result count: ' . count($result));
-        }
-        
-        return $result;
+        return is_array($current_data) ? $current_data : [$current_data];
     }
     
     /**
-     * Convertir datos de API al formato que espera Bricks - CORREGIDO
+     * Convertir datos de API al formato que espera Bricks
      */
     private function convert_api_data_for_bricks($api_data) {
         if (empty($api_data)) {
-            if (defined('WP_DEBUG') && WP_DEBUG) {
-                error_log('CONVERT DEBUG - Empty API data received');
-            }
             return [];
         }
         
@@ -497,67 +384,27 @@ class BricksAPIIntegrator {
             $api_data = [$api_data];
         }
         
-        if (defined('WP_DEBUG') && WP_DEBUG) {
-            error_log('CONVERT DEBUG - Processing ' . count($api_data) . ' items');
-        }
-        
         $converted_data = [];
         
         foreach ($api_data as $index => $item) {
             // Crear un objeto pseudo-post para cada item
             $pseudo_post = new stdClass();
-            $pseudo_post->ID = is_numeric($index) ? ($index + 1) : ($index + 1);
+            $pseudo_post->ID = is_numeric($index) ? ($index + 1) : 1;
             $pseudo_post->post_title = '';
             $pseudo_post->post_content = '';
             $pseudo_post->post_type = 'api_data';
             $pseudo_post->post_status = 'publish';
-            $pseudo_post->post_date = current_time('mysql');
-            $pseudo_post->post_author = 1;
-            $pseudo_post->post_name = 'api-item-' . ($index + 1);
             
-            // CLAVE: Añadir todos los campos de la API como propiedades directas del objeto
-            if (is_array($item) || is_object($item)) {
-                $item_array = (array) $item;
-                foreach ($item_array as $key => $value) {
-                    // Normalizar el nombre de la propiedad para evitar conflictos
-                    $prop_name = sanitize_key($key);
-                    if (empty($prop_name)) {
-                        $prop_name = 'field_' . $index;
-                    }
-                    $pseudo_post->$prop_name = $value;
-                    
-                    // También crear propiedades con el nombre original para compatibilidad
-                    if ($key !== $prop_name && !property_exists($pseudo_post, $key)) {
-                        $pseudo_post->$key = $value;
-                    }
-                }
-            }
-            
-            // También mantener acceso completo a datos originales
+            // Añadir todos los campos de la API como meta data
             $pseudo_post->api_data = $item;
-            $pseudo_post->api_raw_data = $item; // Backup adicional
             
-            // Intentar extraer título desde varios campos posibles
+            // Intentar extraer título si existe
             if (is_array($item) || is_object($item)) {
                 $item_array = (array) $item;
-                $title_fields = [
-                    'title', 'name', 'nombre', 'titulo', 'titol-anunci', 'titol_anunci',
-                    'post_title', 'label', 'display_name', 'full_name'
-                ];
-                
-                foreach ($title_fields as $title_field) {
-                    if (isset($item_array[$title_field]) && !empty($item_array[$title_field])) {
-                        $pseudo_post->post_title = sanitize_text_field($item_array[$title_field]);
+                foreach (['title', 'name', 'nombre', 'titulo', 'id'] as $title_field) {
+                    if (isset($item_array[$title_field])) {
+                        $pseudo_post->post_title = $item_array[$title_field];
                         break;
-                    }
-                }
-                
-                // Si no encontramos título, usar el ID o crear uno genérico
-                if (empty($pseudo_post->post_title)) {
-                    if (isset($item_array['id'])) {
-                        $pseudo_post->post_title = 'Item #' . $item_array['id'];
-                    } else {
-                        $pseudo_post->post_title = 'API Item #' . ($index + 1);
                     }
                 }
             }
@@ -565,76 +412,31 @@ class BricksAPIIntegrator {
             $converted_data[] = $pseudo_post;
         }
         
-        if (defined('WP_DEBUG') && WP_DEBUG) {
-            error_log('CONVERT DEBUG - Successfully converted ' . count($converted_data) . ' items');
-            if (!empty($converted_data[0])) {
-                $first_item_props = get_object_vars($converted_data[0]);
-                error_log('CONVERT DEBUG - First item properties: ' . implode(', ', array_keys($first_item_props)));
-                error_log('CONVERT DEBUG - First item title: ' . $converted_data[0]->post_title);
-            }
-        }
+
         
         return $converted_data;
     }
     
     /**
-     * Dynamic Tags diferenciados para AUTO/MANUAL - CORREGIDO
+     * Dynamic Tags diferenciados para AUTO/MANUAL
      */
     public function add_dynamic_tags_dynamic($tags) {
         // Solo usar los tags generados manualmente
         $tags_data = get_option('bricks_api_generated_tags', []);
-        
-        if (defined('WP_DEBUG') && WP_DEBUG) {
-            error_log('DYNAMIC TAGS DEBUG - Starting with ' . count($tags) . ' existing tags');
-            error_log('DYNAMIC TAGS DEBUG - Tags data found: ' . count($tags_data) . ' groups');
-        }
-        
         if (!empty($tags_data)) {
             foreach ($tags_data as $slug => $info) {
                 $group_title = $info['group_title'] ?? $slug;
                 $endpoint_name = $info['endpoint_name'] ?? $slug;
                 $tag_list = $info['tags'] ?? [];
-                
-                if (defined('WP_DEBUG') && WP_DEBUG) {
-                    error_log('DYNAMIC TAGS DEBUG - Processing group: ' . $group_title . ' with ' . count($tag_list) . ' tags');
-                }
-                
                 foreach ($tag_list as $tag) {
-                    // Extraer el nombre del tag sin llaves
-                    $tag_name = trim($tag, '{}');
-                    
-                    // Verificar que el tag no esté ya registrado
-                    $already_exists = false;
-                    foreach ($tags as $existing_tag) {
-                        if (isset($existing_tag['name']) && $existing_tag['name'] === $tag_name) {
-                            $already_exists = true;
-                            break;
-                        }
-                    }
-                    
-                    if (!$already_exists) {
-                        $tags[] = [
-                            'name' => $tag_name,
-                            'label' => $tag_name, 
-                            'group' => $group_title
-                        ];
-                        
-                        if (defined('WP_DEBUG') && WP_DEBUG) {
-                            error_log('DYNAMIC TAGS DEBUG - Added tag: ' . $tag_name . ' to group: ' . $group_title);
-                        }
-                    } else {
-                        if (defined('WP_DEBUG') && WP_DEBUG) {
-                            error_log('DYNAMIC TAGS DEBUG - Tag already exists: ' . $tag_name);
-                        }
+                    $tags[] = [
+                        'name' => $tag,
+                        'label' => $tag, // Puedes mejorar esto si quieres mostrar un label más bonito
+                        'group' => $group_title
+                    ];
                     }
                 }
             }
-        }
-        
-        if (defined('WP_DEBUG') && WP_DEBUG) {
-            error_log('DYNAMIC TAGS DEBUG - Total tags registered: ' . count($tags));
-        }
-        
         return $tags;
     }
     
@@ -1068,89 +870,37 @@ class BricksAPIIntegrator {
     }
     
     /**
-     * Renderizar Dynamic Tags diferenciados AUTO/MANUAL - CORREGIDO
+     * Renderizar Dynamic Tags diferenciados AUTO/MANUAL
      */
     public function render_dynamic_tags_dynamic($content, $post, $context) {
         // Buscar cualquier tag con formato {prefijo_slug_campo}
         if (strpos($content, '{') === false) {
             return $content;
         }
-        
-        if (defined('WP_DEBUG') && WP_DEBUG) {
-            error_log('RENDER TAGS DEBUG - Processing content: ' . substr($content, 0, 100));
-        }
-        
         $content = preg_replace_callback(
             '/\{([a-zA-Z0-9_]+)_([a-zA-Z0-9-]+)_([a-zA-Z0-9_.-]+)\}/',
             function($matches) use ($post, $context) {
                 $prefix = $matches[1];
                 $identifier = $matches[2];
                 $field = $matches[3];
-                
-                if (defined('WP_DEBUG') && WP_DEBUG) {
-                    error_log('RENDER TAGS DEBUG - Processing tag: ' . $matches[0]);
-                    error_log('RENDER TAGS DEBUG - Prefix: ' . $prefix . ', Identifier: ' . $identifier . ', Field: ' . $field);
-                }
-                
-                // Primero intentar obtener desde el loop object actual
                 $loop_object = \Bricks\Query::get_loop_object();
-                if (!empty($loop_object)) {
-                    if (defined('WP_DEBUG') && WP_DEBUG) {
-                        error_log('RENDER TAGS DEBUG - Loop object found, type: ' . gettype($loop_object));
-                    }
-                    
-                    // Intentar acceso directo a la propiedad
-                    if (property_exists($loop_object, $field)) {
-                        $value = $loop_object->$field;
-                        if (defined('WP_DEBUG') && WP_DEBUG) {
-                            error_log('RENDER TAGS DEBUG - Found direct property: ' . $field . ' = ' . $value);
-                        }
-                        return $this->format_field_output($value, $field);
-                    }
-                    
-                    // Intentar acceso a través de api_data
-                    if (isset($loop_object->api_data)) {
-                        $api_data = $loop_object->api_data;
-                        $value = $this->get_value_by_dot_notation($api_data, $field);
-                        if ($value !== '' && $value !== null) {
-                            if (defined('WP_DEBUG') && WP_DEBUG) {
-                                error_log('RENDER TAGS DEBUG - Found in api_data: ' . $field . ' = ' . $value);
-                            }
-                            return $this->format_field_output($value, $field);
-                        }
-                    }
-                    
-                    // Intentar con el campo normalizado
-                    $normalized_field = str_replace(['-', '.'], '_', $field);
-                    if (property_exists($loop_object, $normalized_field)) {
-                        $value = $loop_object->$normalized_field;
-                        if (defined('WP_DEBUG') && WP_DEBUG) {
-                            error_log('RENDER TAGS DEBUG - Found normalized property: ' . $normalized_field . ' = ' . $value);
-                        }
+                if (!empty($loop_object) && isset($loop_object->api_data)) {
+                    $api_data = $loop_object->api_data;
+                    $value = $this->get_value_by_dot_notation($api_data, $field);
+                    if ($value !== '' && $value !== null) {
                         return $this->format_field_output($value, $field);
                     }
                 }
-                
-                // Si el prefijo es 'snap', usar lógica de source
-                if ($prefix === 'snap') {
+                // Si el prefijo es 'auto', usar lógica de endpoint automático
+                if ($prefix === 'snap_auto' || $prefix === 'auto') {
+                    $value = $this->get_dynamic_field_value($identifier, $field, $post, $context);
+                } else {
                     $value = $this->get_source_field_value($identifier, $field, $post, $context);
-                    if ($value !== '') {
-                        if (defined('WP_DEBUG') && WP_DEBUG) {
-                            error_log('RENDER TAGS DEBUG - Found via source method: ' . $field . ' = ' . $value);
-                        }
-                        return $value;
-                    }
                 }
-                
-                if (defined('WP_DEBUG') && WP_DEBUG) {
-                    error_log('RENDER TAGS DEBUG - Tag not resolved: ' . $matches[0]);
-                }
-                
-                return $matches[0]; // Devolver el tag original si no se puede resolver
+                return $value !== '' ? $value : $matches[0];
             },
             $content
         );
-        
         return $content;
     }
     

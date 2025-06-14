@@ -1,0 +1,7 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+- No quiero código o nuevos archivos de refuerzos de nada (a menos que sea muy importante y parte de las buenas prácticas), quiero código limpio y que haga lo que tiene que hacer, si algo no funciona es porque en alguna otra parte del código hay otra lógica que la está alterando y tenemos que encontrarlo y resolverlo. Si  Crear código de refuerzo o nuevos archivos es imprescindible y parte de las buenas prácticas de desarrollo sirve para que la aplicación/web/proyecto funcione, entonces lo hacemos pero debe anotarse en la documentación que generemos
+- Pregúntame si quiero hacer yo los cambios solo la primera vez, si te respondo que no, lo haces tu todas las veces siguientes. Básicamente el desarrollo lo haces tu, a menos que yo quiera participar en el mismo, pero no me preguntes todo el tiempo si yo quiero realizar lo cambios/adaptaciones

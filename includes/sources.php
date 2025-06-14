@@ -144,8 +144,14 @@ function render_api_sources_page() {
                             </th>
                             <td>
                                 <div id="dynamic-params-container">
-                                    <?php if ($editing && !empty($source_to_edit['dynamic_params'])): ?>
-                                        <?php foreach ($source_to_edit['dynamic_params'] as $param): ?>
+                                    <?php
+                                    $pagination_param = $editing && !empty($source_to_edit['pagination_param']) ? $source_to_edit['pagination_param'] : '';
+                                    $per_page_param = $editing && !empty($source_to_edit['per_page_param']) ? $source_to_edit['per_page_param'] : '';
+                                    if ($editing && !empty($source_to_edit['dynamic_params'])):
+                                        foreach ($source_to_edit['dynamic_params'] as $param):
+                                            // No mostrar parámetros que coincidan con los de paginación
+                                            if ($param['name'] === $pagination_param || $param['name'] === $per_page_param) continue;
+                                    ?>
                                             <div class="dynamic-param-row">
                                                 <input type="text" name="param_names[]" placeholder="<?php esc_attr_e('Nombre del Parámetro (ej. id)', 'bricks-api-integrator'); ?>" class="regular-text" value="<?php echo esc_attr($param['name']); ?>">
                                                 <select name="param_sources[]">
@@ -157,10 +163,12 @@ function render_api_sources_page() {
                                                 <input type="text" name="param_defaults[]" placeholder="<?php esc_attr_e('Valor por Defecto (opcional)', 'bricks-api-integrator'); ?>" class="regular-text" value="<?php echo esc_attr($param['default']); ?>">
                                                 <button type="button" class="button button-delete-param" style="background:#dc3232;color:#fff;"><?php esc_html_e('Eliminar', 'bricks-api-integrator'); ?></button>
                                             </div>
-                                        <?php endforeach; ?>
-                                    <?php endif; ?>
+                                    <?php
+                                        endforeach;
+                                    endif;
+                                    ?>
                                 </div>
-                                <button type="button" id="add-param" class="button"><?php esc_html_e('Añadir Parámetro', 'bricks-api-integrator'); ?></button>
+                                <button type="button" class="button" id="add-param"><?php esc_html_e('Añadir Parámetro', 'bricks-api-integrator'); ?></button>
                                 <p class="description"><?php esc_html_e('Define parámetros para pasar a la API. Para parámetros URL, el valor se tomará de la cadena de consulta de la URL actual.', 'bricks-api-integrator'); ?></p>
                             </td>
                         </tr>
@@ -334,17 +342,17 @@ function render_api_sources_page() {
             
             // Si no tenemos datos de ejemplo, intentar obtenerlos
             if (!example || Object.keys(example).length === 0) {
-                $.post(ajaxurl, {action:'preview_source_api', source_id:sourceId, nonce: window.bricksApiSourceNonce}, function(previewRes){
-                    if(previewRes.success && previewRes.data && previewRes.data.preview){
-                        var preview = previewRes.data.preview;
-                        if(Array.isArray(preview)){
-                            example = preview[0] || {};
-                        } else if(typeof preview === 'object'){
-                            example = preview;
-                        } else if(typeof preview === 'string'){
-                            try { example = JSON.parse(preview); } catch(e) { example = {}; }
-                        }
-                        try { exampleJson = JSON.stringify(example, null, 2); } catch(e) { exampleJson = ''; }
+            $.post(ajaxurl, {action:'preview_source_api', source_id:sourceId, nonce: window.bricksApiSourceNonce}, function(previewRes){
+                if(previewRes.success && previewRes.data && previewRes.data.preview){
+                    var preview = previewRes.data.preview;
+                    if(Array.isArray(preview)){
+                        example = preview[0] || {};
+                    } else if(typeof preview === 'object'){
+                        example = preview;
+                    } else if(typeof preview === 'string'){
+                        try { example = JSON.parse(preview); } catch(e) { example = {}; }
+                    }
+                    try { exampleJson = JSON.stringify(example, null, 2); } catch(e) { exampleJson = ''; }
                         // Continuar con la renderización después de obtener los datos
                         renderTagsTableContent(res, example, exampleJson);
                     }
@@ -356,87 +364,88 @@ function render_api_sources_page() {
         }
         
         function renderTagsTableContent(res, example, exampleJson) {
-            // 1. Respuesta de la API
-            var html = '<div style="margin-bottom:18px;"><strong>📦 Respuesta de la API (primer registro o detalle):</strong><pre style="background:#f8f9fa;padding:10px;border-radius:5px;max-height:300px;overflow:auto;font-size:13px;">'+exampleJson+'</pre></div>';
-            
-            // 2. Estructura detectada (tabla recursiva)
-            function renderStructure(obj, prefix='') {
-                let rows = '';
-                Object.entries(obj).forEach(function([key, value]){
-                    let tipo = Array.isArray(value) ? 'Array' : typeof value;
-                    let valEjemplo = (typeof value === 'object' && value !== null)
-                        ? JSON.stringify(value, null, 2)
-                        : value;
-                    let fullKey = prefix ? prefix+'.'+key : key;
-                    rows += '<tr><td style="padding:6px 8px;border:1px solid #e3e3e3;">'+fullKey+'</td><td style="padding:6px 8px;border:1px solid #e3e3e3;">'+tipo+'</td><td style="padding:6px 8px;border:1px solid #e3e3e3;font-family:monospace;">'+valEjemplo+'</td></tr>';
-                    if(typeof value === 'object' && value !== null && !Array.isArray(value)){
-                        rows += renderStructure(value, fullKey);
-                    }
+            console.log('renderTagsTableContent NUEVO');
+            let html = '';
+            // 1. JSON formateado
+            if (exampleJson) {
+                html += '<div style="margin-bottom:18px;"><strong>📦 Respuesta de la API (primer registro o detalle):</strong><pre style="background:#f8f9fa;padding:10px;border-radius:5px;max-height:300px;overflow:auto;font-size:13px;">'+exampleJson+'</pre></div>';
+            }
+            // 2. Estructura detectada
+            if (example && typeof example === 'object' && Object.keys(example).length > 0) {
+                html += '<div style="margin-bottom:18px;"><strong>🧩 Estructura detectada:</strong><table style="width:100%;border-collapse:collapse;font-size:13px;background:#fff;"><thead><tr style="background:#e7f3ff;"><th style="padding:6px 8px;border:1px solid #e3e3e3;">Campo</th><th style="padding:6px 8px;border:1px solid #e3e3e3;">Tipo</th><th style="padding:6px 8px;border:1px solid #e3e3e3;">Valor de ejemplo</th></tr></thead><tbody>';
+                Object.entries(example).forEach(function([key, value]) {
+                        let tipo = Array.isArray(value) ? 'Array' : typeof value;
+                        let valEjemplo = (typeof value === 'object' && value !== null)
+                            ? JSON.stringify(value, null, 2)
+                            : value;
+                    html += '<tr><td style="padding:6px 8px;border:1px solid #e3e3e3;">'+key+'</td><td style="padding:6px 8px;border:1px solid #e3e3e3;">'+tipo+'</td><td style="padding:6px 8px;border:1px solid #e3e3e3;font-family:monospace;">'+valEjemplo+'</td></tr>';
                 });
-                return rows;
+                html += '</tbody></table></div>';
             }
-            
-            html += '<div style="margin-bottom:18px;"><strong>🧩 Estructura detectada:</strong><table style="width:100%;border-collapse:collapse;font-size:13px;background:#fff;"><thead><tr style="background:#e7f3ff;"><th style="padding:6px 8px;border:1px solid #e3e3e3;">Campo</th><th style="padding:6px 8px;border:1px solid #e3e3e3;">Tipo</th><th style="padding:6px 8px;border:1px solid #e3e3e3;">Valor de ejemplo</th></tr></thead><tbody>';
-            
-            if(example && typeof example === 'object' && Object.keys(example).length){
-                html += renderStructure(example);
-            } else {
-                html += '<tr><td colspan="3" style="text-align:center;">Sin datos de ejemplo</td></tr>';
+            // 3. Tags dinámicos generados con checkboxes y ejemplos
+            let tags = [];
+            let tagObjs = res.data.tag_objects || [];
+            let disabledTags = Array.isArray(res.data.disabled_tags) ? res.data.disabled_tags : [];
+            if (Array.isArray(res.data.tags)) {
+                tags = res.data.tags;
             }
-            
-            html += '</tbody></table></div>';
-            
-            // 3. Tags dinámicos generados
-            html += '<div style="margin-bottom:18px;"><strong>🏷️ Tags dinámicos generados:</strong><form id="tags-enable-form"><div style="display:grid;gap:8px;margin-top:10px;">';
-            
-            // Asegurarse de que res.data.tags es un array
-            var tags = Array.isArray(res.data.tags) ? res.data.tags : [];
-            var disabledTags = Array.isArray(res.data.disabled_tags) ? res.data.disabled_tags : [];
-            
-            tags.forEach(function(tagObj, idx){
-                var tag = typeof tagObj === 'object' ? tagObj.tag : tagObj;
-                var exampleVal = typeof tagObj === 'object' ? tagObj.example : '';
-                var checked = disabledTags.includes(tag) ? '' : 'checked';
-                var tagStr = '{' + tag + '}';
-                var safeId = 'tag-enable-' + idx;
-                
-                html += '<div class="dynamic-tag-item" style="display:flex;align-items:center;gap:10px;background:#f8f9fa;padding:8px 12px;border-radius:5px;">';
-                html += '<input type="checkbox" id="'+safeId+'" class="tag-enable-checkbox" data-tag="'+tag+'" '+checked+' style="margin-right:6px;">';
-                html += '<label for="'+safeId+'" style="margin:0;cursor:pointer;">';
-                html += '<code class="dynamic-tag" style="font-size:14px;color:#e67e22;font-weight:bold;">'+tagStr+'</code>';
-                html += '</label>';
+            if (!tags.length) {
+                html += '<div style="margin-bottom:18px;"><em>No se han generado tags dinámicos para este Source.</em></div>';
+                $('#source-test-result').html(html);
+                return;
+            }
+                html += '<div style="margin-bottom:18px;"><strong>🏷️ Tags dinámicos generados:</strong><form id="tags-enable-form"><div style="display:grid;gap:8px;margin-top:10px;">';
+            tags.forEach(function(tag, idx){
+                let tagStr = '';
+                let example = '';
+                if (typeof tag === 'object' && tag.tag) {
+                    tagStr = tag.tag;
+                    example = tag.example || '';
+                } else {
+                    tagStr = tag;
+                    // Buscar el ejemplo en tagObjs si existe
+                    let obj = tagObjs.find(t => t.tag === tag);
+                    example = obj && obj.example ? obj.example : '';
+                }
+                let checked = disabledTags.includes(tagStr) ? '' : 'checked';
+                let safeId = 'tag-enable-' + idx;
+                html += '<div style="display:flex;align-items:center;gap:10px;background:#f8f9fa;padding:8px 12px;border-radius:5px;">';
+                html += '<input type="checkbox" id="'+safeId+'" class="tag-enable-checkbox" data-tag="'+tagStr+'" '+checked+' style="margin-right:6px;">';
+                html += '<label for="'+safeId+'" style="margin:0;cursor:pointer;"><code style="font-size:14px;color:#e67e22;font-weight:bold;">'+tagStr+'</code></label>';
                 html += '<button type="button" class="button button-small copy-tag-btn" data-copy="'+tagStr+'" style="margin-left:10px;">Copiar tag</button>';
-                html += '<span class="arrow" style="color:#888;">→</span>';
-                html += '<span class="dynamic-tag-value" style="font-family:monospace;background:#fff;padding:2px 6px;border-radius:3px;">'+(exampleVal||'')+'</span>';
-                // Botón "Copiar valor" eliminado
-                html += '</div>';
+                html += '<span style="color:#888;">→</span>';
+                html += '<span style="font-family:monospace;background:#fff;padding:2px 6px;border-radius:3px;">'+example+'</span>';
+                    html += '</div>';
+                });
+            html += '</div><div style="margin-top:15px;"><button type="submit" class="button button-primary">💾 Guardar selección de tags</button></div></form></div>';
+            html += '<p style="font-size:12px;color:#6c757d;margin:10px 0 0 0;">💡 Puedes desmarcar los tags que no quieras usar. Haz clic en el tag o en el botón para copiar el valor de ejemplo o el tag completo.</p>';
+                $('#source-test-result').html(html);
+                // --- Guardar selección de tags habilitados ---
+                $('#tags-enable-form').off('submit').on('submit', function(e){
+            e.preventDefault();
+                    const enabledTags = [];
+                    $('.tag-enable-checkbox:checked').each(function(){
+                        enabledTags.push($(this).data('tag'));
+                    });
+            $.post(ajaxurl, {
+                        action: 'save_enabled_tags_for_source',
+                        nonce: window.bricksApiSourceNonce,
+                    source_id: $('input[name="source_id"]').val() || $('#source_name').val().toLowerCase().replace(/\s+/g,'_'),
+                        enabled_tags: enabledTags
+                    }, function(resp2){
+                        if (resp2.success) {
+                        showSourceMessage('✅ Selección de tags guardada.', 'success');
+                } else {
+                        showSourceMessage('❌ Error al guardar la selección de tags.', 'error');
+                }
             });
-            
-            html += '</div></form></div>';
-            
-            // Mostrar el resultado en el contenedor
-            $('#source-test-result').html(html);
-            
-            // --- Guardar selección de tags habilitados ---
-            $('#tags-enable-form').off('submit').on('submit', function(e){
-                e.preventDefault();
-                const enabledTags = [];
-                $('.tag-enable-checkbox:checked').each(function(){
-                    enabledTags.push($(this).data('tag'));
-                });
-                
-                $.post(ajaxurl, {
-                    action: 'save_enabled_tags_for_source',
-                    nonce: window.bricksApiSourceNonce,
-                    source_id: sourceId,
-                    enabled_tags: enabledTags
-                }, function(resp2){
-                    if (resp2.success) {
-                        alert('Selección de tags guardada.');
-                    } else {
-                        alert('Error al guardar la selección de tags.');
-                    }
-                });
+        });
+            // --- Copiar tag al portapapeles ---
+            $('.copy-tag-btn').off('click').on('click', function(){
+                const tag = $(this).data('copy');
+                navigator.clipboard.writeText(tag);
+                $(this).text('¡Copiado!');
+                setTimeout(()=>{$(this).text('Copiar tag');},1000);
             });
         }
         // --- Ocultar botón crear tags al crear nuevo Source ---
@@ -467,7 +476,7 @@ function render_api_sources_page() {
         
         // --- Ver tags dinámicos ---
         $('#view-source-tags-btn').off('click').on('click', function(){
-            var sourceId = $('input[name="source_id"]').val() || $('#source_name').val().toLowerCase().replace(/\s+/g,'_');
+          var sourceId = $('input[name="source_id"]').val() || $('#source_name').val().toLowerCase().replace(/\s+/g,'_');
             var sourceName = $('#source_name').val();
             
             // Cargar los tags dinámicamente desde el servidor con toda la información
@@ -487,8 +496,8 @@ function render_api_sources_page() {
                 }
             }).fail(function() {
                 // Si falla la petición AJAX, intentar con la función anterior
-                renderAdvancedSections(sourceId);
-            });
+          renderAdvancedSections(sourceId);
+        });
         });
         
         // --- Copiar al portapapeles ---
@@ -1126,8 +1135,7 @@ function register_api_sources_with_bricks($sources) {
     
     return $sources;
 }
-// TEMPORALMENTE DESACTIVADO PARA EVITAR DUPLICACIÓN
-// add_filter('bricks/query/sources', 'register_api_sources_with_bricks');
+add_filter('bricks/query/sources', 'register_api_sources_with_bricks');
 
 /**
  * Create custom query class for Query Types
@@ -1292,6 +1300,9 @@ function register_api_source_query_class() {
                     'error' => esc_html__('Endpoint URL is empty.', 'bricks-api-integrator'),
                 ];
             }
+            
+            // Inicializar la URL de la petición
+            $request_url = $endpoint_url;
             
             // Handle pagination
             $pagination_type = isset($source['pagination_type']) ? $source['pagination_type'] : 'none';
@@ -1595,6 +1606,15 @@ function register_api_source_query_class() {
                 set_transient($cache_key, $results, $cache_duration);
             }
             
+            // Forzar que el array de items sea siempre indexado
+            if (!empty($items) && is_array($items)) {
+                $items = array_values($items);
+            }
+            // Limitar el número de items si per_page_param está definido
+            if (!empty($per_page_param) && is_numeric($items_per_page) && $items_per_page > 0) {
+                $items = array_slice($items, 0, $items_per_page);
+            }
+            
             return $results;
         }
         
@@ -1637,8 +1657,7 @@ function register_api_source_query_class() {
         }
     }
 }
-// TEMPORALMENTE DESACTIVADO PARA EVITAR DUPLICACIÓN
-// add_action('init', 'register_api_source_query_class');
+add_action('init', 'register_api_source_query_class');
 
 /**
  * Register sample data for Bricks Query Loop preview
@@ -1964,7 +1983,7 @@ add_action('wp_ajax_save_api_source', function() {
     wp_send_json_success(['sources' => $sources]);
 });
 
-// --- LÓGICA AJAX PARA TAGS DINÁMICOS DE SOURCES ---
+// --- LÓGICA AJAX PARA TAGS DINÁMICOS DE SOURCES - CORREGIDO ---
 add_action('wp_ajax_generate_source_tags', function() {
     if (!current_user_can('manage_options')) {
         wp_send_json_error('No autorizado');
@@ -1978,19 +1997,110 @@ add_action('wp_ajax_generate_source_tags', function() {
     if (empty($source_id) || !isset($sources[$source_id])) {
         wp_send_json_error('Source no encontrado');
     }
+    
     $source = $sources[$source_id];
-    // --- Generación real de tags dinámicos con valores de ejemplo ---
-    if (!trait_exists('APIManager')) {
-        require_once __DIR__ . '/api-manager.php';
+    
+    if (defined('WP_DEBUG') && WP_DEBUG) {
+        error_log('GENERATE TAGS DEBUG - Processing source: ' . $source['name']);
+        error_log('GENERATE TAGS DEBUG - Source endpoint_id: ' . ($source['endpoint_id'] ?? 'empty'));
+        error_log('GENERATE TAGS DEBUG - Source items_path: ' . ($source['items_path'] ?? 'empty'));
     }
-    $api_manager = new class { public static $api_cache = []; use APIManager; };
-    $items = $api_manager->get_api_data_by_source_id($source_id);
+    
+    // Obtener datos usando la misma lógica que el query loop corregido
+    $endpoint_id = $source['endpoint_id'] ?? '';
+    $endpoints = get_option('bricks_api_endpoints', []);
+    
+    if (!isset($endpoints[$endpoint_id])) {
+        wp_send_json_error('Endpoint no encontrado para este source');
+    }
+    
+    $endpoint = $endpoints[$endpoint_id];
+    
+    // Añadir parámetros de paginación por defecto si no existen en la URL - IGUAL QUE TEST SOURCE
+    $url = $endpoint['url'];
+    $parsed_url = parse_url($url);
+    $query_params = [];
+    if (isset($parsed_url['query'])) {
+        parse_str($parsed_url['query'], $query_params);
+    }
+    
+    // Añadir parámetros necesarios para obtener datos
+    if (!isset($query_params['per_page'])) {
+        $url = add_query_arg('per_page', 10, $url);
+    }
+    if (!isset($query_params['page'])) {
+        $url = add_query_arg('page', 1, $url);
+    }
+    
+    if (defined('WP_DEBUG') && WP_DEBUG) {
+        error_log('GENERATE TAGS DEBUG - Original URL: ' . $endpoint['url']);
+        error_log('GENERATE TAGS DEBUG - URL with params: ' . $url);
+    }
+    
+    // Configurar headers de autenticación si es necesario
+    $args = [
+        'timeout' => 30,
+        'headers' => [
+            'User-Agent' => 'Bricks API Integrator/2.1.1'
+        ]
+    ];
+    
+    // Añadir autenticación básica si está configurada
+    if (!empty($endpoint['auth_type']) && $endpoint['auth_type'] === 'basic') {
+        $username = $endpoint['basic_user'] ?? $endpoint['auth_username'] ?? '';
+        $password = $endpoint['basic_password'] ?? $endpoint['auth_password'] ?? '';
+        if (!empty($username) && !empty($password)) {
+            $args['headers']['Authorization'] = 'Basic ' . base64_encode($username . ':' . $password);
+        }
+    }
+    
+    $response = wp_remote_get($url, $args);
+    if (is_wp_error($response)) {
+        wp_send_json_error('Error de API: ' . $response->get_error_message());
+    }
+    
+    $status_code = wp_remote_retrieve_response_code($response);
+    if ($status_code !== 200) {
+        wp_send_json_error('Error HTTP: ' . $status_code);
+    }
+    
+    $body = wp_remote_retrieve_body($response);
+    $raw_data = json_decode($body, true);
+    
+    if (json_last_error() !== JSON_ERROR_NONE) {
+        wp_send_json_error('Error de JSON: ' . json_last_error_msg());
+    }
+    
+    // Aplicar items_path usando la función corregida
+    $items = $raw_data;
+    if (!empty($source['items_path'])) {
+        $path_parts = explode('.', $source['items_path']);
+        $current_data = $raw_data;
+        
+        foreach ($path_parts as $part) {
+            if (is_array($current_data) && isset($current_data[$part])) {
+                $current_data = $current_data[$part];
+            } elseif (is_object($current_data) && isset($current_data->$part)) {
+                $current_data = $current_data->$part;
+            } else {
+                wp_send_json_error('Items path "' . $source['items_path'] . '" no encontrado en la respuesta.');
+            }
+        }
+        
+        $items = is_array($current_data) ? $current_data : [$current_data];
+    }
+    
     if (empty($items) || !is_array($items)) {
         wp_send_json_error('No se pudo obtener datos de la API o el array de items está vacío.');
     }
+    
     $first_item = is_array($items) && isset($items[0]) && is_array($items[0]) ? $items[0] : (is_array($items) ? $items : []);
     if (empty($first_item) || !is_array($first_item)) {
         wp_send_json_error('No se pudo extraer ningún campo del primer item de la API.');
+    }
+    
+    if (defined('WP_DEBUG') && WP_DEBUG) {
+        error_log('GENERATE TAGS DEBUG - First item keys: ' . print_r(array_keys($first_item), true));
     }
     // Recursivo: extraer todos los paths y valores
     function extract_tags_with_examples($item, $prefix = '') {
@@ -1998,10 +2108,8 @@ add_action('wp_ajax_generate_source_tags', function() {
         foreach ($item as $key => $value) {
             $path = $prefix ? $prefix . '.' . $key : $key;
             if (is_array($value) && !empty($value) && array_keys($value) !== range(0, count($value) - 1)) {
-                // Es un objeto asociativo
                 $tags = array_merge($tags, extract_tags_with_examples($value, $path));
             } else if (is_array($value) && !empty($value)) {
-                // Es un array indexado, tomar el primer item si es objeto
                 if (is_array($value[0] ?? null)) {
                     $tags = array_merge($tags, extract_tags_with_examples($value[0], $path . '[0]'));
                 } else {
@@ -2014,11 +2122,40 @@ add_action('wp_ajax_generate_source_tags', function() {
         return $tags;
     }
     $tags_with_examples = extract_tags_with_examples($first_item);
-    $source['tags'] = $tags_with_examples;
-    $source['disabled_tags'] = $source['disabled_tags'] ?? [];
-    $sources[$source_id] = $source;
-    update_option('bricks_api_sources', $sources);
-    wp_send_json_success(['tags' => $tags_with_examples, 'disabled_tags' => $source['disabled_tags']]);
+    // --- Construcción de tags idéntica a Endpoints ---
+    $slug = bricks_api_normalize_slug($source['name']);
+    $field_prefix = 'snap_'; // Igual que en Endpoints
+    $tags_final = array_map(function($tagObj) use ($field_prefix, $slug) {
+        $tag = is_array($tagObj) ? $tagObj['tag'] : $tagObj;
+        // Normalizar el campo: puntos y corchetes a guiones bajos
+        $normalized = preg_replace('/[.\[\]]+/', '_', $tag);
+        $normalized = preg_replace('/_+/', '_', $normalized);
+        $normalized = trim($normalized, '_');
+        return '{' . $field_prefix . $slug . '_' . $normalized . '}';
+    }, $tags_with_examples);
+    $query_type = '{' . $field_prefix . $slug . '}';
+    $group_title = $source['name'] . ' (Source)';
+    $query_types = get_option('bricks_api_generated_query_types', []);
+    $tags_data = get_option('bricks_api_generated_tags', []);
+    $query_types[$slug] = [
+        'query_type' => $query_type,
+        'endpoint_name' => $source['name'],
+        'group_title' => $group_title,
+        'url' => $source['endpoint_id'] ?? '',
+        'fields' => array_column($tags_with_examples, 'tag'),
+        'example' => $first_item,
+        'field_prefix' => $field_prefix
+    ];
+    $tags_data[$slug] = [
+        'tags' => $tags_final,
+        'group_title' => $group_title,
+        'endpoint_name' => $source['name'],
+        'example' => $first_item,
+        'field_prefix' => $field_prefix
+    ];
+    update_option('bricks_api_generated_query_types', $query_types);
+    update_option('bricks_api_generated_tags', $tags_data);
+    wp_send_json_success(['tags' => $tags_final]);
 });
 add_action('wp_ajax_get_tags_for_source', function() {
     if (!current_user_can('manage_options')) {
@@ -2206,9 +2343,15 @@ add_action('wp_ajax_delete_source_and_tags', function() {
     if (empty($source_id) || !isset($sources[$source_id])) {
         wp_send_json_error('Source no encontrado');
     }
-    unset($sources[$source_id]);
-    update_option('bricks_api_sources', $sources);
-    wp_send_json_success();
+    $source = $sources[$source_id];
+    $slug = bricks_api_normalize_slug($source['name']);
+    $query_types = get_option('bricks_api_generated_query_types', []);
+    $tags_data = get_option('bricks_api_generated_tags', []);
+    unset($query_types[$slug]);
+    unset($tags_data[$slug]);
+    update_option('bricks_api_generated_query_types', $query_types);
+    update_option('bricks_api_generated_tags', $tags_data);
+    wp_send_json_success('Tags y query type eliminados.');
 });
 
 // --- LÓGICA AJAX PARA TEST Y REFRESH DE SOURCE ---
@@ -2246,7 +2389,7 @@ add_action('wp_ajax_test_source_api', function() {
     wp_send_json_success(['fields' => $fields, 'preview' => $preview]);
 });
 
-// --- LÓGICA AJAX PARA TEST Y REFRESH DE SOURCE EN VIVO ---
+// --- LÓGICA AJAX PARA TEST Y REFRESH DE SOURCE EN VIVO - CORREGIDO ---
 add_action('wp_ajax_test_source_api_live', function() {
     if (!current_user_can('manage_options')) {
         wp_send_json_error('No autorizado');
@@ -2255,67 +2398,161 @@ add_action('wp_ajax_test_source_api_live', function() {
         error_log('Nonce inválido en test_source_api_live: '.print_r($_POST['nonce'],true));
         wp_send_json_error('Nonce inválido.');
     }
+    
     $endpoint_id = sanitize_text_field($_POST['endpoint_id'] ?? '');
     $items_path = sanitize_text_field($_POST['items_path'] ?? '');
-    $field_prefix = sanitize_text_field($_POST['field_prefix'] ?? '');
-    $pagination_type = sanitize_text_field($_POST['pagination_type'] ?? 'none');
-    $pagination_param = sanitize_text_field($_POST['pagination_param'] ?? '');
-    $per_page_param = sanitize_text_field($_POST['per_page_param'] ?? '');
-    // Procesar parámetros dinámicos como arrays
-    $param_names = isset($_POST['param_names']) ? (array)$_POST['param_names'] : [];
-    $param_sources = isset($_POST['param_sources']) ? (array)$_POST['param_sources'] : [];
-    $param_defaults = isset($_POST['param_defaults']) ? (array)$_POST['param_defaults'] : [];
-    $dynamic_params = [];
-    foreach ($param_names as $i => $name) {
-        if (!empty($name)) {
-            $dynamic_params[] = [
-                'name' => $name,
-                'source' => $param_sources[$i] ?? 'url',
-                'default' => $param_defaults[$i] ?? ''
-            ];
-        }
-    }
     $force_refresh = !empty($_POST['force_refresh']);
+    
     $endpoints = get_option('bricks_api_endpoints', []);
     if(!$endpoint_id || !isset($endpoints[$endpoint_id])){
         wp_send_json_error('Endpoint no encontrado.');
     }
+    
     $endpoint = $endpoints[$endpoint_id];
-    if (!trait_exists('APIManager')) {
-        require_once __DIR__ . '/api-manager.php';
+    
+    if (defined('WP_DEBUG') && WP_DEBUG) {
+        error_log('TEST SOURCE DEBUG - endpoint_id: ' . $endpoint_id);
+        error_log('TEST SOURCE DEBUG - items_path: ' . $items_path);
+        error_log('TEST SOURCE DEBUG - force_refresh: ' . ($force_refresh ? 'yes' : 'no'));
+        error_log('TEST SOURCE DEBUG - endpoint URL: ' . $endpoint['url']);
     }
-    $api_manager = new class { public static $api_cache = []; use APIManager; };
-    // Construir la URL dinámica
-    $pagination_config = [
-        'type' => $pagination_type,
-        'param' => $pagination_param,
-        'per_page_param' => $per_page_param,
-        'page' => 1,
-        'per_page' => 10
+    
+    // Añadir parámetros de paginación por defecto si no existen en la URL
+    $url = $endpoint['url'];
+    $parsed_url = parse_url($url);
+    $query_params = [];
+    if (isset($parsed_url['query'])) {
+        parse_str($parsed_url['query'], $query_params);
+    }
+    
+    // Añadir parámetros necesarios para obtener datos
+    if (!isset($query_params['per_page'])) {
+        $url = add_query_arg('per_page', 10, $url);
+    }
+    if (!isset($query_params['page'])) {
+        $url = add_query_arg('page', 1, $url);
+    }
+    
+    if (defined('WP_DEBUG') && WP_DEBUG) {
+        error_log('TEST SOURCE DEBUG - Original URL: ' . $endpoint['url']);
+        error_log('TEST SOURCE DEBUG - URL with params: ' . $url);
+    }
+    
+    // Configurar headers de autenticación si es necesario
+    $args = [
+        'timeout' => 30,
+        'headers' => [
+            'User-Agent' => 'Bricks API Integrator/2.1.1'
+        ]
     ];
-    $url = $api_manager->build_dynamic_api_url($endpoint['url'], $dynamic_params, $pagination_config, []);
-    // Forzar refresh de caché si se solicita
-    if($force_refresh){
-        $api_manager->get_api_data_with_cache($url, $endpoint, true);
-    }
-    $items = $api_manager->get_api_data_with_cache($url, $endpoint, false);
-    // Procesar items_path
-    if(!empty($items_path) && is_array($items)){
-        $path_parts = explode('.', $items_path);
-        foreach($path_parts as $part){
-            if(isset($items[$part])){
-                $items = $items[$part];
-            }else{
-                wp_send_json_error('Items path "'.$items_path.'" no encontrado en la respuesta.');
+    
+    // Añadir autenticación básica si está configurada
+    if (!empty($endpoint['auth_type']) && $endpoint['auth_type'] === 'basic') {
+        $username = $endpoint['basic_user'] ?? $endpoint['auth_username'] ?? '';
+        $password = $endpoint['basic_password'] ?? $endpoint['auth_password'] ?? '';
+        if (!empty($username) && !empty($password)) {
+            $args['headers']['Authorization'] = 'Basic ' . base64_encode($username . ':' . $password);
+            if (defined('WP_DEBUG') && WP_DEBUG) {
+                error_log('TEST SOURCE DEBUG - Basic auth configurada');
             }
         }
     }
-    if(empty($items) || !is_array($items)){
+    
+    if (defined('WP_DEBUG') && WP_DEBUG) {
+        error_log('TEST SOURCE DEBUG - Full URL requested: ' . $url);
+        error_log('TEST SOURCE DEBUG - Request headers: ' . print_r($args['headers'], true));
+    }
+    
+    $response = wp_remote_get($url, $args);
+    if (is_wp_error($response)) {
+        if (defined('WP_DEBUG') && WP_DEBUG) {
+            error_log('TEST SOURCE DEBUG - API error: ' . $response->get_error_message());
+        }
+        wp_send_json_error('Error de API: ' . $response->get_error_message());
+    }
+    
+    $status_code = wp_remote_retrieve_response_code($response);
+    if ($status_code !== 200) {
+        if (defined('WP_DEBUG') && WP_DEBUG) {
+            error_log('TEST SOURCE DEBUG - HTTP error: ' . $status_code);
+        }
+        wp_send_json_error('Error HTTP: ' . $status_code);
+    }
+    
+    $body = wp_remote_retrieve_body($response);
+    $raw_data = json_decode($body, true);
+    
+    if (json_last_error() !== JSON_ERROR_NONE) {
+        if (defined('WP_DEBUG') && WP_DEBUG) {
+            error_log('TEST SOURCE DEBUG - JSON error: ' . json_last_error_msg());
+        }
+        wp_send_json_error('Error de JSON: ' . json_last_error_msg());
+    }
+    
+    if (defined('WP_DEBUG') && WP_DEBUG) {
+        error_log('TEST SOURCE DEBUG - Raw data keys: ' . print_r(is_array($raw_data) ? array_keys($raw_data) : 'not array', true));
+    }
+    
+    // Aplicar items_path usando la función corregida
+    $items = $raw_data;
+    if (!empty($items_path)) {
+        // Función corregida de extracción
+        $path_parts = explode('.', $items_path);
+        $current_data = $raw_data;
+        
+        if (defined('WP_DEBUG') && WP_DEBUG) {
+            error_log('TEST SOURCE DEBUG - Extracting path: ' . $items_path);
+            error_log('TEST SOURCE DEBUG - Path parts: ' . print_r($path_parts, true));
+        }
+        
+        foreach ($path_parts as $part) {
+            if (is_array($current_data) && isset($current_data[$part])) {
+                $current_data = $current_data[$part];
+                if (defined('WP_DEBUG') && WP_DEBUG) {
+                    error_log('TEST SOURCE DEBUG - Found array part: ' . $part);
+                    if (is_array($current_data)) {
+                        error_log('TEST SOURCE DEBUG - New data count: ' . count($current_data));
+                        if (count($current_data) == 0) {
+                            error_log('TEST SOURCE DEBUG - ¡ARRAY VACÍO! La API devolvió array "items" sin elementos');
+                        } else {
+                            error_log('TEST SOURCE DEBUG - Primer elemento del array: ' . substr(print_r($current_data[0], true), 0, 300));
+                        }
+                    }
+                }
+            } elseif (is_object($current_data) && isset($current_data->$part)) {
+                $current_data = $current_data->$part;
+                if (defined('WP_DEBUG') && WP_DEBUG) {
+                    error_log('TEST SOURCE DEBUG - Found object part: ' . $part);
+                }
+            } else {
+                if (defined('WP_DEBUG') && WP_DEBUG) {
+                    error_log('TEST SOURCE DEBUG - Part not found: ' . $part);
+                    $available_keys = is_array($current_data) ? array_keys($current_data) : 
+                                     (is_object($current_data) ? array_keys(get_object_vars($current_data)) : 'not array or object');
+                    error_log('TEST SOURCE DEBUG - Available keys: ' . print_r($available_keys, true));
+                }
+                wp_send_json_error('Items path "' . $items_path . '" no encontrado en la respuesta.');
+            }
+        }
+        
+        $items = is_array($current_data) ? $current_data : [$current_data];
+    }
+    
+    if (empty($items) || !is_array($items)) {
+        if (defined('WP_DEBUG') && WP_DEBUG) {
+            error_log('TEST SOURCE DEBUG - No items found after processing');
+        }
         wp_send_json_error('La API no devolvió datos o el array de items está vacío.');
     }
+    
     $first_item = is_array($items) && isset($items[0]) && is_array($items[0]) ? $items[0] : (is_array($items) ? $items : []);
     $fields = is_array($first_item) ? array_keys($first_item) : [];
     $preview = esc_html(print_r($first_item, true));
+    
+    if (defined('WP_DEBUG') && WP_DEBUG) {
+        error_log('TEST SOURCE DEBUG - Success! Fields found: ' . implode(', ', $fields));
+    }
+    
     wp_send_json_success(['fields' => $fields, 'preview' => $preview]);
 });
 
@@ -2893,3 +3130,86 @@ add_action('wp_ajax_preview_source_api', function() {
         'items_path' => $items_path_info
     ]);
 });
+
+// --- Registro seguro de la clase y filtro solo si Bricks está cargado ---
+add_action('init', function() {
+    if (defined('BRICKS_VERSION') && class_exists('Bricks_Query_Provider')) {
+        add_filter('bricks/query/sources', 'register_api_sources_with_bricks');
+        register_api_source_query_class();
+    }
+}, 20);
+
+// --- Registro seguro de la clase y filtro SOLO cuando Bricks ha cargado completamente ---
+if (has_action('bricks/loaded')) {
+    add_action('bricks/loaded', function() {
+        if (class_exists('Bricks_Query_Provider')) {
+            add_filter('bricks/query/sources', 'register_api_sources_with_bricks');
+            register_api_source_query_class();
+        }
+    }, 20);
+} else {
+    add_action('after_setup_theme', function() {
+        if (defined('BRICKS_VERSION') && class_exists('Bricks_Query_Provider')) {
+            add_filter('bricks/query/sources', 'register_api_sources_with_bricks');
+            register_api_source_query_class();
+        }
+    }, 20);
+}
+
+// --- REGISTRO DE QUERY TYPES DE SOURCES COMO TIPOS ESTÁNDAR (SIN CLASE PERSONALIZADA) ---
+add_filter('bricks/query/sources', function($sources) {
+    $api_sources = get_option('bricks_api_sources', []);
+    if (empty($api_sources)) return $sources;
+    foreach ($api_sources as $source_id => $source) {
+        $display_name = isset($source['query_type_name']) ? $source['query_type_name'] : $source['name'];
+        $sources['source_' . $source_id] = [
+            'name' => $display_name,
+        ];
+    }
+    return $sources;
+}, 20);
+
+// --- DEVOLVER DATOS PARA EL LOOP DE BRICKS DESDE SOURCES ---
+add_filter('bricks/query/run', function($results, $query_obj) {
+    $object_type = isset($query_obj->object_type) ? $query_obj->object_type : '';
+    if (strpos($object_type, 'source_') !== 0) return $results;
+    $source_id = str_replace('source_', '', $object_type);
+    $api_sources = get_option('bricks_api_sources', []);
+    if (!isset($api_sources[$source_id])) return $results;
+    $source = $api_sources[$source_id];
+    $endpoints = get_option('bricks_api_endpoints', []);
+    $endpoint_id = isset($source['endpoint_id']) ? $source['endpoint_id'] : '';
+    if (!isset($endpoints[$endpoint_id])) return $results;
+    $endpoint = $endpoints[$endpoint_id];
+    $endpoint_url = isset($endpoint['url']) ? $endpoint['url'] : '';
+    if (empty($endpoint_url)) return $results;
+    // Obtener datos de la API
+    if (!function_exists('get_api_data')) require_once __DIR__ . '/api-manager.php';
+    $data = get_api_data($endpoint_url, $endpoint);
+    if (empty($data) || !is_array($data)) return $results;
+    // Extraer items según items_path
+    $items_path = isset($source['items_path']) ? $source['items_path'] : '';
+    $items = $data;
+    if (!empty($items_path)) {
+        $path_parts = explode('.', $items_path);
+        foreach ($path_parts as $part) {
+            if (isset($items[$part])) {
+                $items = $items[$part];
+            } else {
+                return $results;
+            }
+        }
+    }
+    if (!is_array($items)) $items = [$items];
+    // Formatear items para Bricks
+    $formatted = [];
+    foreach ($items as $item) {
+        $formatted[] = is_array($item) ? (object)$item : $item;
+    }
+    return [
+        'items' => $formatted,
+        'count' => count($formatted),
+        'found_posts' => count($formatted),
+        'post_count' => count($formatted),
+    ];
+}, 20, 2);
