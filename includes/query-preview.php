@@ -28,7 +28,6 @@ trait QueryPreview {
         add_action('wp_enqueue_scripts', [$this, 'enqueue_preview_scripts']);
         
         if (defined('WP_DEBUG') && WP_DEBUG) {
-            error_log('Query Preview: Hooks inicializados');
         }
     }
     
@@ -193,7 +192,6 @@ trait QueryPreview {
      */
     public function enqueue_preview_scripts($hook = '') {
         if (defined('WP_DEBUG') && WP_DEBUG) {
-            error_log('Query Preview: Cargando scripts en: ' . $hook);
         }
         
         // Script para admin (configuración de endpoints)

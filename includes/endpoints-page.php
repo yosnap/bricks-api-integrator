@@ -58,7 +58,6 @@ if (!function_exists('render_api_endpoints_page')) {
         
         // DEBUG: Verificar qué endpoints se están cargando
         if (defined('WP_DEBUG') && WP_DEBUG) {
-            error_log('Endpoints cargados: ' . print_r($endpoints, true));
         }
         ?>
         <div class="wrap">
@@ -1037,13 +1036,11 @@ add_action('wp_ajax_save_api_endpoint', function() {
     // Manejar el caso especial 'new' para crear siempre un nuevo endpoint
     if (isset($_POST['index']) && $_POST['index'] === 'new') {
         $index = null; // Forzar creación de nuevo endpoint
-        error_log('Recibido index=new, creando nuevo endpoint. Total endpoints antes: ' . count($endpoints));
     } else {
         $index = isset($_POST['index']) && $_POST['index'] !== '' ? intval($_POST['index']) : null;
     }
     
     // Debug para verificar los datos recibidos
-    error_log('Saving endpoint. Index: ' . ($index === null ? 'NULL (new)' : $index) . ', Total endpoints: ' . count($endpoints));
     
     $dynamic_params = [];
     if (!empty($_POST['dynamic_params']) && is_array($_POST['dynamic_params'])) {
@@ -1077,13 +1074,10 @@ add_action('wp_ajax_save_api_endpoint', function() {
     // Verificar si estamos editando o creando un nuevo endpoint
     if ($index !== null && isset($endpoints[$index])) {
         // Modo edición: actualizar endpoint existente
-        error_log('Actualizando endpoint existente en índice: ' . $index);
         $endpoints[$index] = $data;
     } else {
         // Modo creación: agregar nuevo endpoint
-        error_log('Creando nuevo endpoint. Total antes: ' . count($endpoints));
         $endpoints[] = $data;
-        error_log('Nuevo endpoint agregado. Total después: ' . count($endpoints));
     }
     
     // Guardar los endpoints actualizados
@@ -1091,7 +1085,6 @@ add_action('wp_ajax_save_api_endpoint', function() {
     
     // Verificar que los endpoints se guardaron correctamente
     $saved_endpoints = get_option('bricks_api_endpoints', []);
-    error_log('Endpoints guardados. Total: ' . count($saved_endpoints));
     
     wp_send_json_success(['endpoints' => $endpoints]);
 });

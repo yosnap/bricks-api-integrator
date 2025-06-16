@@ -312,7 +312,6 @@ function render_api_templates_page() {
 function save_api_template() {
     // Debug: Registrar los datos recibidos
     if (defined('WP_DEBUG') && WP_DEBUG) {
-        error_log('API Template Form Data: ' . print_r($_POST, true));
     }
     
     // Validate and sanitize inputs
@@ -325,22 +324,10 @@ function save_api_template() {
     
     // Debug: Registrar los valores procesados
     if (defined('WP_DEBUG') && WP_DEBUG) {
-        error_log('Processed values:');
-        error_log('template_name: ' . $template_name);
-        error_log('endpoint_id: ' . $endpoint_id);
-        error_log('template_type: ' . $template_type);
-        error_log('page_id: ' . $page_id);
-        error_log('url_base: ' . $url_base);
     }
     
     // Registrar los valores para depuración
     if (defined('WP_DEBUG') && WP_DEBUG) {
-        error_log('Validando campos:');
-        error_log('template_name: ' . $template_name);
-        error_log('endpoint_id: ' . $endpoint_id . ' (tipo: ' . gettype($endpoint_id) . ')');
-        error_log('page_id: ' . $page_id . ' (tipo: ' . gettype($page_id) . ')');
-        error_log('url_base: ' . $url_base);
-        error_log('template_type: ' . $template_type);
     }
     
     // Validar cada campo individualmente para mostrar mensajes más específicos

@@ -29,17 +29,13 @@ function render_api_launcher_page() {
     }
     
     // Debug: Mostrar launchers existentes
-    error_log('Launchers existentes: ' . print_r($api_launchers, true));
-    error_log('Endpoints existentes: ' . print_r(array_keys($endpoints), true));
     
     // Check if form was submitted
     $form_submitted = isset($_POST['submit_api_launcher']);
     if ($form_submitted) {
-        error_log('Formulario enviado');
         
         // Verificar nonce
         if (check_admin_referer('bricks_api_launcher_nonce')) {
-            error_log('Nonce verificado correctamente');
             
             // Intentar guardar el launcher
             if (save_api_launcher()) {
@@ -48,12 +44,9 @@ function render_api_launcher_page() {
                 if (!is_array($api_launchers)) {
                     $api_launchers = [];
                 }
-                error_log('Launcher guardado correctamente');
             } else {
-                error_log('Error al guardar el launcher');
             }
         } else {
-            error_log('Error de verificación de nonce');
         }
     }
     
@@ -99,10 +92,7 @@ function render_api_launcher_page() {
                     <?php endif; ?>
                     
                     <!-- Debug para ver los datos del formulario -->
-                    <?php error_log('Datos del formulario al renderizar:'); ?>
-                    <?php error_log('Editing: ' . ($editing ? 'true' : 'false')); ?>
                     <?php if ($editing): ?>
-                        <?php error_log('Current launcher: ' . print_r($current_launcher, true)); ?>
                     <?php endif; ?>
                     
                     <table class="form-table">
@@ -208,16 +198,13 @@ function render_api_launcher_page() {
  * Guardar Tags Dinámicos
  */
 function save_api_launcher() {
-    error_log('Iniciando save_api_launcher');
     
     // Validar nonce
     if (!isset($_POST['_wpnonce']) || !wp_verify_nonce($_POST['_wpnonce'], 'bricks_api_launcher_nonce')) {
-        error_log('Fallo en la verificación del nonce');
         wp_die(__('Comprobación de seguridad fallida.', 'bricks-api-integrator'));
     }
     
     // Dump completo de POST para depuración
-    error_log('POST completo: ' . print_r($_POST, true));
     
     // Obtener y validar datos del formulario
     $launcher_name = isset($_POST['launcher_name']) ? trim($_POST['launcher_name']) : '';
@@ -232,17 +219,11 @@ function save_api_launcher() {
     $dynamic_tag_group = sanitize_text_field($dynamic_tag_group);
     
     // Debug: Registrar los valores procesados
-    error_log('Valores procesados:');
-    error_log('launcher_name: "' . $launcher_name . '" (empty: ' . (empty($launcher_name) ? 'true' : 'false') . ')');
-    error_log('endpoint_id: "' . $endpoint_id . '" (empty: ' . (empty($endpoint_id) ? 'true' : 'false') . ')');
-    error_log('field_prefix: "' . $field_prefix . '"');
-    error_log('dynamic_tag_group: "' . $dynamic_tag_group . '"');
     
     // Verificar campos obligatorios
     $has_errors = false;
     
     if (empty($launcher_name)) {
-        error_log('Error: Nombre de tags dinámicos vacío');
         add_settings_error(
             'bricks_api_launcher',
             'missing_launcher_name',
@@ -254,7 +235,6 @@ function save_api_launcher() {
     
     // Verificar si el endpoint_id es realmente vacío (teniendo en cuenta que "0" es un valor válido)
     if ($endpoint_id === '') {
-        error_log('Error: Endpoint ID vacío');
         add_settings_error(
             'bricks_api_launcher',
             'missing_endpoint_id',
@@ -263,27 +243,22 @@ function save_api_launcher() {
         );
         $has_errors = true;
     } else {
-        error_log('Endpoint ID válido: ' . $endpoint_id);
     }
     
     if ($has_errors) {
-        error_log('Hay errores de validación, abortando');
         return false;
     }
     
-    error_log('Validación exitosa, procediendo a guardar');
     
     // Si el campo dynamic_tag_group está vacío, asignarle un valor predeterminado
     if (empty($dynamic_tag_group)) {
         $dynamic_tag_group = !empty($launcher_name) ? $launcher_name : 'API Data';
-        error_log('Dynamic tag group vacío, usando: ' . $dynamic_tag_group);
     }
     
     // Determinar si es una edición o un nuevo launcher
     $is_edit = isset($_POST['launcher_id']) && !empty($_POST['launcher_id']);
     $launcher_id = $is_edit ? sanitize_text_field($_POST['launcher_id']) : 'tags_dinamicos_' . time() . '_' . wp_rand(100, 999);
     
-    error_log('Modo: ' . ($is_edit ? 'Edición (ID: ' . $launcher_id . ')' : 'Nuevos tags dinámicos'));
     
     // Preparar datos del launcher
     $launcher_data = [
@@ -293,25 +268,20 @@ function save_api_launcher() {
         'dynamic_tag_group' => $dynamic_tag_group
     ];
     
-    error_log('Datos del launcher preparados: ' . print_r($launcher_data, true));
     
     // Obtener launchers existentes
     $api_launchers = get_option('bricks_api_launchers', []);
     if (!is_array($api_launchers)) {
-        error_log('Los launchers existentes no son un array, inicializando array vacío');
         $api_launchers = [];
     }
     
     // Guardar el launcher
     $api_launchers[$launcher_id] = $launcher_data;
-    error_log('Launcher agregado al array: ' . print_r($api_launchers, true));
     
     // Método 1: Usar update_option
-    error_log('Intentando guardar con update_option');
     $update_result = update_option('bricks_api_launchers', $api_launchers);
     
     if ($update_result) {
-        error_log('Guardado exitoso con update_option');
         add_settings_error(
             'bricks_api_launcher',
             'launcher_saved',
@@ -322,12 +292,10 @@ function save_api_launcher() {
     }
     
     // Método 2: Eliminar y volver a crear la opción
-    error_log('update_option falló, intentando delete_option + add_option');
     delete_option('bricks_api_launchers');
     $add_result = add_option('bricks_api_launchers', $api_launchers, '', 'yes');
     
     if ($add_result) {
-        error_log('Guardado exitoso con delete_option + add_option');
         add_settings_error(
             'bricks_api_launcher',
             'launcher_saved',
@@ -338,7 +306,6 @@ function save_api_launcher() {
     }
     
     // Método 3: Usar el método directo con la base de datos
-    error_log('add_option falló, intentando método directo con la base de datos');
     global $wpdb;
     $option_name = 'bricks_api_launchers';
     $serialized_value = maybe_serialize($api_launchers);
@@ -352,7 +319,6 @@ function save_api_launcher() {
     wp_cache_delete($option_name, 'options');
     
     if ($wpdb_result !== false) {
-        error_log('Guardado exitoso con método directo de base de datos');
         add_settings_error(
             'bricks_api_launcher',
             'launcher_saved',
@@ -363,7 +329,6 @@ function save_api_launcher() {
     }
     
     // Si llegamos aquí, todos los métodos fallaron
-    error_log('Todos los métodos de guardado fallaron');
     add_settings_error(
         'bricks_api_launcher',
         'save_failed',

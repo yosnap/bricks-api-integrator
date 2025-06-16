@@ -76,16 +76,20 @@ jQuery(document).ready(function($) {
         }
         html += '<div style="margin-bottom:18px;"><strong>🏷️ Tags dinámicos generados:</strong><form id="tags-enable-form"><div style="display:grid;gap:8px;margin-top:10px;">';
         tags.forEach(function(tag, idx){
+            // Buscar el objeto del tag en tagObjs
             let tagObj = tagObjs.find(t => t.tag === tag) || {};
             let example = tagObj.example || '';
             let checked = disabledTags.includes(tag) ? '' : 'checked';
             let safeId = 'tag-enable-' + idx;
+            // Debug para ver el tag y el ejemplo
+            console.log('TAG DEBUG:', tag, 'EJEMPLO:', example);
             html += '<div style="display:flex;align-items:center;gap:10px;background:#f8f9fa;padding:8px 12px;border-radius:5px;">';
             html += '<input type="checkbox" id="'+safeId+'" class="tag-enable-checkbox" data-tag="'+tag+'" '+checked+' style="margin-right:6px;">';
             html += '<label for="'+safeId+'" style="margin:0;cursor:pointer;"><code style="font-size:14px;color:#e67e22;font-weight:bold;">'+tag+'</code></label>';
             html += '<button type="button" class="button button-small copy-tag-btn" data-copy="'+tag+'" style="margin-left:10px;">Copiar tag</button>';
             html += '<span style="color:#888;">→</span>';
-            html += '<span style="font-family:monospace;background:#fff;padding:2px 6px;border-radius:3px;">'+example+'</span>';
+            // Mostrar el valor de ejemplo en un input solo lectura para fácil copia
+            html += '<input type="text" readonly value="'+example+'" style="font-family:monospace;background:#fff;padding:2px 6px;border-radius:3px;border:1px solid #e3e3e3;min-width:80px;max-width:220px;">';
             html += '</div>';
         });
         html += '</div><div style="margin-top:15px;"><button type="submit" class="button button-primary">💾 Guardar selección de tags</button></div></form></div>';
@@ -119,6 +123,22 @@ jQuery(document).ready(function($) {
             setTimeout(()=>{$(this).text('Copiar tag');},1000);
         });
     }
+
+    // --- Mostrar tags dinámicos y ejemplo de campos SIEMPRE que se cargue un Source ---
+    function showTagsAndExamples(res) {
+        // Obtener ejemplo del primer registro si está disponible
+        let example = res.data && res.data.example ? res.data.example : null;
+        let exampleJson = '';
+        if (example) {
+            try {
+                exampleJson = JSON.stringify(example, null, 2);
+            } catch (e) { exampleJson = ''; }
+        }
+        renderTagsTableContent(res, example, exampleJson);
+    }
+
+    // --- Hook para mostrar los tags dinámicos al cargar o refrescar un Source ---
+    window.showTagsAndExamples = showTagsAndExamples;
 
     // --- Botón eliminar tags y query type ---
     $('#delete-source-tags-btn').off('click').on('click', function(){
@@ -175,7 +195,7 @@ jQuery(document).ready(function($) {
                     html += '<b>Campos detectados:</b> '+res.data.fields.join(', ');
                 }
                 html += '</div>';
-                $('#source-test-result').html(html);
+                showTagsAndExamples(res);
             }else{
                 $('#source-test-result').html('<span style="color:#c00">'+res.data+'</span>');
             }
