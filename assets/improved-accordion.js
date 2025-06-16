@@ -737,6 +737,13 @@
         window.copyToClipboard = function(text, element) {
             BricksAPIIntegrator.copyToClipboard(text, element);
         };
+        
+        // Asegurar que los botones de eliminar parámetro funcionen siempre
+        $(document).on('click', '.remove-param', function(e) {
+            if (typeof BricksAPIIntegrator !== 'undefined' && BricksAPIIntegrator.removeDynamicParam) {
+                BricksAPIIntegrator.removeDynamicParam(e);
+            }
+        });
     });
     
 })(jQuery);

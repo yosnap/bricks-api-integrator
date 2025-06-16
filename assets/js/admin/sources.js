@@ -20,8 +20,8 @@ jQuery(document).ready(function($) {
         $('#dynamic-params-container').append(row);
     }
 
-    // Add parameter on button click
-    $('#add-param').click(function(){ addParamRow(); });
+    // Add parameter on button click (corregido para evitar duplicados)
+    $('#add-param').off('click').on('click', function(){ addParamRow(); });
 
     // Ensure delete buttons work for existing rows
     $(document).on('click', '.button-delete-param', function(){ 
@@ -71,8 +71,8 @@ jQuery(document).ready(function($) {
         }
         if (!tags.length) {
             html += '<div style="margin-bottom:18px;"><em>No se han generado tags dinámicos para este Source.</em></div>';
+            // Eliminado el return para que siempre se muestren los datos y campos
             $('#source-test-result').html(html);
-            return;
         }
         html += '<div style="margin-bottom:18px;"><strong>🏷️ Tags dinámicos generados:</strong><form id="tags-enable-form"><div style="display:grid;gap:8px;margin-top:10px;">';
         tags.forEach(function(tag, idx){
@@ -174,31 +174,45 @@ jQuery(document).ready(function($) {
         };
     }
 
+    // --- Renderizado de respuesta simple como en Endpoints ---
+    function renderApiTestResult(res) {
+        let html = '';
+        // Respuesta cruda de la API
+        if(res.data && res.data.preview){
+            html += '<div style="background:#f8f9fa;padding:12px;border-radius:6px;margin-top:10px;">';
+            html += '<b>Respuesta de la API:</b><br><pre style="max-height:300px;overflow:auto;">'+res.data.preview+'</pre>';
+            if(res.data.fields && res.data.fields.length){
+                html += '<b>Campos detectados:</b> '+res.data.fields.join(', ');
+            }
+            html += '</div>';
+        } else {
+            html += '<div style="color:#c00">No se recibió respuesta de la API.</div>';
+        }
+        $('#source-test-result').html(html);
+    }
+
     // --- Botones Test Source y Actualizar datos ---
-    $('#test-source-btn, #refresh-source-btn').off('click').on('click', function(){
-        const isRefresh = $(this).attr('id') === 'refresh-source-btn';
+    $('#test-source-btn').off('click').on('click', function(){
         const data = getSourceFormData();
         if(!data.endpoint_id){
             $('#source-test-result').html('<span style="color:#c00">Selecciona un endpoint antes de testear.</span>');
             return;
         }
-        $('#source-test-result').html(isRefresh ? '<em>Actualizando datos...</em>' : '<em>Consultando API...</em>');
+        $('#source-test-result').html('<em>Consultando API...</em>');
         $.post(ajaxurl, {
             action: 'test_source_api_live',
-            ...data,
-            force_refresh: isRefresh ? 1 : 0
+            ...data
         }, function(res){
             if(res.success){
-                var html = '<div style="background:#f8f9fa;padding:12px;border-radius:6px;margin-top:10px;">';
-                html += '<b>Respuesta de la API'+(isRefresh?' (actualizada)':'')+':</b><br><pre style="max-height:300px;overflow:auto;">'+res.data.preview+'</pre>';
-                if(res.data.fields && res.data.fields.length){
-                    html += '<b>Campos detectados:</b> '+res.data.fields.join(', ');
-                }
-                html += '</div>';
-                showTagsAndExamples(res);
+                renderApiTestResult(res);
             }else{
                 $('#source-test-result').html('<span style="color:#c00">'+res.data+'</span>');
             }
         });
     });
+
+    // Eliminar el botón de Actualizar datos de la UI
+    $('.source-actions #refresh-source-btn').remove();
+    // Eliminar el handler de click para refresh-source-btn
+    $('#refresh-source-btn').off('click');
 }); 

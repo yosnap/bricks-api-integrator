@@ -300,7 +300,7 @@ trait APIManager {
      */
     public function build_dynamic_api_url($base_url, $dynamic_params = [], $pagination_config = [], $overrides = [], $post = null, $extra_context = []) {
         $url = $base_url;
-        // 1. Procesar parámetros dinámicos
+        // 1. Procesar parámetros dinámicos y reemplazar en el path si corresponde
         if (!empty($dynamic_params)) {
             foreach ($dynamic_params as $param) {
                 $param_name = $param['name'] ?? '';
@@ -317,44 +317,23 @@ trait APIManager {
                             $param_value = isset($_GET[$param_name]) ? sanitize_text_field($_GET[$param_name]) : $param_default;
                             break;
                         case 'post':
-                            if ($post && isset($post->ID)) {
-                                $param_value = $post->ID;
-                            } elseif (is_singular()) {
-                                $param_value = get_the_ID();
-                            } else {
-                                $param_value = $param_default;
-                            }
-                            break;
-                        case 'post_slug':
-                            if ($post && isset($post->post_name)) {
-                                $param_value = $post->post_name;
-                            } elseif (is_singular()) {
-                                $current_post = get_post();
-                                $param_value = $current_post ? $current_post->post_name : $param_default;
-                            } else {
-                                $param_value = $param_default;
-                            }
+                            global $post;
+                            $param_value = isset($post->ID) ? $post->ID : $param_default;
                             break;
                         case 'user':
                             $current_user = wp_get_current_user();
                             $param_value = $current_user->exists() ? $current_user->ID : $param_default;
                             break;
-                        case 'meta':
-                            if ($post && isset($post->ID)) {
-                                $meta_value = get_post_meta($post->ID, $param_name, true);
-                                $param_value = !empty($meta_value) ? $meta_value : $param_default;
-                            } else {
-                                $param_value = $param_default;
-                            }
-                            break;
-                        case 'static':
                         default:
                             $param_value = $param_default;
                             break;
                     }
                 }
-                // Agregar parámetro si tiene valor
-                if ($param_value !== '') {
+                // Reemplazar en el path si existe el placeholder
+                if (strpos($url, '{'.$param_name.'}') !== false) {
+                    $url = str_replace('{'.$param_name.'}', urlencode($param_value), $url);
+                } else if ($param_value !== '') {
+                    // Si no está en el path, añadir como query string
                     $url = add_query_arg($param_name, $param_value, $url);
                 }
             }
@@ -375,6 +354,10 @@ trait APIManager {
             if (!empty($per_page_param)) {
                 $url = add_query_arg($per_page_param, $per_page, $url);
             }
+        }
+        // --- LOG TEMPORAL: mostrar la URL final construida ---
+        if (defined('WP_DEBUG') && WP_DEBUG) {
+            error_log('API MANAGER - URL FINAL: ' . $url);
         }
         return $url;
     }
