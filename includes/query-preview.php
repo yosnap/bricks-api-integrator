@@ -75,17 +75,41 @@ trait QueryPreview {
         
         try {
             $preview_data = $this->get_query_preview_data($query_type, $limit);
-            
             if (empty($preview_data)) {
                 wp_send_json_error(['message' => 'No se encontraron datos para este query type']);
             }
-            
+            $api_data = $preview_data['full_data'] ?? [];
+            // Si es array indexado (lista de objetos)
+            if (is_array($api_data) && array_keys($api_data) === range(0, count($api_data) - 1)) {
+                $preview = isset($api_data[0]) ? $api_data[0] : [];
+            }
+            // Si es array asociativo (objeto)
+            elseif (is_array($api_data) && count($api_data) > 0) {
+                $preview = $api_data;
+            }
+            // Si es objeto
+            elseif (is_object($api_data)) {
+                $preview = (array)$api_data;
+            }
+            // Si no, encapsular
+            else {
+                $preview = ['value' => $api_data];
+            }
+            // Si preview sigue vacío pero raw_data tiene datos, usar raw_data
+            if (empty($preview) && !empty($api_data)) {
+                $preview = (array)$api_data;
+            }
+            if (is_object($preview)) {
+                $preview = json_decode(json_encode($preview), true);
+            }
+            $fields = is_array($preview) ? array_keys($preview) : [];
             wp_send_json_success([
                 'query_type' => $query_type,
-                'total_found' => count($preview_data['full_data'] ?? []),
-                'preview_data' => $preview_data['preview'],
-                'fields' => $preview_data['fields'],
-                'sample_tags' => $preview_data['sample_tags']
+                'total_found' => is_array($api_data) ? count($api_data) : 1,
+                'preview' => $preview,
+                'fields' => $fields,
+                'sample_tags' => $preview_data['sample_tags'] ?? [],
+                'raw_data' => $api_data
             ]);
             
         } catch (Exception $e) {

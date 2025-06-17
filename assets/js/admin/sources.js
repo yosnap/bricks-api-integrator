@@ -88,8 +88,12 @@ jQuery(document).ready(function($) {
             html += '<label for="'+safeId+'" style="margin:0;cursor:pointer;"><code style="font-size:14px;color:#e67e22;font-weight:bold;">'+tag+'</code></label>';
             html += '<button type="button" class="button button-small copy-tag-btn" data-copy="'+tag+'" style="margin-left:10px;">Copiar tag</button>';
             html += '<span style="color:#888;">→</span>';
-            // Mostrar el valor de ejemplo en un input solo lectura para fácil copia
-            html += '<input type="text" readonly value="'+example+'" style="font-family:monospace;background:#fff;padding:2px 6px;border-radius:3px;border:1px solid #e3e3e3;min-width:80px;max-width:220px;">';
+            // Mostrar el valor de ejemplo: textarea para arrays/objetos, input para escalares
+            if (typeof example === 'string' && (example.trim().startsWith('[') || example.trim().startsWith('{'))) {
+                html += '<textarea readonly style="font-family:monospace;background:#fff;padding:2px 6px;border-radius:3px;border:1px solid #e3e3e3;min-width:80px;max-width:600px;min-height:40px;max-height:120px;resize:vertical;">'+example+'</textarea>';
+            } else {
+                html += '<input type="text" readonly value="'+example+'" style="font-family:monospace;background:#fff;padding:2px 6px;border-radius:3px;border:1px solid #e3e3e3;min-width:80px;max-width:600px;">';
+            }
             html += '</div>';
         });
         html += '</div><div style="margin-top:15px;"><button type="submit" class="button button-primary">💾 Guardar selección de tags</button></div></form></div>';
@@ -207,6 +211,24 @@ jQuery(document).ready(function($) {
                 renderApiTestResult(res);
             }else{
                 $('#source-test-result').html('<span style="color:#c00">'+res.data+'</span>');
+            }
+        });
+    });
+
+    // --- Botón Crear Tags y Query Types Dinámicos ---
+    $('#generate-source-tags-btn').off('click').on('click', function(){
+        const data = getSourceFormData();
+        $('#source-test-result').html('<em>Generando tags dinámicos...</em>');
+        $.post(ajaxurl, {
+            action: 'generate_source_tags',
+            nonce: window.bricksApiSourceNonce,
+            ...data
+        }, function(res){
+            if(res.success){
+                // Mostrar los tags y ejemplos generados
+                showTagsAndExamples(res);
+            } else {
+                $('#source-test-result').html('<span style="color:#c00">'+(res.data || 'Error al generar tags dinámicos')+'</span>');
             }
         });
     });

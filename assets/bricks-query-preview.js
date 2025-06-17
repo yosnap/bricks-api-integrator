@@ -275,24 +275,31 @@
         displayPreviewData: function(response) {
             const modal = document.getElementById('bricks-query-preview-modal');
             if (!modal) return;
-            
             const contentDiv = modal.querySelector('.modal-content');
-            
-            if (response.success && response.data.preview_data && response.data.preview_data.length > 0) {
-                const item = response.data.preview_data[0];
+            // Usar siempre response.data.preview
+            const data = response.data && response.data.preview ? response.data.preview : null;
+            if (response.success && data && typeof data === 'object') {
                 let html = '<div class="preview-item">';
                 html += '<h4>📊 Primer elemento encontrado:</h4>';
-                
-                // Mostrar campos del item
-                Object.entries(item).forEach(([key, value]) => {
-                    html += '<div class="preview-field">';
-                    html += `<div class="field-label">${key}</div>`;
-                    html += `<div class="field-value">${this.formatValue(value)}</div>`;
-                    html += '</div>';
-                });
-                
+                if (Array.isArray(data)) {
+                    // Si es array, mostrar cada elemento (o solo el primero si es muy largo)
+                    const item = data[0] || {};
+                    Object.entries(item).forEach(([key, value]) => {
+                        html += '<div class="preview-field">';
+                        html += `<div class="field-label">${key}</div>`;
+                        html += `<div class="field-value">${this.formatValue(value)}</div>`;
+                        html += '</div>';
+                    });
+                } else {
+                    // Si es objeto, mostrar sus claves
+                    Object.entries(data).forEach(([key, value]) => {
+                        html += '<div class="preview-field">';
+                        html += `<div class="field-label">${key}</div>`;
+                        html += `<div class="field-value">${this.formatValue(value)}</div>`;
+                        html += '</div>';
+                    });
+                }
                 html += '</div>';
-                
                 // Añadir información de dynamic tags
                 if (response.data.sample_tags && response.data.sample_tags.length > 0) {
                     html += '<div class="preview-item">';
@@ -304,7 +311,6 @@
                     html += '</div>';
                     html += '</div>';
                 }
-                
                 contentDiv.innerHTML = html;
             } else {
                 this.displayPreviewError(response.data?.message || 'No se encontraron datos');

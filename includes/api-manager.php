@@ -95,8 +95,14 @@ trait APIManager {
                 }
             }
             
-            $result = is_array($processed_data) ? $processed_data : [$processed_data];
-            return $result;
+            // Ajuste: devolver el tipo correcto según el resultado
+            if (is_array($processed_data)) {
+                return $processed_data;
+            } elseif (is_object($processed_data)) {
+                return (array)$processed_data;
+            } else {
+                return [$processed_data];
+            }
         }
         
         return $data;

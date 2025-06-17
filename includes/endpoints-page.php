@@ -183,6 +183,27 @@ if (!function_exists('render_api_endpoints_page')) {
               color: #a71d2a;
               border: 1px solid #f5c6cb;
             }
+            .preloader {
+              display: flex;
+              align-items: center;
+              gap: 8px;
+              color: #2980b9;
+              font-weight: 500;
+            }
+            .preloader:before {
+              content: '';
+              display: inline-block;
+              width: 18px;
+              height: 18px;
+              border: 3px solid #b3d4fc;
+              border-top: 3px solid #2980b9;
+              border-radius: 50%;
+              animation: spin 1s linear infinite;
+            }
+            @keyframes spin {
+              0% { transform: rotate(0deg);}
+              100% { transform: rotate(360deg);}
+            }
             </style>
             
             <!-- Formulario de alta/edición de endpoint -->
@@ -664,6 +685,8 @@ if (!function_exists('render_api_endpoints_page')) {
             });
             // --- Test API ---
             $('#test-api-btn').click(function(){
+                // Mostrar preloader antes de la petición
+                $('#endpoint-test-result').html('<div class="preloader">Consultando API...</div>');
                 const data = {
                     action: 'test_api_endpoint',
                     nonce: '<?php echo wp_create_nonce('test_api_endpoint'); ?>',
@@ -676,7 +699,6 @@ if (!function_exists('render_api_endpoints_page')) {
                     api_key_header: $('#api_key_header').val() || '',
                     dynamic_params: getParamsFromForm()
                 };
-                showTestResult('<em>Comprobando endpoint...</em>');
                 $.post(ajaxurl, data, function(resp){
                     if (resp.success) {
                         showTestResult(resp.data.html);
@@ -1116,7 +1138,7 @@ add_action('wp_ajax_test_api_endpoint', function() {
     check_ajax_referer('test_api_endpoint', 'nonce');
     $url = preg_replace('/[^a-zA-Z0-9\-\_\:\/\.\?\=\&\{\}]/', '', $_POST['url'] ?? '');
     $auth_type = sanitize_text_field($_POST['auth_type'] ?? 'none');
-    $args = [ 'headers' => [] ];
+    $args = [ 'headers' => [] , 'timeout' => 15 ];
     if ($auth_type === 'token' && !empty($_POST['token'])) {
         $args['headers']['Authorization'] = 'Bearer ' . sanitize_text_field($_POST['token']);
     } elseif ($auth_type === 'basic' && !empty($_POST['basic_user']) && isset($_POST['basic_password'])) {

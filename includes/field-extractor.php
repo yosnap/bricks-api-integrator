@@ -280,9 +280,9 @@ function bricks_api_extract_tags_recursive($data, $prefix = 'snap', $path = '', 
                 // Array indexado
                 if (count($value) > 0) {
                     // Tag para el array completo
-                    $tags[] = [ 'tag' => $tag, 'field' => $new_path, 'example' => json_encode($value), 'type' => 'array' ];
+                    $tags[] = [ 'tag' => $tag, 'field' => $new_path, 'example' => json_encode($value, JSON_UNESCAPED_UNICODE), 'type' => 'array' ];
                     // Tag para el primer elemento
-                    $tags[] = [ 'tag' => '{' . $prefix . '_' . $new_path . '.0}', 'field' => $new_path . '.0', 'example' => is_scalar($value[0]) ? $value[0] : json_encode($value[0]), 'type' => gettype($value[0]) ];
+                    $tags[] = [ 'tag' => '{' . $prefix . '_' . $new_path . '.0}', 'field' => $new_path . '.0', 'example' => is_scalar($value[0]) ? $value[0] : json_encode($value[0], JSON_UNESCAPED_UNICODE), 'type' => gettype($value[0]) ];
                     // Recursivo para el primer elemento si es array/objeto
                     if (is_array($value[0]) || is_object($value[0])) {
                         $tags = array_merge($tags, bricks_api_extract_tags_recursive($value[0], $prefix, $new_path . '.0', $max_depth - 1));
@@ -290,11 +290,11 @@ function bricks_api_extract_tags_recursive($data, $prefix = 'snap', $path = '', 
                 }
             } else {
                 // Array asociativo
-                $tags[] = [ 'tag' => $tag, 'field' => $new_path, 'example' => json_encode($value), 'type' => 'object' ];
+                $tags[] = [ 'tag' => $tag, 'field' => $new_path, 'example' => json_encode($value, JSON_UNESCAPED_UNICODE), 'type' => 'object' ];
                 $tags = array_merge($tags, bricks_api_extract_tags_recursive($value, $prefix, $new_path, $max_depth - 1));
             }
         } elseif (is_object($value)) {
-            $tags[] = [ 'tag' => $tag, 'field' => $new_path, 'example' => json_encode($value), 'type' => 'object' ];
+            $tags[] = [ 'tag' => $tag, 'field' => $new_path, 'example' => json_encode($value, JSON_UNESCAPED_UNICODE), 'type' => 'object' ];
             $tags = array_merge($tags, bricks_api_extract_tags_recursive($value, $prefix, $new_path, $max_depth - 1));
         } else {
             // Escalar
