@@ -195,6 +195,7 @@ add_action('wp_ajax_generate_source_tags', function() {
     error_log('DEBUG FINAL $items: ' . print_r($items, true));
     error_log('DEBUG FINAL $first_item: ' . print_r($first_item, true));
     $json_api_response = json_encode($items, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+    $url_real = $url;
     wp_send_json_success([
         'tags' => array_column($tag_objects, 'tag'),
         'tag_objects' => $tag_objects,
@@ -206,7 +207,8 @@ add_action('wp_ajax_generate_source_tags', function() {
         'example' => $tag_example_data,
         'example_json' => $example_json,
         'field_prefix' => $field_prefix,
-        'api_response_json' => $json_api_response
+        'api_response_json' => $json_api_response,
+        'url_real' => $url_real
     ]);
 });
 
@@ -238,10 +240,17 @@ add_action('wp_ajax_get_tags_for_source', function() {
         }
         $slug = bricks_api_normalize_slug($source['name']);
         $tag_example_data = $example;
+        // Si es array indexado, tomar siempre el primer objeto válido
         if (is_array($example) && array_keys($example) === range(0, count($example) - 1)) {
-            if (isset($example[0]) && is_array($example[0]) && count($example[0])) {
-                $tag_example_data = $example[0];
-            } else {
+            $found = false;
+            foreach ($example as $item) {
+                if (is_array($item) && count($item)) {
+                    $tag_example_data = $item;
+                    $found = true;
+                    break;
+                }
+            }
+            if (!$found) {
                 wp_send_json_error('El array de la API está vacío o no contiene objetos válidos.');
             }
         } elseif (is_array($example) && !count($example)) {
@@ -253,6 +262,24 @@ add_action('wp_ajax_get_tags_for_source', function() {
     }
     $items_path = $source['items_path'] ?? '';
     $example_json = !empty($example) ? json_encode($example, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) : '';
+    // --- Datos del endpoint asociado ---
+    $endpoint_id = $source['endpoint_id'] ?? '';
+    $endpoints = get_option('bricks_api_endpoints', []);
+    $endpoint = $endpoints[$endpoint_id] ?? [];
+    $endpoint_info = [
+        'name' => $endpoint['name'] ?? '-',
+        'url' => $endpoint['url'] ?? '-',
+        'method' => $endpoint['method'] ?? '-',
+        'auth_type' => $endpoint['auth_type'] ?? '-',
+    ];
+    // --- url_real y total_items ---
+    $url_real = $endpoint['url'] ?? '-';
+    $total_items = is_array($example) ? count($example) : (is_array($example_json) ? count($example_json) : '-');
+    // --- preview_type ---
+    $preview_type = 'object';
+    if (is_array($example) && array_keys($example) === range(0, count($example) - 1)) {
+        $preview_type = 'array';
+    }
     if (defined('WP_DEBUG') && WP_DEBUG) {}
     wp_send_json_success([
         'tags' => array_column($tag_objects, 'tag'),
@@ -260,7 +287,11 @@ add_action('wp_ajax_get_tags_for_source', function() {
         'example' => $tag_example_data,
         'example_json' => $example_json,
         'items_path' => $items_path,
-        'tag_objects' => $tag_objects
+        'tag_objects' => $tag_objects,
+        'endpoint' => $endpoint_info,
+        'url_real' => $url_real,
+        'total_items' => $total_items,
+        'preview_type' => $preview_type
     ]);
     if (defined('WP_DEBUG') && WP_DEBUG) {}
     if (empty($example)) {
@@ -369,7 +400,7 @@ add_action('wp_ajax_test_source_api', function() {
     }
     $first_item = is_array($items) && isset($items[0]) && is_array($items[0]) ? $items[0] : (is_array($items) ? $items : []);
     $fields = is_array($first_item) ? array_keys($first_item) : [];
-    $preview = esc_html(print_r($first_item, true));
+    $preview = $first_item;
     wp_send_json_success(['fields' => $fields, 'preview' => $preview]);
 });
 
@@ -388,7 +419,7 @@ add_action('wp_ajax_test_source_api_live', function() {
     $param_sources = isset($_POST['param_sources']) ? (array)$_POST['param_sources'] : [];
     $param_defaults = isset($_POST['param_defaults']) ? (array)$_POST['param_defaults'] : [];
     $endpoints = get_option('bricks_api_endpoints', []);
-    if(!$endpoint_id || !isset($endpoints[$endpoint_id])){
+    if ($endpoint_id === '' || !isset($endpoints[$endpoint_id])) {
         wp_send_json_error('Endpoint no encontrado.');
     }
     $endpoint = $endpoints[$endpoint_id];
@@ -464,30 +495,25 @@ add_action('wp_ajax_test_source_api_live', function() {
             }
         }
     }
-    $preview = '';
-    $fields = [];
+    $preview = null;
     if (is_array($items_data)) {
         $is_indexed = array_keys($items_data) === range(0, count($items_data) - 1);
         if ($is_indexed && count($items_data) > 0) {
             $first_item = $items_data[0];
-            $preview = esc_html(print_r($first_item, true));
-            $fields = is_array($first_item) ? array_keys($first_item) : [];
+            $preview = $first_item;
         } elseif (count($items_data) > 0) {
-            $preview = esc_html(print_r($items_data, true));
-            $fields = array_keys($items_data);
+            $preview = $items_data;
         } else {
             wp_send_json_error('La API no devolvió datos o el array de items está vacío.');
         }
     } elseif (is_object($items_data)) {
-        $preview = esc_html(print_r($items_data, true));
-        $fields = array_keys(get_object_vars($items_data));
+        $preview = (array)$items_data;
     } elseif (!empty($items_data) || $items_data === 0 || $items_data === '0') {
-        $preview = esc_html(print_r($items_data, true));
-        $fields = [];
+        $preview = $items_data;
     } else {
         wp_send_json_error('La API no devolvió datos o el array de items está vacío.');
     }
-    wp_send_json_success(['fields' => $fields, 'preview' => $preview]);
+    wp_send_json_success(['fields' => array_keys($preview), 'preview' => $preview]);
 });
 
 // --- AJAX para probar ruta de items ---
@@ -498,13 +524,13 @@ add_action('wp_ajax_test_items_path', function() {
     $endpoint_id = sanitize_text_field($_POST['endpoint_id'] ?? '');
     $items_path = sanitize_text_field($_POST['items_path'] ?? '');
     $source_id = sanitize_text_field($_POST['source_id'] ?? '');
-    if (empty($endpoint_id)) {
+    if ($endpoint_id === '' || $endpoint_id === null) {
         wp_send_json_error('ID de endpoint no proporcionado');
         return;
     }
     $endpoints = get_option('bricks_api_endpoints', []);
-    if (!isset($endpoints[$endpoint_id])) {
-        wp_send_json_error('Endpoint no encontrado');
+    if ($endpoint_id === '' || !isset($endpoints[$endpoint_id])) {
+        wp_send_json_error('Endpoint no encontrado.');
         return;
     }
     $endpoint = $endpoints[$endpoint_id];
@@ -527,21 +553,21 @@ add_action('wp_ajax_test_items_path', function() {
             }
         }
     }
-    $preview = '';
+    $preview = null;
     if (is_array($items)) {
         $is_indexed = array_keys($items) === range(0, count($items) - 1);
         if ($is_indexed && count($items) > 0) {
             $first_item = $items[0];
-            $preview = esc_html(print_r($first_item, true));
+            $preview = $first_item;
         } elseif (count($items) > 0) {
-            $preview = esc_html(print_r($items, true));
+            $preview = $items;
         } else {
             wp_send_json_error('La API no devolvió datos o el array de items está vacío.');
         }
     } elseif (is_object($items)) {
-        $preview = esc_html(print_r($items, true));
+        $preview = (array)$items;
     } elseif (!empty($items) || $items === 0 || $items === '0') {
-        $preview = esc_html(print_r($items, true));
+        $preview = $items;
     } else {
         wp_send_json_error('La API no devolvió datos o el array de items está vacío.');
     }
@@ -591,20 +617,107 @@ add_action('wp_ajax_preview_source_api', function() {
     }
     $items_path = !empty($source['items_path']) ? $source['items_path'] : '';
     $items_data = $items;
-    // --- Lógica uniforme para preview ---
-    if (is_array($items_data) && array_keys($items_data) === range(0, count($items_data) - 1)) {
-        // Array indexado: usar primer elemento
-        $preview = isset($items_data[0]) ? $items_data[0] : [];
-    } elseif (is_array($items_data)) {
-        // Array asociativo: usar tal cual
+    // --- Construir URL con parámetros dinámicos de ejemplo (igual que Test Source) ---
+    $dynamic_params = $source['dynamic_params'] ?? [];
+    $pagination_config = [
+        'type' => $source['pagination_type'] ?? '',
+        'param' => $source['pagination_param'] ?? '',
+        'per_page_param' => $source['per_page_param'] ?? '',
+        'page' => 1,
+        'per_page' => 10
+    ];
+    $overrides = [];
+    foreach ($dynamic_params as $param) {
+        $overrides[$param['name']] = $param['default'] ?? '';
+    }
+    if (!trait_exists('APIManager')) {
+        require_once __DIR__ . '/../api-manager.php';
+    }
+    $api_manager = new class { use APIManager; };
+    $endpoints = get_option('bricks_api_endpoints', []);
+    $endpoint = $endpoints[$source['endpoint_id']] ?? [];
+    $url = $api_manager->build_dynamic_api_url(
+        $endpoint['url'] ?? '',
+        $dynamic_params,
+        $pagination_config,
+        $overrides
+    );
+    $args = [
+        'timeout' => 30,
+        'headers' => [
+            'User-Agent' => 'Bricks API Integrator/2.1.1'
+        ]
+    ];
+    if (!empty($endpoint['auth_type']) && $endpoint['auth_type'] === 'basic') {
+        $username = $endpoint['basic_user'] ?? $endpoint['auth_username'] ?? '';
+        $password = $endpoint['basic_password'] ?? $endpoint['auth_password'] ?? '';
+        if (!empty($username) && !empty($password)) {
+            $args['headers']['Authorization'] = 'Basic ' . base64_encode($username . ':' . $password);
+        }
+    }
+    $response = wp_remote_get($url, $args);
+    if (is_wp_error($response)) {
+        wp_send_json_error('Error de API: ' . $response->get_error_message());
+    }
+    $body = wp_remote_retrieve_body($response);
+    $items = json_decode($body, true);
+    $items_path = !empty($source['items_path']) ? $source['items_path'] : '';
+    $items_data = $items;
+    if (!empty($items_path)) {
+        $path_parts = explode('.', $items_path);
+        foreach ($path_parts as $part) {
+            if (is_array($items_data) && isset($items_data[$part])) {
+                $items_data = $items_data[$part];
+            } else {
+                wp_send_json_error('Items path "' . $items_path . '" no encontrado en la respuesta.');
+            }
+        }
+    }
+    // --- Lógica uniforme para preview reforzada y robusta ---
+    $preview = [];
+    $preview_type = 'object';
+    $es_objeto_plano = false;
+    // Caso 1: Array de un solo objeto
+    if (is_array($items_data) && count($items_data) === 1 && is_array($items_data[0]) && array_keys($items_data[0]) !== range(0, count($items_data[0]) - 1)) {
+        $preview = $items_data[0];
+        $es_objeto_plano = true;
+    // Caso 2: Objeto plano directamente
+    } elseif (is_array($items_data) && count($items_data) > 0 && array_keys($items_data) !== range(0, count($items_data) - 1)) {
         $preview = $items_data;
+        $es_objeto_plano = true;
+    // Caso 3: Array indexado
+    } elseif (is_array($items_data) && array_keys($items_data) === range(0, count($items_data) - 1)) {
+        $preview = isset($items_data[0]) ? $items_data[0] : [];
+        $preview_type = 'array';
+    // Caso 4: Objeto (stdClass)
     } elseif (is_object($items_data)) {
         $preview = (array)$items_data;
+        $es_objeto_plano = true;
     } else {
-        $preview = ['value' => $items_data];
+        $preview = (object)[];
+        $preview_type = 'object';
+    }
+    // Si es objeto plano (array asociativo u objeto), reemplazar placeholders en la URL con valores reales
+    if ($es_objeto_plano && is_array($preview)) {
+        foreach ($dynamic_params as $param) {
+            $param_name = $param['name'];
+            if (isset($preview[$param_name]) && $preview[$param_name] !== '') {
+                $overrides[$param_name] = $preview[$param_name];
+            }
+        }
+        $url_real = $api_manager->build_dynamic_api_url(
+            $endpoint['url'],
+            $dynamic_params,
+            $pagination_config,
+            $overrides
+        );
+        $preview_type = 'object';
     }
     if (is_object($preview)) {
         $preview = json_decode(json_encode($preview), true);
+    }
+    if (!isset($url_real)) {
+        $url_real = $url;
     }
     $fields = is_array($preview) ? array_keys($preview) : [];
     $total_items = (is_array($items_data) && array_keys($items_data) === range(0, count($items_data) - 1)) ? count($items_data) : (is_array($items_data) ? 1 : 0);
@@ -622,12 +735,20 @@ add_action('wp_ajax_preview_source_api', function() {
         }
     }
     $items_path_info = !empty($source['items_path']) ? $source['items_path'] : 'Raíz de la respuesta';
+    // Log de depuración para ver el preview, overrides y url_real
+    if (defined('WP_DEBUG') && WP_DEBUG) {
+        error_log('DEBUG PREVIEW: ' . print_r($preview, true));
+        error_log('DEBUG OVERRIDES: ' . print_r($overrides, true));
+        error_log('DEBUG URL_REAL: ' . print_r($url_real, true));
+    }
     wp_send_json_success([
         'fields' => $fields,
         'preview' => $preview,
         'total_items' => $total_items,
         'endpoint' => $endpoint_info,
         'items_path' => $items_path_info,
-        'raw_data' => $items_data // respuesta original de la API
+        'raw_data' => $items_data, // respuesta original de la API
+        'url_real' => $url_real,
+        'preview_type' => $preview_type
     ]);
 });

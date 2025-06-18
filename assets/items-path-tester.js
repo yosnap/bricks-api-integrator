@@ -10,7 +10,9 @@ jQuery(document).ready(function($) {
         e.preventDefault();
         
         const button = $(this);
-        const endpointId = button.data('endpoint-id');
+        // Tomar SIEMPRE el valor actual del select de endpoint
+        const endpointId = $('#endpoint_id').val();
+        console.log('endpointId', endpointId); // DEPURACIÓN
         const itemsPath = $('#items_path').val();
         const filterField = $('#filter_field').val() || '';
         const filterValue = $('#filter_value').val() || '';
@@ -36,14 +38,26 @@ jQuery(document).ready(function($) {
                 
                 if (response.success) {
                     // Mostrar resultados
-                    $('#items-path-message').html(response.data.message);
-                    
-                    // Mostrar vista previa de datos
-                    if (response.data.sample_data) {
-                        $('#items-path-preview').html(response.data.sample_data).show();
-                    } else {
-                        $('#items-path-preview').hide();
+                    let previewHtml = '';
+                    if (typeof response.data.preview === 'object' && response.data.preview !== null) {
+                        previewHtml += '<table style="width:100%;border-collapse:collapse;background:#f8f9fa;margin-bottom:10px;">';
+                        Object.entries(response.data.preview).forEach(function([key, value]) {
+                            previewHtml += '<tr>';
+                            previewHtml += '<td style="font-weight:bold;padding:4px 8px;border-bottom:1px solid #eee;width:180px;">'+key+'</td>';
+                            if (Array.isArray(value)) {
+                                previewHtml += '<td style="padding:4px 8px;border-bottom:1px solid #eee;"><pre style="margin:0;font-size:12px;">'+JSON.stringify(value, null, 2)+'</pre></td>';
+                            } else if (typeof value === 'object' && value !== null) {
+                                previewHtml += '<td style="padding:4px 8px;border-bottom:1px solid #eee;"><pre style="margin:0;font-size:12px;">'+JSON.stringify(value, null, 2)+'</pre></td>';
+                            } else {
+                                previewHtml += '<td style="padding:4px 8px;border-bottom:1px solid #eee;">'+value+'</td>';
+                            }
+                            previewHtml += '</tr>';
+                        });
+                        previewHtml += '</table>';
+                    } else if (typeof response.data.preview === 'string') {
+                        previewHtml = '<pre style="background:#f8f9fa;padding:10px;border-radius:5px;">'+response.data.preview+'</pre>';
                     }
+                    $('#items-path-preview').html(previewHtml).show();
                     
                     // Mostrar parámetros aplicados si están disponibles
                     if (response.data.params_applied && Object.keys(response.data.params_applied).length > 0) {

@@ -97,15 +97,15 @@ function render_api_sources_page() {
                             <td>
                                 <div class="items-path-container" style="display: flex; align-items: center; gap: 10px;">
                                     <input type="text" id="items_path" name="items_path" class="regular-text" value="<?php echo $editing ? esc_attr($source_to_edit['items_path']) : ''; ?>" style="flex-grow: 1;">
-                                    <?php if ($editing && !empty($source_to_edit['endpoint_id'])): ?>
-                                        <?php $test_path_nonce = wp_create_nonce('bricks_api_source_nonce'); ?>
-                                        <button type="button" class="button test-items-path" 
-                                            data-endpoint-id="<?php echo esc_attr($source_to_edit['endpoint_id']); ?>" 
-                                            data-source-id="<?php echo esc_attr($source_id_to_edit); ?>"
-                                            data-nonce="<?php echo esc_attr($test_path_nonce); ?>">
-                                            <?php esc_html_e('Probar Ruta', 'bricks-api-integrator'); ?>
-                                        </button>
-                                    <?php endif; ?>
+                                    <?php $test_path_nonce = wp_create_nonce('bricks_api_source_nonce'); ?>
+                                    <button type="button" class="button test-items-path" 
+                                        data-endpoint-id="<?php echo esc_attr($source_to_edit['endpoint_id'] ?? ''); ?>" 
+                                        data-source-id="<?php echo esc_attr($source_id_to_edit ?? ''); ?>"
+                                        data-nonce="<?php echo esc_attr($test_path_nonce); ?>"
+                                        <?php if (empty($source_to_edit['endpoint_id'])): ?>disabled title="Selecciona un endpoint primero"<?php endif; ?>
+                                    >
+                                        <?php esc_html_e('Probar Ruta', 'bricks-api-integrator'); ?>
+                                    </button>
                                 </div>
                                 
                                 <?php if ($editing && !empty($source_to_edit['endpoint_id'])): ?>
@@ -429,14 +429,7 @@ function save_api_source() {
     $editing = isset($_POST['source_id']) && !empty($_POST['source_id']);
     $source_id = $editing ? sanitize_text_field($_POST['source_id']) : 'query_type_' . time();
     // Si estamos editando y no se envían parámetros, mantener los existentes
-    if ($editing && empty($dynamic_params) && isset($api_sources[$source_id]['dynamic_params'])) {
-        $dynamic_params = $api_sources[$source_id]['dynamic_params'];
-    }
-    // Si estamos creando un nuevo query type, limpiar cualquier dato residual
-    if (!$editing) {
-        // Limpiar caché de parámetros dinámicos para evitar persistencia de datos
-        clean_dynamic_params_cache();
-    }
+    // (ELIMINADO: ahora si no se envían, se guardará vacío)
     // Verificar explícitamente que no haya un parámetro anunci-actiu no deseado
     foreach ($dynamic_params as $key => $param) {
         if ($param['name'] === 'anunci-actiu' && !in_array('anunci-actiu', $_POST['param_names'])) {
@@ -459,6 +452,13 @@ function save_api_source() {
         'query_type_name' => !empty($field_prefix) ? $field_prefix . $source_name : $source_name,
         'last_updated' => current_time('mysql')
     ];
+    // Mantener tags y datos relacionados si ya existen y no se están regenerando
+    if ($editing && isset($api_sources[$source_id])) {
+        $prev = $api_sources[$source_id];
+        foreach(['tags','example','tags_generated','last_tag_generation','disabled_tags'] as $k) {
+            if (isset($prev[$k])) $source_data[$k] = $prev[$k];
+        }
+    }
     // Añadir o actualizar el query type
     $api_sources[$source_id] = $source_data;
     // Guardar los query types actualizados
@@ -608,3 +608,15 @@ function clean_anunci_actiu_parameter() {
     }
     wp_cache_flush();
 }
+
+// --- Asegurar carga de scripts en la página de administración de Sources ---
+add_action('admin_enqueue_scripts', function($hook) {
+    if (
+        $hook === 'toplevel_page_bricks-api-integrator-sources' ||
+        strpos($hook, 'bricks-api-integrator-sources') !== false
+    ) {
+        if (function_exists('bricks_api_integrator_assets')) {
+            bricks_api_integrator_assets();
+        }
+    }
+});

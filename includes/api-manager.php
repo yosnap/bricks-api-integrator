@@ -312,6 +312,10 @@ trait APIManager {
      * @return string URL final construida
      */
     public function build_dynamic_api_url($base_url, $dynamic_params = [], $pagination_config = [], $overrides = [], $post = null, $extra_context = []) {
+        // Log inicial de la función
+        error_log('DEBUG URL BASE: ' . $base_url);
+        error_log('DEBUG PARAMS INICIALES: ' . print_r($dynamic_params, true));
+        error_log('DEBUG OVERRIDES: ' . print_r($overrides, true));
         $url = $base_url;
         // 1. Procesar parámetros dinámicos y reemplazar en el path si corresponde
         if (!empty($dynamic_params)) {
@@ -342,6 +346,8 @@ trait APIManager {
                             break;
                     }
                 }
+                // Log de cada parámetro procesado
+                error_log('DEBUG PARAM: ' . $param_name . ' = ' . var_export($param_value, true));
                 // Reemplazar en el path si existe el placeholder
                 if (strpos($url, '{'.$param_name.'}') !== false) {
                     $url = str_replace('{'.$param_name.'}', urlencode($param_value), $url);
@@ -368,10 +374,8 @@ trait APIManager {
                 $url = add_query_arg($per_page_param, $per_page, $url);
             }
         }
-        // --- LOG TEMPORAL: mostrar la URL final construida ---
-        if (defined('WP_DEBUG') && WP_DEBUG) {
-            error_log('API MANAGER - URL FINAL: ' . $url);
-        }
+        // Log final de la URL construida
+        error_log('DEBUG URL FINAL: ' . $url);
         return $url;
     }
 }

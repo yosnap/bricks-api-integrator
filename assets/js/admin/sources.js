@@ -44,12 +44,36 @@ jQuery(document).ready(function($) {
 
     // --- Renderizado avanzado de tags dinámicos (idéntico a Endpoints) ---
     function renderTagsTableContent(res, example, exampleJson) {
+        console.log('DEBUG RES.DATA', res.data);
+        window.lastSourcePreviewData = res.data;
         console.log('renderTagsTableContent NUEVO');
         let html = '';
-        // 1. JSON formateado
+        // --- Información del Endpoint y URL real (siempre mostrar) ---
+        const endpoint = res.data.endpoint || {};
+        html += '<div style="background:#f4faff;border:1px solid #b6e0fe;padding:14px 18px 10px 18px;border-radius:8px;margin-bottom:18px;">';
+        html += '<div style="font-size:16px;font-weight:600;color:#1a4b7a;margin-bottom:6px;">Información del Endpoint</div>';
+        html += '<div><b>Nombre:</b> ' + (endpoint.name || '-') + '</div>';
+        html += '<div><b>URL:</b> <span style="font-family:monospace;">' + (res.data.url_real || '-') + '</span></div>';
+        html += '<div><b>Método:</b> ' + (endpoint.method || '-') + '</div>';
+        html += '<div><b>Autenticación:</b> ' + (endpoint.auth_type || '-') + '</div>';
+        html += '</div>';
+        // --- Configuración de Datos ---
+        html += '<div style="background:#f8f9fa;border:1px solid #e3e3e3;padding:12px 18px 8px 18px;border-radius:8px;margin-bottom:18px;">';
+        html += '<div style="font-size:15px;font-weight:600;color:#444;margin-bottom:6px;">Configuración de Datos</div>';
+        html += '<div><b>Ruta de elementos:</b> <span style="font-family:monospace;">' + (res.data.items_path || '-') + '</span></div>';
+        html += '<div><b>Total de elementos:</b> ' + (typeof res.data.total_items !== 'undefined' ? res.data.total_items : '-') + '</div>';
+        // Mostrar tipo de datos (Array/Objeto)
+        let tipoDatos = (res.data.preview_type === 'array') ? 'Array' : 'Objeto';
+        html += '<div><b>Tipo de datos:</b> <span style="font-family:monospace;">' + tipoDatos + '</span></div>';
+        html += '</div>';
+        // --- Datos del Primer Elemento u Objeto ---
+        let datosTitulo = (res.data.preview_type === 'object') ? 'Datos del objeto' : 'Datos del Primer Elemento';
+        html += '<div style="background:#eafbe7;border:1px solid #b6e0fe;padding:12px 18px 8px 18px;border-radius:8px;margin-bottom:18px;">';
+        html += '<div style="font-size:15px;font-weight:600;color:#1a4b7a;margin-bottom:6px;">' + datosTitulo + '</div>';
         if (exampleJson) {
-            html += '<div style="margin-bottom:18px;"><strong>📦 Respuesta de la API (primer registro o detalle):</strong><pre style="background:#f8f9fa;padding:10px;border-radius:5px;max-height:300px;overflow:auto;font-size:13px;">'+exampleJson+'</pre></div>';
+            html += '<pre style="background:#f8f9fa;padding:10px;border-radius:5px;max-height:300px;overflow:auto;font-size:13px;">'+exampleJson+'</pre>';
         }
+        html += '</div>';
         // 2. Estructura detectada
         if (example && typeof example === 'object' && Object.keys(example).length > 0) {
             html += '<div style="margin-bottom:18px;"><strong>🧩 Estructura detectada:</strong><table style="width:100%;border-collapse:collapse;font-size:13px;background:#fff;"><thead><tr style="background:#e7f3ff;"><th style="padding:6px 8px;border:1px solid #e3e3e3;">Campo</th><th style="padding:6px 8px;border:1px solid #e3e3e3;">Tipo</th><th style="padding:6px 8px;border:1px solid #e3e3e3;">Valor de ejemplo</th></tr></thead><tbody>';
@@ -193,7 +217,25 @@ jQuery(document).ready(function($) {
         // Respuesta cruda de la API
         if(res.data && res.data.preview){
             html += '<div style="background:#f8f9fa;padding:12px;border-radius:6px;margin-top:10px;">';
-            html += '<b>Respuesta de la API:</b><br><pre style="max-height:300px;overflow:auto;">'+res.data.preview+'</pre>';
+            html += '<b>Respuesta de la API:</b><br>';
+            if (typeof res.data.preview === 'object' && res.data.preview !== null) {
+                html += '<table style="width:100%;border-collapse:collapse;background:#fff;margin-bottom:10px;">';
+                Object.entries(res.data.preview).forEach(function([key, value]) {
+                    html += '<tr>';
+                    html += '<td style="font-weight:bold;padding:4px 8px;border-bottom:1px solid #eee;width:180px;">'+key+'</td>';
+                    if (Array.isArray(value)) {
+                        html += '<td style="padding:4px 8px;border-bottom:1px solid #eee;"><pre style="margin:0;font-size:12px;">'+JSON.stringify(value, null, 2)+'</pre></td>';
+                    } else if (typeof value === 'object' && value !== null) {
+                        html += '<td style="padding:4px 8px;border-bottom:1px solid #eee;"><pre style="margin:0;font-size:12px;">'+JSON.stringify(value, null, 2)+'</pre></td>';
+                    } else {
+                        html += '<td style="padding:4px 8px;border-bottom:1px solid #eee;">'+value+'</td>';
+                    }
+                    html += '</tr>';
+                });
+                html += '</table>';
+            } else {
+                html += '<pre style="max-height:300px;overflow:auto;">'+res.data.preview+'</pre>';
+            }
             if(res.data.fields && res.data.fields.length){
                 html += '<b>Campos detectados:</b> '+res.data.fields.join(', ');
             }
@@ -234,8 +276,12 @@ jQuery(document).ready(function($) {
             ...data
         }, function(res){
             if(res.success){
-                // Mostrar los tags y ejemplos generados
                 showTagsAndExamples(res);
+                $('#no-tags-message').remove();
+                if (res.data && Array.isArray(res.data.tags) && res.data.tags.length > 0) {
+                    $('#view-source-tags-btn, .button-view-tags').show();
+                    $('#delete-source-tags-btn, .button-delete-tags').show();
+                }
             } else {
                 $('#source-test-result').html('<span style="color:#c00">'+(res.data || 'Error al generar tags dinámicos')+'</span>');
             }
@@ -246,4 +292,85 @@ jQuery(document).ready(function($) {
     $('.source-actions #refresh-source-btn').remove();
     // Eliminar el handler de click para refresh-source-btn
     $('#refresh-source-btn').off('click');
+
+    // --- Mostrar botones de gestión de tags al cargar la página si ya existen tags ---
+    function showTagButtonsIfTagsExist() {
+        var sourceId = $('input[name="source_id"]').val() || $('#source_name').val().toLowerCase().replace(/\s+/g,'_');
+        if (!sourceId) return;
+        $.post(ajaxurl, {action:'get_source_tags', source_id:sourceId, nonce: window.bricksApiSourceNonce}, function(res){
+            // Elimina mensaje previo
+            $('#no-tags-message').remove();
+            if(res.success && res.data.tags && res.data.tags.length > 0){
+                $('#view-source-tags-btn, .button-view-tags').show();
+                $('#delete-source-tags-btn, .button-delete-tags').show();
+            } else {
+                $('#view-source-tags-btn, .button-view-tags').hide();
+                $('#delete-source-tags-btn, .button-delete-tags').hide();
+                // Mensaje claro si no hay tags
+                var msg = $('<div id="no-tags-message" style="margin:12px 0 0 0;padding:10px 16px;background:#fff3cd;border:1px solid #ffeeba;border-radius:6px;color:#856404;font-size:14px;">⚠️ Primero debes generar los tags dinámicos para este Source usando el botón <b>Crear tags y query types dinámicos</b>.</div>');
+                $('.source-actions').after(msg);
+            }
+        });
+    }
+    // Llamar al cargar la página
+    showTagButtonsIfTagsExist();
+
+    // --- Handler para botón Ver Dynamic Tags (siempre activo) ---
+    $('#view-source-tags-btn, .button-view-tags').off('click').on('click', function(){
+        var sourceId = $('input[name="source_id"]').val() || $('#source_name').val().toLowerCase().replace(/\s+/g,'_');
+        var sourceName = $('#source_name').val();
+        $.post(ajaxurl, {
+            action: 'get_tags_for_source',
+            nonce: window.bricksApiSourceNonce,
+            source_id: sourceId,
+            source_name: sourceName,
+            full_info: true
+        }, function(res){
+            if(res.success && res.data){
+                showTagsAndExamples({data: res.data});
+            } else {
+                $('#source-test-result').html('<span style="color:#c00">No se pudieron cargar los tags dinámicos.</span>');
+            }
+        });
+    });
+    // --- Handler para botón Eliminar tags y query type (siempre activo) ---
+    $('#delete-source-tags-btn, .button-delete-tags').off('click').on('click', function(){
+        if(!confirm('¿Seguro que quieres eliminar los tags y el query type?')) return;
+        var sourceId = $('input[name="source_id"]').val() || $('#source_name').val().toLowerCase().replace(/\s+/g,'_');
+        $.post(ajaxurl, {action:'delete_source_and_tags', source_id:sourceId, nonce: window.bricksApiSourceNonce}, function(res){
+            if(res.success){
+                $('#source-test-result, .source-test-result').empty();
+                $('#view-source-tags-btn, .button-view-tags').hide();
+                $('#delete-source-tags-btn, .button-delete-tags').hide();
+                showSourceMessage('✅ Tags y query type eliminados.', 'success');
+            }else{
+                showSourceMessage('❌ ' + res.data, 'error');
+            }
+        });
+    });
+
+    function togglePaginationInputs() {
+        const val = $('#pagination_type').val();
+        if (val && val !== 'none') {
+            $('.pagination-param-row, .per-page-param-row').show();
+        } else {
+            $('.pagination-param-row, .per-page-param-row').hide();
+        }
+    }
+    togglePaginationInputs();
+    $('#pagination_type').on('change', togglePaginationInputs);
+
+    function toggleTestPathButton() {
+        const endpointId = $('#endpoint_id').val();
+        const btn = $('.test-items-path');
+        if (endpointId) {
+            btn.prop('disabled', false).removeAttr('title');
+            btn.attr('data-endpoint-id', endpointId);
+        } else {
+            btn.prop('disabled', true).attr('title', 'Selecciona un endpoint primero');
+            btn.attr('data-endpoint-id', '');
+        }
+    }
+    toggleTestPathButton();
+    $('#endpoint_id').on('change', toggleTestPathButton);
 }); 
