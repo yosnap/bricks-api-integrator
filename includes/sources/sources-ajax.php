@@ -26,8 +26,16 @@ add_action('wp_ajax_save_api_source', function() {
     wp_send_json_success(['sources' => $sources]);
 });
 
-// --- LÓGICA AJAX PARA TAGS DINÁMICOS DE SOURCES - CORREGIDO ---
+// --- LÓGICA AJAX PARA TAGS DINÁMICOS DE SOURCES - UNIFICADA CON TEST SOURCE ---
 add_action('wp_ajax_generate_source_tags', function() {
+    // --- DEBUG LOG ---
+    $debug = (isset($_GET['debug']) && $_GET['debug'] == '1') || (isset($_POST['debug']) && $_POST['debug'] == '1');
+    $is_ajax = defined('DOING_AJAX') && DOING_AJAX;
+    $log_file = '/tmp/bricks_api_debug.log';
+    function bricks_api_debug_log($data, $context = '', $log_file = '/tmp/bricks_api_debug.log') {
+        $entry = date('Y-m-d H:i:s') . " [$context] " . print_r($data, true) . "\n";
+        file_put_contents($log_file, $entry, FILE_APPEND);
+    }
     if (!current_user_can('manage_options')) {
         wp_send_json_error('No autorizado');
     }
@@ -44,9 +52,6 @@ add_action('wp_ajax_generate_source_tags', function() {
         wp_send_json_error('Endpoint no encontrado para este source');
     }
     $endpoint = $endpoints[$endpoint_id];
-    if (!trait_exists('APIManager')) {
-        require_once __DIR__ . '/../api-manager.php';
-    }
     $dynamic_params = $source['dynamic_params'] ?? [];
     $pagination_config = [
         'type' => $source['pagination_type'] ?? '',
@@ -58,6 +63,9 @@ add_action('wp_ajax_generate_source_tags', function() {
     $overrides = [];
     foreach ($dynamic_params as $param) {
         $overrides[$param['name']] = $param['default'] ?? '';
+    }
+    if (!trait_exists('APIManager')) {
+        require_once __DIR__ . '/../api-manager.php';
     }
     $api_manager = new class { use APIManager; };
     $url = $api_manager->build_dynamic_api_url(
@@ -85,21 +93,48 @@ add_action('wp_ajax_generate_source_tags', function() {
     }
     $body = wp_remote_retrieve_body($response);
     $items = json_decode($body, true);
-    // Lógica robusta para extraer el primer ítem correctamente
-    if (is_array($items) && array_keys($items) === range(0, count($items) - 1)) {
-        $first_item = isset($items[0]) ? $items[0] : [];
-    } elseif (is_array($items) && count($items) > 0) {
-        $first_item = $items;
-    } elseif (is_object($items)) {
-        $first_item = (array)$items;
+    if ($debug && !$is_ajax) {
+        echo '<pre style="background:#222;color:#fff;padding:10px;">[DEBUG generate_source_tags] BODY:\n' . htmlspecialchars($body) . '\n\nITEMS:\n' . print_r($items, true) . '</pre>';
+    }
+    bricks_api_debug_log([
+        'source_id' => $source_id,
+        'handler' => 'generate_source_tags',
+        'body' => $body,
+        'items' => $items
+    ], 'generate_source_tags', $log_file);
+    // --- Aplicar items_path si está configurado ---
+    $items_path = $source['items_path'] ?? '';
+    $items_data = $items;
+    if (!empty($items_path)) {
+        $path_parts = explode('.', $items_path);
+        foreach ($path_parts as $part) {
+            if (is_array($items_data) && isset($items_data[$part])) {
+                $items_data = $items_data[$part];
+            } else {
+                wp_send_json_error('Items path "' . $items_path . '" no encontrado en la respuesta.');
+            }
+        }
+    }
+    // --- Lógica para extraer el primer ítem correctamente ---
+    if (is_array($items_data)) {
+        if (array_keys($items_data) === range(0, count($items_data) - 1)) {
+            // Array indexado: usar primer elemento si es un array de objetos
+            $first_item = (isset($items_data[0]) && is_array($items_data[0])) ? $items_data[0] : $items_data;
+        } elseif (count($items_data) > 0) {
+            // Array asociativo (objeto plano): usar tal cual
+            $first_item = $items_data;
+        } else {
+            // Array vacío
+            wp_send_json_error('La respuesta de la API es un array vacío, no se pueden generar tags.');
+        }
+    } elseif (is_object($items_data)) {
+        $first_item = (array)$items_data;
     } else {
-        $first_item = ['value' => $items];
+        wp_send_json_error('La respuesta de la API no es un objeto ni un array, no se pueden generar tags.');
     }
-    if (empty($first_item) && !empty($items)) {
-        $first_item = (array)$items;
-    }
-    if (empty($first_item) || !is_array($first_item)) {
-        wp_send_json_error('No se pudo extraer ningún campo del primer item de la API.');
+    // Validar que el objeto tenga campos útiles
+    if (empty($first_item) || (is_array($first_item) && count($first_item) === 1 && isset($first_item['value']) && (empty($first_item['value']) || $first_item['value'] === []))) {
+        wp_send_json_error('La respuesta de la API no contiene datos válidos para generar tags.');
     }
     if (!function_exists('extract_tags_with_examples')) {
         require_once __DIR__ . '/sources-helpers.php';
@@ -136,58 +171,30 @@ add_action('wp_ajax_generate_source_tags', function() {
     ];
     update_option('bricks_api_generated_query_types', $query_types);
     update_option('bricks_api_generated_tags', $tags_data);
-    $sources = get_option('bricks_api_sources', []);
-    if (isset($sources[$source_id])) {
-        if (!trait_exists('APIManager')) {
-            require_once __DIR__ . '/../api-manager.php';
-        }
-        $api_manager = new class { public static $api_cache = []; use APIManager; };
-        $items = $api_manager->get_api_data_by_source_id($source_id, true);
-        if (is_array($items) && array_keys($items) === range(0, count($items) - 1)) {
-            $first_item = isset($items[0]) ? $items[0] : [];
-        } elseif (is_array($items) && count($items) > 0) {
-            $first_item = $items;
-        } elseif (is_object($items)) {
-            $first_item = (array)$items;
-        } else {
-            $first_item = ['value' => $items];
-        }
-        if (empty($first_item) && !empty($items)) {
-            $first_item = (array)$items;
-        }
-        $sources[$source_id]['tags'] = $tags_final;
-        $sources[$source_id]['example'] = $first_item;
-        $sources[$source_id]['tags_generated'] = true;
-        $sources[$source_id]['last_tag_generation'] = current_time('mysql');
-        update_option('bricks_api_sources', $sources);
-    }
-    // --- Refuerzo para arrays, objetos y ejemplos ---
-    // Validar raíz
-    if (empty($first_item)) {
-        wp_send_json_error('La respuesta de la API está vacía, no se pueden generar tags.');
-    }
+    $sources[$source_id]['tags'] = $tags_final;
+    $sources[$source_id]['example'] = $first_item;
+    $sources[$source_id]['tags_generated'] = true;
+    $sources[$source_id]['last_tag_generation'] = current_time('mysql');
+    update_option('bricks_api_sources', $sources);
+    // --- Generar datos para la respuesta AJAX ---
     $tag_example_data = $first_item;
-    // Si la raíz es un array indexado y tiene al menos un objeto, usar el primer objeto
-    if (is_array($first_item) && array_keys($first_item) === range(0, count($first_item) - 1)) {
-        if (isset($first_item[0]) && is_array($first_item[0]) && count($first_item[0])) {
-            $tag_example_data = $first_item[0];
-        } else {
-            wp_send_json_error('El array de la API está vacío o no contiene objetos válidos.');
-        }
-    } elseif (is_array($first_item) && !count($first_item)) {
-        wp_send_json_error('El objeto de la API está vacío, no se pueden generar tags.');
-    }
-    require_once __DIR__ . '/../field-extractor.php';
-    $slug = bricks_api_normalize_slug($source['name']);
     $tag_objects = function_exists('bricks_api_extract_tags_recursive')
         ? bricks_api_extract_tags_recursive($tag_example_data, 'snap_' . $slug)
         : [];
-    // Si no se generaron tags, error claro
     if (empty($tag_objects)) {
         wp_send_json_error('No se pudieron generar tags dinámicos para la estructura recibida.');
     }
-    // Para arrays y objetos, el campo example será el JSON completo
     $example_json = json_encode($tag_example_data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+    $debug_flag = isset($_GET['debug_tags']) || isset($_POST['debug_tags']);
+    if ($debug_flag) {
+        echo '<div style="background:#222;color:#fff;padding:10px;margin-bottom:10px;">';
+        echo '<b>DEBUG generate_source_tags - BODY:</b><br><pre>' . htmlspecialchars($body) . '</pre>';
+        echo '<b>DEBUG generate_source_tags - ITEMS:</b><br><pre>' . print_r($items, true) . '</pre>';
+        echo '</div>';
+    }
+    error_log('DEBUG FINAL $items: ' . print_r($items, true));
+    error_log('DEBUG FINAL $first_item: ' . print_r($first_item, true));
+    $json_api_response = json_encode($items, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
     wp_send_json_success([
         'tags' => array_column($tag_objects, 'tag'),
         'tag_objects' => $tag_objects,
@@ -198,7 +205,8 @@ add_action('wp_ajax_generate_source_tags', function() {
         'fields' => array_column($tag_objects, 'tag'),
         'example' => $tag_example_data,
         'example_json' => $example_json,
-        'field_prefix' => $field_prefix
+        'field_prefix' => $field_prefix,
+        'api_response_json' => $json_api_response
     ]);
 });
 
@@ -542,6 +550,14 @@ add_action('wp_ajax_test_items_path', function() {
 
 // --- AJAX para preview de Source ---
 add_action('wp_ajax_preview_source_api', function() {
+    // --- DEBUG LOG ---
+    $debug = (isset($_GET['debug']) && $_GET['debug'] == '1') || (isset($_POST['debug']) && $_POST['debug'] == '1');
+    $is_ajax = defined('DOING_AJAX') && DOING_AJAX;
+    $log_file = '/tmp/bricks_api_debug.log';
+    function bricks_api_debug_log($data, $context = '', $log_file = '/tmp/bricks_api_debug.log') {
+        $entry = date('Y-m-d H:i:s') . " [$context] " . print_r($data, true) . "\n";
+        file_put_contents($log_file, $entry, FILE_APPEND);
+    }
     if (!current_user_can('manage_options')) {
         wp_send_json_error('No autorizado');
     }
@@ -559,6 +575,14 @@ add_action('wp_ajax_preview_source_api', function() {
     }
     $api_manager = new class { public static $api_cache = []; use APIManager; };
     $items = $api_manager->get_api_data_by_source_id($source_id, true);
+    if ($debug && !$is_ajax) {
+        echo '<pre style="background:#222;color:#fff;padding:10px;">[DEBUG preview_source_api] ITEMS:\n' . print_r($items, true) . '</pre>';
+    }
+    bricks_api_debug_log([
+        'source_id' => $source_id,
+        'handler' => 'preview_source_api',
+        'items' => $items
+    ], 'preview_source_api', $log_file);
     $available_keys = [];
     if (is_array($items)) {
         $available_keys = array_keys($items);

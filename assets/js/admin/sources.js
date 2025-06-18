@@ -88,12 +88,21 @@ jQuery(document).ready(function($) {
             html += '<label for="'+safeId+'" style="margin:0;cursor:pointer;"><code style="font-size:14px;color:#e67e22;font-weight:bold;">'+tag+'</code></label>';
             html += '<button type="button" class="button button-small copy-tag-btn" data-copy="'+tag+'" style="margin-left:10px;">Copiar tag</button>';
             html += '<span style="color:#888;">→</span>';
-            // Mostrar el valor de ejemplo: textarea para arrays/objetos, input para escalares
-            if (typeof example === 'string' && (example.trim().startsWith('[') || example.trim().startsWith('{'))) {
-                html += '<textarea readonly style="font-family:monospace;background:#fff;padding:2px 6px;border-radius:3px;border:1px solid #e3e3e3;min-width:80px;max-width:600px;min-height:40px;max-height:120px;resize:vertical;">'+example+'</textarea>';
+            // Mostrar el valor de ejemplo igual que en los Endpoints: <span> monoespaciado, fondo blanco, saltos de línea, sin overflow
+            let exampleStr = '';
+            if (typeof example === 'object' && example !== null) {
+                exampleStr = JSON.stringify(example, null, 2);
+            } else if (typeof example === 'string' && (example.trim().startsWith('{') || example.trim().startsWith('['))) {
+                try {
+                    const parsed = JSON.parse(example);
+                    exampleStr = JSON.stringify(parsed, null, 2);
+                } catch (e) {
+                    exampleStr = example;
+                }
             } else {
-                html += '<input type="text" readonly value="'+example+'" style="font-family:monospace;background:#fff;padding:2px 6px;border-radius:3px;border:1px solid #e3e3e3;min-width:80px;max-width:600px;">';
+                exampleStr = String(example);
             }
+            html += '<span style="font-family:monospace;background:#fff;padding:2px 6px;border-radius:3px;white-space:pre-line;word-break:break-all;display:block;max-width:100%;">'+exampleStr+'</span>';
             html += '</div>';
         });
         html += '</div><div style="margin-top:15px;"><button type="submit" class="button button-primary">💾 Guardar selección de tags</button></div></form></div>';

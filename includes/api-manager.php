@@ -86,8 +86,6 @@ trait APIManager {
                 
                 if (is_array($processed_data) && isset($processed_data[$part])) {
                     $processed_data = $processed_data[$part];
-                    if (is_array($processed_data)) {
-                    }
                 } elseif (is_object($processed_data) && isset($processed_data->$part)) {
                     $processed_data = $processed_data->$part;
                 } else {
@@ -95,13 +93,19 @@ trait APIManager {
                 }
             }
             
-            // Ajuste: devolver el tipo correcto según el resultado
+            // Adaptación: distinguir entre array indexado y objeto plano
             if (is_array($processed_data)) {
-                return $processed_data;
+                // Si es array indexado, devolver tal cual
+                if (array_keys($processed_data) === range(0, count($processed_data) - 1)) {
+                    return $processed_data;
+                } else {
+                    // Es un objeto plano (array asociativo), devolver tal cual
+                    return $processed_data;
+                }
             } elseif (is_object($processed_data)) {
                 return (array)$processed_data;
             } else {
-                return [$processed_data];
+                return $processed_data;
             }
         }
         
@@ -181,9 +185,12 @@ trait APIManager {
         
         // Obtener y procesar el cuerpo de la respuesta
         $body = wp_remote_retrieve_body($response);
-        
+        // Log del body crudo de la API
+        error_log('DEBUG API RAW BODY: ' . $body);
         // Intentar decodificar como JSON
         $data = json_decode($body, true);
+        // Log del array $data justo después de decodificar el JSON
+        error_log('DEBUG API RAW DATA: ' . print_r($data, true));
         
         if (json_last_error() !== JSON_ERROR_NONE) {
             return [];
