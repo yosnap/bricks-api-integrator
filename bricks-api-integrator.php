@@ -1044,8 +1044,11 @@ class BricksAPIIntegrator {
                     }
                     
                     // Intentar acceso directo a la propiedad
-                    if (property_exists($loop_object, $field)) {
-                        $value = $loop_object->$field;
+                    if (is_array($loop_object)) {
+                        $loop_object = (object)$loop_object;
+                    }
+                    $value = bricks_api_safe_get($loop_object, $field);
+                    if ($value !== null) {
                         if (defined('WP_DEBUG') && WP_DEBUG) {
                         }
                         return $this->format_field_output($value, $field);
@@ -1063,9 +1066,12 @@ class BricksAPIIntegrator {
                     }
                     
                     // Intentar con el campo normalizado
+                    if (is_array($loop_object)) {
+                        $loop_object = (object)$loop_object;
+                    }
                     $normalized_field = str_replace(['-', '.'], '_', $field);
-                    if (property_exists($loop_object, $normalized_field)) {
-                        $value = $loop_object->$normalized_field;
+                    $value = bricks_api_safe_get($loop_object, $normalized_field);
+                    if ($value !== null) {
                         if (defined('WP_DEBUG') && WP_DEBUG) {
                         }
                         return $this->format_field_output($value, $field);
@@ -3070,3 +3076,20 @@ add_action('admin_enqueue_scripts', function($hook) {
         );
     }
 });
+
+/**
+ * Acceso seguro a propiedades de objetos/arrays/escalares
+ */
+function bricks_api_safe_get($item, $field) {
+    // Si es escalar, lo convertimos a objeto con propiedad 'value'
+    if (is_scalar($item)) {
+        $item = (object)['value' => $item];
+    } elseif (is_array($item)) {
+        $item = (object)$item;
+    }
+    // Solo si es objeto, intentamos acceder a la propiedad
+    if (is_object($item) && property_exists($item, $field)) {
+        return $item->$field;
+    }
+    return null;
+}

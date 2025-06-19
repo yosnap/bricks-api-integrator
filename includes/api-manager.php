@@ -311,71 +311,51 @@ trait APIManager {
      * @param array $extra_context Contexto adicional (opcional)
      * @return string URL final construida
      */
-    public function build_dynamic_api_url($base_url, $dynamic_params = [], $pagination_config = [], $overrides = [], $post = null, $extra_context = []) {
-        // Log inicial de la función
-        error_log('DEBUG URL BASE: ' . $base_url);
-        error_log('DEBUG PARAMS INICIALES: ' . print_r($dynamic_params, true));
-        error_log('DEBUG OVERRIDES: ' . print_r($overrides, true));
-        $url = $base_url;
-        // 1. Procesar parámetros dinámicos y reemplazar en el path si corresponde
-        if (!empty($dynamic_params)) {
-            foreach ($dynamic_params as $param) {
-                $param_name = $param['name'] ?? '';
-                $param_source = $param['source'] ?? 'static';
-                $param_default = $param['default'] ?? '';
-                if (empty($param_name)) continue;
-                // Sobrescritura desde UI
-                if (isset($overrides[$param_name]) && $overrides[$param_name] !== '') {
-                    $param_value = $overrides[$param_name];
-                } else {
-                    // Obtener valor según el origen
-                    switch ($param_source) {
-                        case 'url':
-                            $param_value = isset($_GET[$param_name]) ? sanitize_text_field($_GET[$param_name]) : $param_default;
-                            break;
-                        case 'post':
-                            global $post;
-                            $param_value = isset($post->ID) ? $post->ID : $param_default;
-                            break;
-                        case 'user':
-                            $current_user = wp_get_current_user();
-                            $param_value = $current_user->exists() ? $current_user->ID : $param_default;
-                            break;
-                        default:
-                            $param_value = $param_default;
-                            break;
-                    }
-                }
-                // Log de cada parámetro procesado
-                error_log('DEBUG PARAM: ' . $param_name . ' = ' . var_export($param_value, true));
-                // Reemplazar en el path si existe el placeholder
-                if (strpos($url, '{'.$param_name.'}') !== false) {
-                    $url = str_replace('{'.$param_name.'}', urlencode($param_value), $url);
-                } else if ($param_value !== '') {
-                    // Si no está en el path, añadir como query string
-                    $url = add_query_arg($param_name, $param_value, $url);
-                }
-            }
+    public function build_dynamic_api_url($base_url, $dynamic_params, $pagination_config, $overrides = []) {
+        if (empty($base_url)) return '';
+        
+        // Parsear la URL base y sus parámetros existentes
+        $url_parts = parse_url($base_url);
+        $base = $url_parts['scheme'] . '://' . $url_parts['host'];
+        if (isset($url_parts['path'])) $base .= $url_parts['path'];
+        
+        // Obtener parámetros existentes de la URL
+        $existing_params = [];
+        if (isset($url_parts['query'])) {
+            parse_str($url_parts['query'], $existing_params);
         }
-        // 2. Procesar paginación
-        if (!empty($pagination_config) && isset($pagination_config['type']) && $pagination_config['type'] !== 'none') {
-            $type = $pagination_config['type'];
-            $pagination_param = $pagination_config['param'] ?? '';
-            $per_page_param = $pagination_config['per_page_param'] ?? '';
-            $page = isset($pagination_config['page']) ? intval($pagination_config['page']) : 1;
-            $per_page = isset($pagination_config['per_page']) ? intval($pagination_config['per_page']) : 10;
-            if ($type === 'page_param' && !empty($pagination_param)) {
-                $url = add_query_arg($pagination_param, $page, $url);
-            } elseif ($type === 'offset_param' && !empty($pagination_param)) {
-                $offset = ($page - 1) * $per_page;
-                $url = add_query_arg($pagination_param, $offset, $url);
+        
+        // Procesar parámetros dinámicos
+        $dynamic_values = [];
+        foreach ($dynamic_params as $param) {
+            $param_name = $param['name'];
+            $param_required = $param['required'] ?? false;
+            $param_default = $param['default'] ?? '';
+            
+            // Si hay un override, usarlo
+            if (isset($overrides[$param_name])) {
+                $dynamic_values[$param_name] = $overrides[$param_name];
             }
-            if (!empty($per_page_param)) {
-                $url = add_query_arg($per_page_param, $per_page, $url);
+            // Si es requerido y no hay override, usar el default
+            elseif ($param_required) {
+                $dynamic_values[$param_name] = $param_default;
             }
+            // Si no es requerido y no hay override, no incluir el parámetro
         }
-        // Log final de la URL construida
-        error_log('DEBUG URL FINAL: ' . $url);
-        return $url;
+        
+        // Combinar parámetros (los dinámicos tienen prioridad sobre los existentes)
+        $final_params = array_merge($existing_params, $dynamic_values);
+        
+        // Construir la URL final
+        if (!empty($final_params)) {
+            $query = http_build_query($final_params);
+            $base .= '?' . $query;
+        }
+        
+        if (defined('WP_DEBUG') && WP_DEBUG) {
+            error_log('BRICKS API DEBUG: URL construida: ' . $base);
+        }
+        
+        return $base;
     }
 }

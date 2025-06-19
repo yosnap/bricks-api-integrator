@@ -427,7 +427,21 @@ function save_api_source() {
     $api_sources = get_option('bricks_api_sources', []);
     // Comprobar si estamos editando un query type existente
     $editing = isset($_POST['source_id']) && !empty($_POST['source_id']);
-    $source_id = $editing ? sanitize_text_field($_POST['source_id']) : 'query_type_' . time();
+    if ($editing) {
+        $source_id = sanitize_text_field($_POST['source_id']);
+    } else {
+        // Generar slug basado en el nombre
+        if (!function_exists('bricks_api_normalize_slug')) {
+            require_once __DIR__ . '/../field-extractor.php';
+        }
+        $base_slug = bricks_api_normalize_slug($source_name);
+        $source_id = $base_slug;
+        $i = 2;
+        while (isset($api_sources[$source_id])) {
+            $source_id = $base_slug . '-' . $i;
+            $i++;
+        }
+    }
     // Si estamos editando y no se envían parámetros, mantener los existentes
     // (ELIMINADO: ahora si no se envían, se guardará vacío)
     // Verificar explícitamente que no haya un parámetro anunci-actiu no deseado

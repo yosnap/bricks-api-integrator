@@ -88,6 +88,13 @@ add_action('wp_ajax_generate_source_tags', function() {
         }
     }
     $response = wp_remote_get($url, $args);
+    // Log de depuración de la respuesta HTTP
+    if (defined('WP_DEBUG') && WP_DEBUG) {
+        $status_code = wp_remote_retrieve_response_code($response);
+        $body = wp_remote_retrieve_body($response);
+        error_log('DEBUG API HTTP STATUS: ' . $status_code);
+        error_log('DEBUG API RAW BODY: ' . $body);
+    }
     if (is_wp_error($response)) {
         wp_send_json_error('Error de API: ' . $response->get_error_message());
     }
@@ -115,25 +122,21 @@ add_action('wp_ajax_generate_source_tags', function() {
             }
         }
     }
-    // --- Lógica para extraer el primer ítem correctamente ---
-    if (is_array($items_data)) {
-        if (array_keys($items_data) === range(0, count($items_data) - 1)) {
-            // Array indexado: usar primer elemento si es un array de objetos
-            $first_item = (isset($items_data[0]) && is_array($items_data[0])) ? $items_data[0] : $items_data;
-        } elseif (count($items_data) > 0) {
-            // Array asociativo (objeto plano): usar tal cual
-            $first_item = $items_data;
-        } else {
-            // Array vacío
-            wp_send_json_error('La respuesta de la API es un array vacío, no se pueden generar tags.');
-        }
-    } elseif (is_object($items_data)) {
-        $first_item = (array)$items_data;
-    } else {
-        wp_send_json_error('La respuesta de la API no es un objeto ni un array, no se pueden generar tags.');
+    // --- Normalizar la respuesta: siempre array indexado para generación de tags ---
+    if (is_object($items_data)) {
+        $items_data = [ (array)$items_data ];
+    } elseif (is_array($items_data) && count($items_data) > 0 && array_keys($items_data) !== range(0, count($items_data) - 1)) {
+        // Es un array asociativo (objeto plano)
+        $items_data = [ $items_data ];
+    } elseif (!is_array($items_data)) {
+        $items_data = [ $items_data ];
     }
+    // Usar el primer elemento para generar los tags
+    $first_item = isset($items_data[0]) ? $items_data[0] : [];
+    // Log detallado para depuración
+    error_log('DEBUG TAGS $first_item: ' . print_r($first_item, true));
     // Validar que el objeto tenga campos útiles
-    if (empty($first_item) || (is_array($first_item) && count($first_item) === 1 && isset($first_item['value']) && (empty($first_item['value']) || $first_item['value'] === []))) {
+    if (empty($first_item) || !is_array($first_item) || count(array_filter(array_keys($first_item), 'is_string')) === 0) {
         wp_send_json_error('La respuesta de la API no contiene datos válidos para generar tags.');
     }
     if (!function_exists('extract_tags_with_examples')) {
@@ -656,6 +659,13 @@ add_action('wp_ajax_preview_source_api', function() {
         }
     }
     $response = wp_remote_get($url, $args);
+    // Log de depuración de la respuesta HTTP
+    if (defined('WP_DEBUG') && WP_DEBUG) {
+        $status_code = wp_remote_retrieve_response_code($response);
+        $body = wp_remote_retrieve_body($response);
+        error_log('DEBUG API HTTP STATUS: ' . $status_code);
+        error_log('DEBUG API RAW BODY: ' . $body);
+    }
     if (is_wp_error($response)) {
         wp_send_json_error('Error de API: ' . $response->get_error_message());
     }
@@ -752,3 +762,55 @@ add_action('wp_ajax_preview_source_api', function() {
         'preview_type' => $preview_type
     ]);
 });
+
+// Función para obtener datos de la API
+function get_api_data($url, $endpoint) {
+    if (empty($url)) return [];
+    
+    $method = isset($endpoint['method']) ? strtoupper($endpoint['method']) : 'GET';
+    $headers = isset($endpoint['headers']) ? $endpoint['headers'] : [];
+    $body = isset($endpoint['body']) ? $endpoint['body'] : '';
+    
+    // Convertir headers de formato visual a formato para la petición
+    $formatted_headers = [];
+    foreach ($headers as $header) {
+        if (isset($header['key']) && isset($header['value'])) {
+            $formatted_headers[$header['key']] = $header['value'];
+        }
+    }
+    
+    $args = [
+        'method' => $method,
+        'headers' => $formatted_headers,
+        'timeout' => 30,
+    ];
+    
+    if ($method === 'POST' && !empty($body)) {
+        $args['body'] = $body;
+    }
+    
+    if (defined('WP_DEBUG') && WP_DEBUG) {
+        error_log('BRICKS API DEBUG: Realizando petición a ' . $url);
+    }
+    
+    $response = wp_remote_request($url, $args);
+    
+    if (is_wp_error($response)) {
+        if (defined('WP_DEBUG') && WP_DEBUG) {
+            error_log('BRICKS API ERROR: ' . $response->get_error_message());
+        }
+        return [];
+    }
+    
+    $body = wp_remote_retrieve_body($response);
+    $data = json_decode($body, true);
+    
+    if (json_last_error() !== JSON_ERROR_NONE) {
+        if (defined('WP_DEBUG') && WP_DEBUG) {
+            error_log('BRICKS API ERROR: Error decodificando JSON - ' . json_last_error_msg());
+        }
+        return [];
+    }
+    
+    return $data;
+}

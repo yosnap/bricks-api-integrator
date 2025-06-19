@@ -6,6 +6,7 @@
 
 ## 🚀 Novedades principales (v0.2.0-beta)
 
+- **Normalización automática**: El sistema detecta y adapta automáticamente si la API devuelve un array o un objeto único. Bricks siempre recibe un array plano de objetos, por lo que los loops y los tags funcionan igual en ambos casos.
 - **Generación manual** de Query Types y Dynamic Tags desde la UI del plugin.
 - **Estructura de tags:** `{snap_{slug}_{campo}}` (ej: `{snap_countries-europe_name.common}`) con soporte para notación de punto en campos anidados.
 - **Visualización avanzada**: muestra la estructura, ejemplo y lista de tags generados, con opción de copiar el tag completo o el valor de ejemplo.
@@ -16,7 +17,7 @@
 
 ---
 
-## 🛠️ Cómo funciona el nuevo flujo
+## 🛠️ Procedimiento actualizado (flujo robusto)
 
 1. **Añade o edita un endpoint** en la sección "API Endpoints".
 2. Pulsa **"Generar Query Type y Tags Dinámicos"** para analizar la respuesta de la API y generar los tags.
@@ -25,21 +26,31 @@
 5. Elige el Query Type generado en el Query Loop de Bricks y usa los tags en tus elementos.
 6. Si la API cambia, puedes eliminar y regenerar los tags fácilmente.
 
+**No necesitas preocuparte por el tipo de respuesta de la API:**
+- Si la API devuelve un array, Bricks lo recorre en loop.
+- Si la API devuelve un objeto único, Bricks lo trata como un solo elemento.
+- El sistema se encarga de la normalización automáticamente.
+
 ---
 
 ## 🧩 Ejemplo de uso de tags
 
-- Para un endpoint llamado "Countries Europe":
+- Para un endpoint llamado "Países Europa":
   - Tag para el nombre común: `{snap_countries-europe_name.common}`
   - Tag para el símbolo de la moneda: `{snap_countries-europe_currencies.CZK.symbol}`
+
+- Para un endpoint de productos:
+  - Tag para el nombre: `{snap_productos_nombre}`
+  - Tag para el precio: `{snap_productos_precio}`
 
 ---
 
 ## ⚠️ Notas importantes
 
 - **Solo se generan y usan los tags habilitados** en la UI.
-- El plugin detecta automáticamente si la respuesta es un array o un objeto único y lo adapta para Bricks.
+- El plugin detecta automáticamente si la respuesta es un array o un objeto único y lo adapta para Bricks. **No es necesario crear lógica extra ni preocuparse por el formato de la respuesta.**
 - Si tienes endpoints antiguos, regenera los tags para usar el nuevo formato.
+- El sistema es robusto y compatible con cualquier estructura de API (arrays, objetos, arrays anidados, etc.).
 - El sistema sigue en **versión beta**: reporta cualquier bug o sugerencia internamente.
 
 ---
