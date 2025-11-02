@@ -80,13 +80,14 @@ add_action('wp_ajax_generate_source_tags', function() {
             'User-Agent' => 'Bricks API Integrator/2.1.1'
         ]
     ];
-    if (!empty($endpoint['auth_type']) && $endpoint['auth_type'] === 'basic') {
-        $username = $endpoint['basic_user'] ?? $endpoint['auth_username'] ?? '';
-        $password = $endpoint['basic_password'] ?? $endpoint['auth_password'] ?? '';
-        if (!empty($username) && !empty($password)) {
-            $args['headers']['Authorization'] = 'Basic ' . base64_encode($username . ':' . $password);
-        }
+
+    // Usar sistema unificado de autenticación (soporta Bearer, API Key, Basic Auth)
+    if (!function_exists('bricks_api_proxy_prepare_auth_headers')) {
+        require_once BRICKS_API_INTEGRATOR_PATH . 'includes/image-proxy.php';
     }
+    $auth_headers = bricks_api_proxy_prepare_auth_headers($endpoint);
+    $args['headers'] = array_merge($args['headers'], $auth_headers);
+
     $response = wp_remote_get($url, $args);
     // Log de depuración de la respuesta HTTP
     if (defined('WP_DEBUG') && WP_DEBUG) {
@@ -463,13 +464,14 @@ add_action('wp_ajax_test_source_api_live', function() {
             'User-Agent' => 'Bricks API Integrator/2.1.1'
         ]
     ];
-    if (!empty($endpoint['auth_type']) && $endpoint['auth_type'] === 'basic') {
-        $username = $endpoint['basic_user'] ?? $endpoint['auth_username'] ?? '';
-        $password = $endpoint['basic_password'] ?? $endpoint['auth_password'] ?? '';
-        if (!empty($username) && !empty($password)) {
-            $args['headers']['Authorization'] = 'Basic ' . base64_encode($username . ':' . $password);
-        }
+
+    // Usar sistema unificado de autenticación (soporta Bearer, API Key, Basic Auth)
+    if (!function_exists('bricks_api_proxy_prepare_auth_headers')) {
+        require_once BRICKS_API_INTEGRATOR_PATH . 'includes/image-proxy.php';
     }
+    $auth_headers = bricks_api_proxy_prepare_auth_headers($endpoint);
+    $args['headers'] = array_merge($args['headers'], $auth_headers);
+
     $response = wp_remote_get($url, $args);
     if (is_wp_error($response)) {
         wp_send_json_error('Error de API: ' . $response->get_error_message());
@@ -651,13 +653,14 @@ add_action('wp_ajax_preview_source_api', function() {
             'User-Agent' => 'Bricks API Integrator/2.1.1'
         ]
     ];
-    if (!empty($endpoint['auth_type']) && $endpoint['auth_type'] === 'basic') {
-        $username = $endpoint['basic_user'] ?? $endpoint['auth_username'] ?? '';
-        $password = $endpoint['basic_password'] ?? $endpoint['auth_password'] ?? '';
-        if (!empty($username) && !empty($password)) {
-            $args['headers']['Authorization'] = 'Basic ' . base64_encode($username . ':' . $password);
-        }
+
+    // Usar sistema unificado de autenticación (soporta Bearer, API Key, Basic Auth)
+    if (!function_exists('bricks_api_proxy_prepare_auth_headers')) {
+        require_once BRICKS_API_INTEGRATOR_PATH . 'includes/image-proxy.php';
     }
+    $auth_headers = bricks_api_proxy_prepare_auth_headers($endpoint);
+    $args['headers'] = array_merge($args['headers'], $auth_headers);
+
     $response = wp_remote_get($url, $args);
     // Log de depuración de la respuesta HTTP
     if (defined('WP_DEBUG') && WP_DEBUG) {

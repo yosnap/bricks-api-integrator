@@ -142,22 +142,24 @@ trait APIManager {
             return [];
         }
         
-        // Preparar headers y opciones de la petición
-        $headers = $this->prepare_request_headers($endpoint_config);
+        // Preparar headers base
+        $headers = [
+            'Content-Type' => 'application/json',
+            'Accept' => 'application/json',
+            'User-Agent' => 'Bricks-API-Integrator/2.0'
+        ];
+
+        // Usar sistema unificado de autenticación (soporta Bearer, API Key, Basic Auth)
+        if (!function_exists('bricks_api_proxy_prepare_auth_headers')) {
+            require_once BRICKS_API_INTEGRATOR_PATH . 'includes/image-proxy.php';
+        }
+        $auth_headers = bricks_api_proxy_prepare_auth_headers($endpoint_config);
+        $headers = array_merge($headers, $auth_headers);
+
         $request_options = [
             'headers' => $headers,
             'timeout' => 30
         ];
-        
-        // Configurar autenticación básica si está definida y no está ya configurada
-        if (empty($headers['Authorization']) && isset($endpoint_config['auth_type']) && $endpoint_config['auth_type'] === 'basic') {
-            $username = $endpoint_config['username'] ?? '';
-            $password = $endpoint_config['password'] ?? '';
-            
-            if (!empty($username) && !empty($password)) {
-                $request_options['headers']['Authorization'] = 'Basic ' . base64_encode($username . ':' . $password);
-            }
-        }
         
         // Determinar el método HTTP a usar (GET por defecto)
         $method = isset($endpoint_config['method']) ? strtoupper($endpoint_config['method']) : 'GET';
