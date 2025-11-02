@@ -8,14 +8,31 @@
 
 ## 🚀 Novedades principales (v0.2.0-beta)
 
-- **Normalización automática**: El sistema detecta y adapta automáticamente si la API devuelve un array o un objeto único. Bricks siempre recibe un array plano de objetos, por lo que los loops y los tags funcionan igual en ambos casos.
-- **Generación manual** de Query Types y Dynamic Tags desde la UI del plugin.
-- **Estructura de tags:** `{snap_{slug}_{campo}}` (ej: `{snap_countries-europe_name.common}`) con soporte para notación de punto en campos anidados.
-- **Visualización avanzada**: muestra la estructura, ejemplo y lista de tags generados, con opción de copiar el tag completo o el valor de ejemplo.
-- **Selección de tags habilitados/deshabilitados** y guardado persistente por endpoint.
-- **Renderizado de tags anidados** en Bricks, tanto para arrays como para objetos únicos.
-- **Eliminación y recreación** de tags/query type desde la UI.
-- **UX mejorada**: visualización automática de tags al editar/cargar endpoint, feedback claro y control total.
+### ✨ **Nuevo: Field Transformers**
+- **Transformación automática de campos**: Convierte IDs de imagen en URLs completas
+- **UI visual**: Sistema de repetidores clave-valor para configurar transformadores
+- **4 tipos de transformadores**:
+  - 🔗 **Related Endpoint**: Construir URLs desde referencias de API
+  - 🌐 **URL Template**: Aplicar plantillas personalizadas
+  - ⬅️ **Prefix**: Añadir prefijos a valores
+  - ➡️ **Suffix**: Añadir sufijos a valores
+- **Persistencia completa**: Los transformadores se guardan y aplican automáticamente
+- **Aplicación en Query Loop**: Funciona en Bricks Builder sin configuración adicional
+- 📚 **[Guía completa de Field Transformers](docs/guias/FIELD-TRANSFORMERS.md)**
+
+### 🔒 **Sistema de Autenticación Unificado**
+- **4 tipos soportados**: None, Bearer Token, API Key, Basic Auth
+- **Función centralizada**: `prepare_auth_headers()` unifica toda la lógica
+- **100% retrocompatible**: Endpoints existentes funcionan sin cambios
+
+### 🎨 **Mejoras de UX**
+- **Normalización automática**: El sistema detecta y adapta automáticamente si la API devuelve un array o un objeto único
+- **Generación manual** de Query Types y Dynamic Tags desde la UI
+- **Estructura de tags:** `{snap_{slug}_{campo}}` con soporte para notación de punto
+- **Visualización avanzada**: Estructura, ejemplos y lista de tags con copia rápida
+- **Selección de tags habilitados/deshabilitados** y guardado persistente
+- **Renderizado de tags anidados** en Bricks para arrays y objetos
+- **Detección automática de arrays de traducciones** con tags por idioma
 
 ---
 

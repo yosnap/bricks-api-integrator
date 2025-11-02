@@ -2,6 +2,80 @@
 
 ## [0.2-beta] - 2025-11-02
 
+### ✨ **Nuevo: Sistema Completo de Field Transformers**
+
+#### **Funcionalidad Principal**
+Sistema avanzado para transformar automáticamente valores de campos API:
+- 🖼️ **Imágenes**: Convertir IDs (`image/55464`) en URLs completas con parámetros
+- 🔗 **Related Endpoints**: Construir URLs desde referencias
+- 🎨 **Templates**: Aplicar plantillas personalizadas
+- ⚙️ **Prefix/Suffix**: Añadir prefijos o sufijos a valores
+
+#### **UI Visual con Repetidores**
+- ✅ **Sistema clave-valor**: Interfaz intuitiva para configurar parámetros
+- ✅ **Añadir/eliminar dinámicamente**: Gestión de parámetros sin recargar
+- ✅ **4 tipos de transformadores**: related_endpoint, url_template, prefix, suffix
+- ✅ **Validación en tiempo real**: Feedback inmediato
+
+#### **Persistencia Completa**
+- ✅ **Guardado en endpoint**: Transformadores vinculados al endpoint
+- ✅ **endpoint_id en query_types**: Vínculo correcto con endpoint
+- ✅ **Recarga sin pérdida**: Transformadores persisten al recargar admin
+- ✅ **Aplicación en Query Loop**: Transformaciones en Bricks Builder
+
+#### **Aplicación en 3 Lugares**
+```php
+1. direct-source.php         → Sources directos
+2. sources-hooks.php          → Sources con hooks
+3. bricks-api-integrator.php  → Endpoints (usando endpoint_id)
+```
+
+#### **Funciones Nuevas**
+- `bricks_api_apply_field_transform()`: Aplicar transformaciones
+- `bricks_api_extract_id_from_path()`: Extraer IDs de paths
+- `bricks_api_build_related_url()`: Construir URLs con parámetros
+- `bricks_api_detect_translation_array()`: Detectar arrays de traducciones
+
+#### **Caso de Uso Real: Inventrip**
+```php
+// Configuración del transformador
+[
+    'field' => 'image',
+    'type' => 'related_endpoint',
+    'endpoint_url' => 'https://api.inventrip.com/v100/image/{id_image}',
+    'params' => [
+        'api_key' => 'Tur!sm0V@ll-2025',
+        'image_quality' => 'medium'
+    ]
+]
+
+// Resultado
+"image/55464" → "https://api.inventrip.com/v100/image/55464?api_key=XXX&image_quality=medium"
+```
+
+#### **Testing Completado**
+- ✅ Test 1: API sin autenticación - OK
+- ✅ Test 2: Bearer Token - OK
+- ✅ Test 3: API Key (Inventrip) - OK
+- ✅ Persistencia de transformadores - OK
+- ✅ Aplicación en Bricks Builder - OK
+
+#### **Documentación**
+- 📚 `/docs/guias/FIELD-TRANSFORMERS.md`: Guía completa de uso
+- 📚 `/docs/testing/INSTRUCCIONES-TESTING.md`: Instrucciones paso a paso
+- 🎯 Ejemplos reales de Inventrip incluidos
+
+#### **Métricas**
+```
+Funciones añadidas:    7 nuevas
+UI mejorada:           Sistema repetidores clave-valor
+Persistencia:          100% funcional
+Compatibilidad:        Retrocompatible
+Breaking changes:      Ninguno
+```
+
+---
+
 ### 🔧 **Refactoring Crítico: Sistema de Autenticación Unificado**
 
 #### **Problemas Resueltos**

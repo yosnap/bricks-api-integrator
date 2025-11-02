@@ -112,16 +112,23 @@ Pendiente:           ██░░░░░░░░░░░░░░░░░�
 
 ## 🚀 Funcionalidades Avanzadas
 
-### ✅ Completado (40%)
+### ✅ Completado (75%)
 - [x] Parámetros dinámicos configurables
 - [x] Soporte básico para paginación
+- [x] **Field Transformers completo**:
+  - [x] UI con repetidores clave-valor
+  - [x] 4 tipos: related_endpoint, url_template, prefix, suffix
+  - [x] Persistencia completa en endpoints
+  - [x] Aplicación en Query Loop (3 lugares)
+  - [x] Detección automática de arrays de traducciones
+  - [x] Transformación de IDs de imagen → URLs completas
+  - [x] Documentación completa y ejemplos reales
 
 ### ⚠️ Pendiente
 - [ ] Sistema de paginación avanzado
 - [ ] Filtrado de datos desde UI
 - [ ] Ordenación de datos
 - [ ] Búsqueda en datos de API
-- [ ] Transformación de datos (mapeo de campos)
 - [ ] Webhooks para actualización automática
 
 ---
