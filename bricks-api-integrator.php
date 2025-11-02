@@ -25,6 +25,7 @@ require_once BRICKS_API_INTEGRATOR_PATH . 'includes/field-extractor.php';
 require_once BRICKS_API_INTEGRATOR_PATH . 'includes/functions.php';
 require_once BRICKS_API_INTEGRATOR_PATH . 'includes/query-preview.php';
 require_once BRICKS_API_INTEGRATOR_PATH . 'includes/cleaner.php';
+require_once BRICKS_API_INTEGRATOR_PATH . 'includes/image-proxy.php';
 
 // Archivos necesarios para el admin - HABILITAR SOLO LOS NECESARIOS
 if (file_exists(BRICKS_API_INTEGRATOR_PATH . 'includes/sources.php')) {

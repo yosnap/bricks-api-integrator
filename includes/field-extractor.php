@@ -369,6 +369,29 @@ function bricks_api_apply_field_transform($field_name, $value, $transformers = [
 
         // Aplicar transformación según el tipo
         switch ($transformer['type']) {
+            case 'proxy':
+                // Transformación usando proxy seguro (oculta credenciales)
+                if (empty($transformer['proxy_slug'])) {
+                    break;
+                }
+
+                $endpoint_slug = $transformer['proxy_slug'];
+
+                // Si es un array de valores, transformar cada uno
+                if (is_array($value)) {
+                    $transformed = [];
+                    foreach ($value as $item) {
+                        $resource_id = bricks_api_extract_id_from_path($item);
+                        $transformed[] = bricks_api_generate_proxy_url($endpoint_slug, $resource_id);
+                    }
+                    return $transformed;
+                } else {
+                    // Valor único
+                    $resource_id = bricks_api_extract_id_from_path($value);
+                    return bricks_api_generate_proxy_url($endpoint_slug, $resource_id);
+                }
+                break;
+
             case 'related_endpoint':
                 // Transformación usando endpoint relacionado
                 if (empty($transformer['endpoint_url'])) {

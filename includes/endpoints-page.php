@@ -477,6 +477,7 @@ if (!function_exists('render_api_endpoints_page')) {
                         <div style="display:flex;gap:8px;margin-bottom:8px;align-items:center;">
                             <input type="text" class="transformer-field" placeholder="Nombre del campo (ej: image)" value="${field}" style="flex:1;">
                             <select class="transformer-type" style="flex:1;">
+                                <option value="proxy" ${type==='proxy'?'selected':''}>🔒 Proxy Seguro (Oculta API Keys)</option>
                                 <option value="related_endpoint" ${type==='related_endpoint'?'selected':''}>🔗 Endpoint Relacionado</option>
                                 <option value="url_template" ${type==='url_template'?'selected':''}>🌐 Template URL</option>
                                 <option value="prefix" ${type==='prefix'?'selected':''}>⬅️ Prefijo</option>
@@ -507,7 +508,33 @@ if (!function_exists('render_api_endpoints_page')) {
                     const $config = row.find('.transformer-config');
                     $config.empty();
 
-                    if (currentType === 'related_endpoint') {
+                    if (currentType === 'proxy') {
+                        const paramsContainer = $('<div class="transformer-params-container" style="margin-top:8px;"></div>');
+
+                        $config.append(`
+                            <div style="background:#e7f3ff;padding:10px;border-radius:4px;margin-bottom:10px;font-size:13px;">
+                                <strong>🔒 Proxy Seguro:</strong> Las imágenes se servirán a través de tu sitio, ocultando las credenciales de la API.
+                                <br><small style="color:#666;">Ejemplo: <code>/wp-json/bricks-api/v1/proxy/inventrip-images/55464</code></small>
+                            </div>
+                            <input type="text" class="regular-text transformer-proxy-slug" placeholder="Slug del proxy (ej: inventrip-images)" value="${config.proxy_slug||''}" style="width:100%;margin-bottom:8px;">
+                            <input type="text" class="regular-text transformer-proxy-url" placeholder="URL del endpoint (ej: https://api.inventrip.com/v100/image/{resource_id})" value="${config.proxy_url_template||''}" style="width:100%;margin-bottom:8px;">
+                            <div style="margin-bottom:4px;font-weight:500;font-size:13px;">Parámetros de URL (se añadirán automáticamente):</div>
+                        `);
+                        $config.append(paramsContainer);
+
+                        // Cargar parámetros existentes
+                        if (config.proxy_params && typeof config.proxy_params === 'object') {
+                            Object.entries(config.proxy_params).forEach(([key, value]) => {
+                                addParamKeyValue(key, value, paramsContainer);
+                            });
+                        }
+
+                        // Botón para añadir más parámetros
+                        const addParamBtn = $('<button type="button" class="button button-small" style="margin-top:4px;">+ Añadir parámetro</button>');
+                        addParamBtn.click(function(){ addParamKeyValue('', '', paramsContainer); });
+                        $config.append(addParamBtn);
+
+                    } else if (currentType === 'related_endpoint') {
                         const paramsContainer = $('<div class="transformer-params-container" style="margin-top:8px;"></div>');
 
                         $config.append(`
@@ -564,7 +591,20 @@ if (!function_exists('render_api_endpoints_page')) {
                     const type = $(this).find('.transformer-type').val();
                     const transformer = { field, type };
 
-                    if (type === 'related_endpoint') {
+                    if (type === 'proxy') {
+                        transformer.proxy_slug = $(this).find('.transformer-proxy-slug').val().trim();
+                        transformer.proxy_url_template = $(this).find('.transformer-proxy-url').val().trim();
+
+                        // Extraer parámetros del sistema clave-valor
+                        transformer.proxy_params = {};
+                        $(this).find('.transformer-param-row').each(function(){
+                            const key = $(this).find('.transformer-param-key').val().trim();
+                            const value = $(this).find('.transformer-param-value').val().trim();
+                            if (key) {
+                                transformer.proxy_params[key] = value;
+                            }
+                        });
+                    } else if (type === 'related_endpoint') {
                         transformer.endpoint_url = $(this).find('.transformer-endpoint-url').val().trim();
 
                         // Extraer parámetros del sistema clave-valor
@@ -1235,8 +1275,14 @@ add_action('wp_ajax_save_api_endpoint', function() {
                 $field_transformers[] = [
                     'field' => sanitize_text_field($transformer['field']),
                     'type' => sanitize_text_field($transformer['type']),
+                    // Campos para proxy
+                    'proxy_slug' => sanitize_text_field($transformer['proxy_slug'] ?? ''),
+                    'proxy_url_template' => sanitize_text_field($transformer['proxy_url_template'] ?? ''),
+                    'proxy_params' => !empty($transformer['proxy_params']) ? $transformer['proxy_params'] : [],
+                    // Campos para related_endpoint
                     'endpoint_url' => sanitize_text_field($transformer['endpoint_url'] ?? ''),
                     'template' => sanitize_text_field($transformer['template'] ?? ''),
+                    // Campos para prefix/suffix
                     'prefix_value' => sanitize_text_field($transformer['prefix_value'] ?? ''),
                     'suffix_value' => sanitize_text_field($transformer['suffix_value'] ?? ''),
                     'params' => !empty($transformer['params']) ? $transformer['params'] : []
