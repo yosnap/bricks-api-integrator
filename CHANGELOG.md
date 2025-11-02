@@ -2,6 +2,75 @@
 
 ## [0.2-beta] - 2025-11-02
 
+### 🔒 **Nuevo: Sistema de Proxy Seguro para Imágenes**
+
+#### **Funcionalidad Principal**
+Sistema de proxy para servir imágenes ocultando credenciales de la API:
+- 🔐 **URLs limpias**: `/wp-json/bricks-api/v1/proxy/{slug}/{id}` sin credenciales visibles
+- 🚀 **Caché inteligente**: Transients con TTL de 1 hora
+- 🎯 **Detección automática**: Maneja JSON con URLs y imágenes directas
+- ✅ **Compatible con todas las auth**: Bearer, API Key, Basic Auth
+
+#### **Archivos Creados**
+- `includes/image-proxy.php` (278 líneas)
+
+#### **Modificaciones**
+- `bricks-api-integrator.php`: Carga del módulo proxy
+- `includes/field-extractor.php`: Transformación tipo 'proxy'
+- `includes/endpoints-page.php`: UI para configurar proxy
+
+#### **Ejemplo de Uso**
+```php
+// Configuración
+'type' => 'proxy',
+'proxy_slug' => 'inventrip-images',
+'proxy_url_template' => 'https://api.inventrip.com/v100/image/{resource_id}',
+'proxy_params' => ['image_quality' => 'medium']
+
+// URL generada (sin credenciales)
+/wp-json/bricks-api/v1/proxy/inventrip-images/55464
+```
+
+### 🔧 **Mejora: Unificación de Sistema de Autenticación**
+
+#### **Problema Resuelto**
+- Sources solo soportaban Basic Auth
+- Código de autenticación duplicado en 4 archivos
+- Inconsistencia entre componentes
+
+#### **Solución**
+- Función unificada: `bricks_api_proxy_prepare_auth_headers()`
+- Elimina 67 líneas de código duplicado
+- 100% compatibilidad en todos los componentes
+
+#### **Archivos Modificados**
+- `includes/sources/sources-ajax.php` (3 ocurrencias)
+- `includes/api-manager.php` (1 ocurrencia)
+
+#### **Resultados**
+✅ Sources funcionan con Bearer Token (GitHub API)
+✅ Sources funcionan con API Key (Inventrip)
+✅ Sources funcionan con Basic Auth (httpbin)
+✅ Código más limpio y mantenible
+
+### 📊 **Testing Completo de Autenticación**
+
+#### **Tests Ejecutados y Pasados**
+- ✅ Test 1: API sin autenticación (JSONPlaceholder)
+- ✅ Test 2: Bearer Token (GitHub API)
+- ✅ Test 3: API Key (Inventrip)
+- ✅ Test 4: Basic Auth (httpbin)
+- ✅ Proxy de imágenes con credenciales ocultas
+- ✅ Sources con todos los tipos de autenticación
+
+#### **Documentación Creada**
+- `docs/testing/RESULTADOS-TESTING-AUTENTICACION.md`: Documento completo con:
+  - Resumen ejecutivo
+  - Detalles de cada test
+  - Matriz de compatibilidad
+  - Casos de uso reales
+  - Bugs corregidos
+
 ### ✨ **Nuevo: Sistema Completo de Field Transformers**
 
 #### **Funcionalidad Principal**
