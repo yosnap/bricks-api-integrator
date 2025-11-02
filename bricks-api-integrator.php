@@ -298,23 +298,13 @@ class BricksAPIIntegrator {
             
             if (defined('WP_DEBUG') && WP_DEBUG) {
             }
-            
-            // Configurar headers de autenticación si es necesario
+
+            // Configurar headers de autenticación usando función unificada
+            $headers = $this->prepare_auth_headers($endpoint);
             $args = [
                 'timeout' => 30,
-                'headers' => [
-                    'User-Agent' => 'Bricks API Integrator/2.1.1'
-                ]
+                'headers' => $headers
             ];
-            
-            // Añadir autenticación básica si está configurada
-            if (!empty($endpoint['auth_type']) && $endpoint['auth_type'] === 'basic') {
-                $username = $endpoint['basic_user'] ?? $endpoint['auth_username'] ?? '';
-                $password = $endpoint['basic_password'] ?? $endpoint['auth_password'] ?? '';
-                if (!empty($username) && !empty($password)) {
-                    $args['headers']['Authorization'] = 'Basic ' . base64_encode($username . ':' . $password);
-                }
-            }
             
             $response = wp_remote_get($url, $args);
             if (is_wp_error($response)) {
@@ -405,7 +395,74 @@ class BricksAPIIntegrator {
         } else if (!is_array($data) || array_keys($data) !== range(0, count($data) - 1)) {
             $data = [$data];
         }
-        
+
+        // Aplicar transformaciones de campos ANTES de convertir a formato Bricks
+        if ($is_endpoint) {
+            // Para endpoints: buscar transformadores en el endpoint
+            $endpoint_id = $query_type_info['endpoint_id'] ?? null;
+
+            if (defined('WP_DEBUG') && WP_DEBUG) {
+                error_log('🔄 ENDPOINT - Query type info: ' . print_r($query_type_info, true));
+                error_log('🔄 ENDPOINT - Endpoint ID: ' . ($endpoint_id ?? 'NULL'));
+            }
+
+            if ($endpoint_id !== null) {
+                $endpoints = get_option('bricks_api_endpoints', []);
+                if (isset($endpoints[$endpoint_id])) {
+                    $endpoint = $endpoints[$endpoint_id];
+                    $field_transformers = $endpoint['field_transformers'] ?? [];
+
+                    if (defined('WP_DEBUG') && WP_DEBUG) {
+                        error_log('🔄 ENDPOINT - Field transformers encontrados: ' . print_r($field_transformers, true));
+                        error_log('🔄 ENDPOINT - Primer item ANTES transformar: ' . print_r($data[0] ?? 'vacío', true));
+                    }
+
+                    if (!empty($field_transformers)) {
+                        require_once plugin_dir_path(__FILE__) . 'includes/field-extractor.php';
+
+                        foreach ($data as &$item) {
+                            foreach ($field_transformers as $transformer) {
+                                $field_name = $transformer['field'] ?? '';
+
+                                if (empty($field_name) || !isset($item[$field_name])) {
+                                    continue;
+                                }
+
+                                $item[$field_name] = bricks_api_apply_field_transform(
+                                    $field_name,
+                                    $item[$field_name],
+                                    [$transformer]
+                                );
+                            }
+                        }
+                        unset($item);
+                    }
+                }
+            }
+        } else {
+            // Para sources: buscar transformadores en el endpoint asociado
+            if (isset($endpoint) && !empty($endpoint['field_transformers'])) {
+                require_once plugin_dir_path(__FILE__) . 'includes/field-extractor.php';
+
+                foreach ($data as &$item) {
+                    foreach ($endpoint['field_transformers'] as $transformer) {
+                        $field_name = $transformer['field'] ?? '';
+
+                        if (empty($field_name) || !isset($item[$field_name])) {
+                            continue;
+                        }
+
+                        $item[$field_name] = bricks_api_apply_field_transform(
+                            $field_name,
+                            $item[$field_name],
+                            [$transformer]
+                        );
+                    }
+                }
+                unset($item);
+            }
+        }
+
         // Convertir al formato que espera Bricks
         return $this->convert_api_data_for_bricks($data);
     }
@@ -617,6 +674,56 @@ class BricksAPIIntegrator {
     }
     
     /**
+     * FUNCIÓN UNIFICADA: Preparar headers de autenticación para peticiones API
+     *
+     * @param array $endpoint_config Configuración del endpoint con datos de autenticación
+     * @return array Headers preparados con autenticación incluida
+     */
+    private function prepare_auth_headers($endpoint_config = []) {
+        $headers = [
+            'User-Agent' => 'Bricks API Integrator/0.1-beta',
+            'Accept' => '*/*',
+            'Connection' => 'keep-alive',
+            'Cache-Control' => 'no-cache'
+        ];
+
+        // Si no hay configuración o auth_type, retornar headers básicos
+        if (empty($endpoint_config) || empty($endpoint_config['auth_type']) || $endpoint_config['auth_type'] === 'none') {
+            return $headers;
+        }
+
+        $auth_type = $endpoint_config['auth_type'];
+
+        switch ($auth_type) {
+            case 'bearer':
+                if (!empty($endpoint_config['auth_token'])) {
+                    $headers['Authorization'] = 'Bearer ' . trim($endpoint_config['auth_token']);
+                }
+                break;
+
+            case 'api_key':
+                if (!empty($endpoint_config['auth_key']) && !empty($endpoint_config['auth_value'])) {
+                    $key_name = trim($endpoint_config['auth_key']);
+                    $key_value = trim($endpoint_config['auth_value']);
+                    $headers[$key_name] = $key_value;
+                }
+                break;
+
+            case 'basic':
+                // Soportar múltiples nombres de campos por compatibilidad
+                $username = $endpoint_config['auth_username'] ?? $endpoint_config['basic_user'] ?? '';
+                $password = $endpoint_config['auth_password'] ?? $endpoint_config['basic_password'] ?? '';
+
+                if (!empty($username) && !empty($password)) {
+                    $headers['Authorization'] = 'Basic ' . base64_encode($username . ':' . $password);
+                }
+                break;
+        }
+
+        return $headers;
+    }
+
+    /**
      * Obtener datos de API con caché
      */
     public function get_api_data_with_cache($url, $endpoint_config = [], $bypass_cache = false) {
@@ -649,37 +756,14 @@ class BricksAPIIntegrator {
      * Obtener datos directamente de la API
      */
     private function fetch_api_data_direct($url, $endpoint_config = []) {
-        // Configuración por defecto
+        // Usar función unificada de autenticación
+        $headers = $this->prepare_auth_headers($endpoint_config);
+
+        // Configuración de la petición
         $args = array(
             'timeout' => 30,
-            'headers' => array(
-                'User-Agent' => 'Bricks API Integrator/2.1.1'
-            )
+            'headers' => $headers
         );
-        
-        // Añadir autenticación si está configurada
-        if (!empty($endpoint_config['auth_type']) && $endpoint_config['auth_type'] !== 'none') {
-            switch ($endpoint_config['auth_type']) {
-                case 'bearer':
-                    if (!empty($endpoint_config['auth_token'])) {
-                        $args['headers']['Authorization'] = 'Bearer ' . $endpoint_config['auth_token'];
-                    }
-                    break;
-                case 'api_key':
-                    if (!empty($endpoint_config['auth_key']) && !empty($endpoint_config['auth_value'])) {
-                        $args['headers'][$endpoint_config['auth_key']] = $endpoint_config['auth_value'];
-                    }
-                    break;
-                case 'basic':
-                    // Compatibilidad con ambos nombres de campo
-                    $username = $endpoint_config['basic_user'] ?? $endpoint_config['auth_username'] ?? '';
-                    $password = $endpoint_config['basic_password'] ?? $endpoint_config['auth_password'] ?? '';
-                    if (!empty($username) && !empty($password)) {
-                        $args['headers']['Authorization'] = 'Basic ' . base64_encode($username . ':' . $password);
-                    }
-                    break;
-            }
-        }
         
         // LOG: Registrar URL y headers antes de la petición
         if (defined('WP_DEBUG') && WP_DEBUG) {
@@ -920,51 +1004,14 @@ class BricksAPIIntegrator {
     
     /**
      * Obtener los encabezados de autenticación para una petición a la API
-     * 
+     *
      * @param array $endpoint Configuración del endpoint
      * @return array Encabezados de autenticación
+     * @deprecated Usar prepare_auth_headers() en su lugar
      */
     private function get_auth_headers($endpoint) {
-        $headers = [
-            'User-Agent' => 'PostmanRuntime/7.44.0',
-            'Accept' => '*/*',
-            'Connection' => 'keep-alive',
-            'Cache-Control' => 'no-cache'
-        ];
-        
-        // Añadir autenticación si está configurada
-        if (!empty($endpoint['auth_type']) && $endpoint['auth_type'] !== 'none') {
-            switch ($endpoint['auth_type']) {
-                case 'bearer':
-                    if (!empty($endpoint['auth_token'])) {
-                        $headers['Authorization'] = 'Bearer ' . $endpoint['auth_token'];
-                    }
-                    break;
-                case 'api_key':
-                    if (!empty($endpoint['auth_key']) && !empty($endpoint['auth_value'])) {
-                        // Preservar el nombre exacto del encabezado como lo configuró el usuario
-                        // Esto es crucial para APIs que esperan un formato específico
-                        $key_name = $endpoint['auth_key'];
-                        $key_value = $endpoint['auth_value'];
-                        
-                        // Usar exactamente el nombre del encabezado configurado por el usuario
-                        $headers[$key_name] = $key_value;
-                        
-
-                    }
-                    break;
-                case 'basic':
-                    // Compatibilidad con ambos nombres de campo
-                    $username = $endpoint_config['basic_user'] ?? $endpoint_config['auth_username'] ?? '';
-                    $password = $endpoint_config['basic_password'] ?? $endpoint_config['auth_password'] ?? '';
-                    if (!empty($username) && !empty($password)) {
-                        $headers['Authorization'] = 'Basic ' . base64_encode($username . ':' . $password);
-                    }
-                    break;
-            }
-        }
-        
-        return $headers;
+        // Usar función unificada
+        return $this->prepare_auth_headers($endpoint);
     }
     
     /**
@@ -1685,80 +1732,22 @@ class BricksAPIIntegrator {
         try {
             // Construir URL con todos los parámetros configurados (estáticos y dinámicos)
             $test_url = $this->build_complete_test_url($endpoint);
-            
-            // Obtener los valores de autenticación
-            $auth_type = isset($endpoint['auth_type']) ? $endpoint['auth_type'] : 'none';
-            $auth_key = isset($endpoint['auth_key']) ? trim($endpoint['auth_key']) : '';
-            $auth_value = isset($endpoint['auth_value']) ? $endpoint['auth_value'] : '';
-            
-            // Configurar encabezados básicos de Postman
-            $headers = [
-                'User-Agent' => 'PostmanRuntime/7.44.0',
-                'Accept' => '*/*',
-                'Connection' => 'keep-alive',
-                'Cache-Control' => 'no-cache'
-            ];
-            
-            // Configuración básica de la solicitud
+
+            // Usar función unificada de autenticación
+            $headers = $this->prepare_auth_headers($endpoint);
+
+            // Configuración de la solicitud
             $args = [
                 'timeout' => 30,
-                'headers' => [
-                    'User-Agent' => 'PostmanRuntime/7.44.0',
-                    'Accept' => '*/*',
-                    'Connection' => 'keep-alive',
-                    'Cache-Control' => 'no-cache'
-                ]
+                'headers' => $headers
             ];
-            
-            // Añadir la API key directamente a los encabezados
-            if ($auth_type === 'api_key' && !empty($auth_key) && !empty($auth_value)) {
-                $args['headers'][$auth_key] = $auth_value;
-            }
-            
-            // Añadir API Key directamente a los encabezados de la solicitud
-            if ($auth_type === 'api_key' && !empty($auth_key) && !empty($auth_value)) {
-                $args['headers'][$auth_key] = $auth_value;
-                
 
-            }
-            
-            // Añadir Bearer Token si está configurado
-            if ($auth_type === 'bearer' && !empty($endpoint['auth_token'])) {
-                $args['headers']['Authorization'] = 'Bearer ' . $endpoint['auth_token'];
-            }
-            
-            // Añadir Basic Auth si está configurado
-            if ($auth_type === 'basic' && !empty($endpoint['auth_username']) && !empty($endpoint['auth_password'])) {
-                $args['headers']['Authorization'] = 'Basic ' . base64_encode($endpoint['auth_username'] . ':' . $endpoint['auth_password']);
-            }
-            
-            // Registrar los encabezados finales para depuración
-
-            
-            // Registrar los encabezados para depuración
-
-            
-            // Añadir la API key directamente al encabezado si no está presente
-            if ($auth_type === 'api_key' && !empty($auth_key) && !empty($auth_value)) {
-                // Forzar la API key en el encabezado correcto
-                $args['headers'][$auth_key] = $auth_value;
-                
-                // Si la URL contiene api-sports.io o api-football, añadir el encabezado específico
-                if (strpos($test_url, 'api-sports.io') !== false || strpos($test_url, 'api-football') !== false) {
-                    // Para esta API específica, asegurarnos de que el encabezado tenga el formato correcto
-                    $args['headers']['x-apisports-key'] = $auth_value;
-                }
-                
-                // Registrar en el log para depuración
-
-            }
-            
-            // Mostrar información de depuración
-
-            
             // LOG: Registrar URL y headers antes de la petición
             if (defined('WP_DEBUG') && WP_DEBUG) {
+                error_log('AJAX TEST - URL: ' . $test_url);
+                error_log('AJAX TEST - Headers: ' . print_r($headers, true));
             }
+
             // Realizar la petición a la API
             $response = wp_remote_get($test_url, $args);
             // LOG: Registrar código de estado y cuerpo de la respuesta
@@ -1780,37 +1769,30 @@ class BricksAPIIntegrator {
             if ($status_code !== 200) {
                 $response_body = wp_remote_retrieve_body($response);
                 $response_headers = wp_remote_retrieve_headers($response);
-                
+
                 // Intentar decodificar la respuesta de error para mostrar información más detallada
                 $error_details = '';
                 $decoded_error = json_decode($response_body, true);
                 if (json_last_error() === JSON_ERROR_NONE && !empty($decoded_error)) {
                     $error_details = ' - Detalles: ' . json_encode($decoded_error, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
                 }
-                
+
                 // Registrar información detallada en el log para depuración
                 if (defined('WP_DEBUG') && WP_DEBUG) {
+                    error_log('AJAX TEST ERROR - Status: ' . $status_code);
+                    error_log('AJAX TEST ERROR - Body: ' . $response_body);
                 }
-                
-                // Crear una copia de los encabezados para mostrar en la respuesta
-                $headers_for_display = $args['headers'];
-                
-                // Si es API key, asegurarnos de que se muestre en la respuesta
-                if ($auth_type === 'api_key' && !empty($auth_key) && !empty($auth_value)) {
-                    $headers_for_display[$auth_key] = $auth_value;
-                }
-                
+
                 wp_send_json_error([
                     'message' => 'La API devolvió un código de estado no válido: ' . $status_code . $error_details,
                     'test_url' => $test_url,
                     'base_url' => $endpoint['url'],
                     'response_body' => $response_body,
-                    'headers_sent' => $headers_for_display,
+                    'headers_sent' => $headers,
                     'headers_received' => $response_headers,
                     'auth_config' => [
-                        'type' => $auth_type,
-                        'key_name' => $auth_key,
-                        'has_value' => !empty($auth_value) ? 'yes' : 'no'
+                        'type' => $endpoint['auth_type'] ?? 'none',
+                        'configured' => !empty($endpoint['auth_type']) && $endpoint['auth_type'] !== 'none'
                     ]
                 ]);
                 return;
@@ -3078,7 +3060,30 @@ add_action('admin_enqueue_scripts', function($hook) {
 });
 
 /**
+ * Helper para transformar URLs de imagen con template
+ * Puede ser usado en funciones personalizadas
+ */
+function bricks_api_transform_image_url($id_or_path, $template = null) {
+    // Si no hay template configurado, buscar en opciones globales
+    if ($template === null) {
+        $template = get_option('bricks_api_image_url_template', '');
+    }
+
+    if (empty($template)) {
+        return $id_or_path;
+    }
+
+    // Reemplazar {value} o {id} en el template
+    $url = str_replace(['{value}', '{id}'], $id_or_path, $template);
+
+    return $url;
+}
+
+/**
  * Acceso seguro a propiedades de objetos/arrays/escalares
+ * Ahora soporta:
+ * - Notación de punto: field.subfield.subsubfield
+ * - Traducciones: field_en, field_es (para arrays [{language, value}])
  */
 function bricks_api_safe_get($item, $field) {
     // Si es escalar, lo convertimos a objeto con propiedad 'value'
@@ -3087,9 +3092,79 @@ function bricks_api_safe_get($item, $field) {
     } elseif (is_array($item)) {
         $item = (object)$item;
     }
-    // Solo si es objeto, intentamos acceder a la propiedad
+
+    // Verificar si el campo incluye notación de punto (ej: name.common o image.0)
+    if (strpos($field, '.') !== false) {
+        $parts = explode('.', $field);
+        $current = $item;
+        $base_field = $parts[0]; // Guardar el nombre del campo base
+
+        foreach ($parts as $part) {
+            if (is_object($current) && property_exists($current, $part)) {
+                $current = $current->$part;
+            } elseif (is_array($current) && isset($current[$part])) {
+                $current = $current[$part];
+            } else {
+                return null;
+            }
+        }
+
+        // Si el campo base es 'image' o 'images', intentar transformar
+        if (in_array(strtolower($base_field), ['image', 'images', 'picture', 'pictures', 'photo', 'photos'])) {
+            // Aplicar transformación de imagen si está configurada
+            $template = get_option('bricks_api_image_url_template', '');
+            if (!empty($template) && is_scalar($current)) {
+                $current = bricks_api_transform_image_url($current, $template);
+            }
+        }
+
+        return $current;
+    }
+
+    // Verificar si es un campo de traducción (ej: name_en, description_es)
+    // Buscar el último guión bajo para separar campo base del código de idioma
+    $last_underscore = strrpos($field, '_');
+    if ($last_underscore !== false) {
+        $base_field = substr($field, 0, $last_underscore);
+        $lang_code = substr($field, $last_underscore + 1);
+
+        // Si el campo base existe y es un array de traducciones
+        if (is_object($item) && property_exists($item, $base_field)) {
+            $translations = $item->$base_field;
+
+            if (is_array($translations)) {
+                // Buscar la traducción del idioma específico
+                foreach ($translations as $translation) {
+                    if (!is_array($translation) && !is_object($translation)) {
+                        continue;
+                    }
+
+                    $trans_array = (array)$translation;
+                    $trans_lang = null;
+                    $trans_value = null;
+
+                    foreach ($trans_array as $k => $v) {
+                        $k_lower = strtolower($k);
+                        if ($k_lower === 'language' || $k_lower === 'lang') {
+                            $trans_lang = strtolower($v);
+                        }
+                        if ($k_lower === 'value' || $k_lower === 'text' || $k_lower === 'translation') {
+                            $trans_value = $v;
+                        }
+                    }
+
+                    if ($trans_lang === strtolower($lang_code) && $trans_value !== null) {
+                        return $trans_value;
+                    }
+                }
+            }
+        }
+    }
+
+    // Acceso directo a la propiedad
     if (is_object($item) && property_exists($item, $field)) {
         return $item->$field;
     }
+
     return null;
 }

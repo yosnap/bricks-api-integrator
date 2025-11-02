@@ -197,7 +197,58 @@ add_filter('bricks/query/run', function($results, $query_obj) {
             $formatted[] = (object)['value' => $item];
         }
     }
-    
+
+    // --- Aplicar transformaciones de campos ---
+    $field_transformers = isset($endpoint['field_transformers']) ? $endpoint['field_transformers'] : [];
+
+    if (defined('WP_DEBUG') && WP_DEBUG) {
+        error_log('🔄 SOURCES - Field transformers del endpoint: ' . print_r($field_transformers, true));
+        error_log('🔄 SOURCES - Primer item ANTES de transformar: ' . print_r($formatted[0] ?? 'vacío', true));
+    }
+
+    if (!empty($field_transformers)) {
+        require_once plugin_dir_path(__FILE__) . '/../field-extractor.php';
+
+        foreach ($formatted as &$item) {
+            // Convertir objeto a array para transformación
+            $item_array = is_object($item) ? (array)$item : $item;
+
+            foreach ($field_transformers as $transformer) {
+                $field_name = $transformer['field'] ?? '';
+
+                if (empty($field_name) || !isset($item_array[$field_name])) {
+                    if (defined('WP_DEBUG') && WP_DEBUG) {
+                        error_log("🔄 SOURCES - Campo '$field_name' no encontrado en item. Campos disponibles: " . implode(', ', array_keys($item_array)));
+                    }
+                    continue;
+                }
+
+                if (defined('WP_DEBUG') && WP_DEBUG) {
+                    error_log("🔄 SOURCES - Transformando campo '$field_name' con valor: " . print_r($item_array[$field_name], true));
+                }
+
+                // Aplicar transformación al campo
+                $item_array[$field_name] = bricks_api_apply_field_transform(
+                    $field_name,
+                    $item_array[$field_name],
+                    [$transformer]
+                );
+
+                if (defined('WP_DEBUG') && WP_DEBUG) {
+                    error_log("🔄 SOURCES - Campo '$field_name' transformado a: " . print_r($item_array[$field_name], true));
+                }
+            }
+
+            // Convertir de vuelta a objeto
+            $item = (object)$item_array;
+        }
+        unset($item);
+
+        if (defined('WP_DEBUG') && WP_DEBUG) {
+            error_log('🔄 SOURCES - Primer item DESPUÉS de transformar: ' . print_r($formatted[0] ?? 'vacío', true));
+        }
+    }
+
     // --- Detectar si es single (detalle) o listado ---
     $is_single = false;
     if (isset($query_obj->settings['is_single']) && $query_obj->settings['is_single']) {

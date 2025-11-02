@@ -266,9 +266,34 @@ class Bricks_API_Integrator_Query {
                 }
             }
         }
-        
+
         error_log('Items mapeados: ' . print_r($items, true));
-        
+
+        // Aplicar transformaciones de campos
+        $field_transformers = isset($endpoint['field_transformers']) ? $endpoint['field_transformers'] : [];
+
+        if (!empty($field_transformers)) {
+            require_once plugin_dir_path(__FILE__) . 'field-extractor.php';
+
+            foreach ($items as &$item) {
+                foreach ($field_transformers as $transformer) {
+                    $field_name = $transformer['field'] ?? '';
+
+                    if (empty($field_name) || !isset($item[$field_name])) {
+                        continue;
+                    }
+
+                    // Aplicar transformación al campo
+                    $item[$field_name] = bricks_api_apply_field_transform(
+                        $field_name,
+                        $item[$field_name],
+                        [$transformer]
+                    );
+                }
+            }
+            unset($item);
+        }
+
         // Devolver los resultados
         return [
             'count' => count($items),

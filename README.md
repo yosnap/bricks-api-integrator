@@ -1,6 +1,8 @@
-# Bricks API Integrator (v0.2.0-beta)
+# Bricks API Integrator (v0.2-beta)
 
 **Integración avanzada de APIs externas en Bricks Builder**
+
+> 📚 **[Ver Documentación Completa](docs/README.md)** | 📋 **[CHANGELOG](CHANGELOG.md)** | 📝 **[TODO](TODO.md)**
 
 ---
 
@@ -302,3 +304,48 @@ Si tu API devuelve un array anidado (por ejemplo, `data.memes`), debes:
 ```
 - `items_path`: `data.memes`
 - Query Type: Source manual asociado al endpoint.
+
+---
+
+## 📚 Documentación
+
+### **Documentación Completa**
+Toda la documentación está organizada en la carpeta [`/docs`](docs/README.md):
+
+```
+docs/
+├── README.md .................... Índice de documentación
+├── REFACTORING-AUTH-SYSTEM.md ... Refactoring de autenticación
+├── RESUMEN-REFACTORING-AUTH.md .. Resumen ejecutivo
+├── release-notes/ ............... Notas de versión
+├── correcciones/ ................ Fixes implementados
+├── guias/ ....................... Tutoriales paso a paso
+├── diagnosticos/ ................ Análisis de problemas
+└── testing/ ..................... Guías de testing
+```
+
+### **Enlaces Rápidos**
+
+#### **Para Empezar**
+- 📖 [Guía de Testing de Autenticación](docs/testing/auth-testing-guide.md)
+- 📋 [Checklist de Implementación](docs/guias/CHECKLIST_IMPLEMENTACION.md)
+- 🧪 [Guía de Testing de Sources](docs/guias/GUIA-TESTING-SOURCES.md)
+
+#### **Referencias Técnicas**
+- 🔧 [Refactoring Sistema de Autenticación](docs/REFACTORING-AUTH-SYSTEM.md)
+- 📊 [Diagnósticos y Fixes](docs/diagnosticos/DIAGNOSTIC_AND_FIXES.md)
+- 📝 [Release Notes](docs/release-notes/)
+
+#### **Cambios Recientes**
+- 🆕 [v0.2-beta: Sistema de Autenticación Unificado](CHANGELOG.md#02-beta---2025-11-02)
+- 📦 [v2.1.4: Corrección Formularios Duplicados](docs/release-notes/RELEASE-NOTES-v2.1.4.md)
+
+### **Soporte y Debugging**
+
+```php
+// Activar debug en wp-config.php
+define('WP_DEBUG', true);
+define('WP_DEBUG_LOG', true);
+```
+
+Ver logs: `wp-content/debug.log`
