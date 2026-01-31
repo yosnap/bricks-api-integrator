@@ -19,6 +19,15 @@ define('BRICKS_API_INTEGRATOR_VERSION', '0.1-beta');
 define('BRICKS_API_INTEGRATOR_PATH', plugin_dir_path(__FILE__));
 define('BRICKS_API_INTEGRATOR_URL', plugin_dir_url(__FILE__));
 
+// Hook de activación para registrar endpoints
+register_activation_hook(__FILE__, function() {
+    // Registrar endpoints de Inmovilla al activar
+    require_once BRICKS_API_INTEGRATOR_PATH . 'includes/inmovilla-auto-endpoints.php';
+    if (function_exists('register_inmovilla_api_endpoints')) {
+        register_inmovilla_api_endpoints();
+    }
+});
+
 // Incluir archivos necesarios ANTES de definir la clase
 require_once BRICKS_API_INTEGRATOR_PATH . 'includes/api-manager.php';
 require_once BRICKS_API_INTEGRATOR_PATH . 'includes/field-extractor.php';
@@ -26,6 +35,8 @@ require_once BRICKS_API_INTEGRATOR_PATH . 'includes/functions.php';
 require_once BRICKS_API_INTEGRATOR_PATH . 'includes/query-preview.php';
 require_once BRICKS_API_INTEGRATOR_PATH . 'includes/cleaner.php';
 require_once BRICKS_API_INTEGRATOR_PATH . 'includes/image-proxy.php';
+require_once BRICKS_API_INTEGRATOR_PATH . 'includes/inmovilla-fields.php';
+require_once BRICKS_API_INTEGRATOR_PATH . 'includes/inmovilla-auto-endpoints.php';
 
 // Archivos necesarios para el admin - HABILITAR SOLO LOS NECESARIOS
 if (file_exists(BRICKS_API_INTEGRATOR_PATH . 'includes/sources.php')) {
