@@ -32,7 +32,8 @@ bricks-api-integrator/
 │   ├── inmovilla-auto-endpoints.php # Endpoints automáticos Inmovilla
 │   ├── inmovilla-sources.php     # Query Handler para Inmovilla
 │   ├── inmovilla-query-state.php # Estado de queries Inmovilla
-│   └── inmovilla-elements.php    # Shortcodes UI para Inmovilla
+│   ├── inmovilla-elements.php    # Shortcodes UI para Inmovilla
+│   └── inmovilla-settings.php    # Panel de configuración UI
 │
 └── includes/sources/
     └── sources-hooks.php         # Hooks para fuentes de datos
@@ -100,6 +101,24 @@ class Inmovilla_Query_State {
 - Shortcodes de UI para paginación y filtros
 - 4 templates CSS: modern, classic, minimal, custom
 - JavaScript para manejo de parámetros URL
+
+**inmovilla-settings.php**
+- Panel de administración "Inmovilla UI"
+- 5 pestañas: General, Colores, Textos, CSS, Vista Previa
+- Opciones almacenadas en `inmovilla_ui_options`
+- Genera variables CSS personalizadas en wp_head
+
+```php
+// Obtener opciones
+$options = inmovilla_get_ui_options();
+
+// Opciones disponibles
+$options['default_template']     // modern, classic, minimal, custom
+$options['primary_color']        // Color principal (#hex)
+$options['pagination_prev_text'] // Texto botón anterior
+$options['results_format']       // Formato: "Mostrando {from}-{to} de {total}"
+$options['custom_css']           // CSS adicional
+```
 
 ### 4. Shortcodes Disponibles
 

@@ -14,15 +14,36 @@ if (!defined('ABSPATH')) {
 }
 
 /**
+ * Obtener opciones de UI con fallback
+ */
+function inmovilla_get_element_options() {
+    if (function_exists('inmovilla_get_ui_options')) {
+        return inmovilla_get_ui_options();
+    }
+    // Fallback si no está cargado el archivo de settings
+    return [
+        'default_template' => 'modern',
+        'pagination_prev_text' => 'Anterior',
+        'pagination_next_text' => 'Siguiente',
+        'results_format' => 'Mostrando {from}-{to} de {total} inmuebles',
+        'results_empty_text' => 'No se encontraron resultados',
+        'filter_submit_text' => 'Buscar',
+        'filter_clear_text' => 'Limpiar',
+    ];
+}
+
+/**
  * Shortcode: Paginación de Inmovilla
  * Uso: [inmovilla_pagination template="modern"]
  */
 add_shortcode('inmovilla_pagination', function($atts) {
+    $ui_options = inmovilla_get_element_options();
+
     $atts = shortcode_atts([
-        'template' => 'modern',
+        'template' => $ui_options['default_template'],
         'show_info' => 'true',
-        'prev_text' => 'Anterior',
-        'next_text' => 'Siguiente',
+        'prev_text' => $ui_options['pagination_prev_text'],
+        'next_text' => $ui_options['pagination_next_text'],
         'max_links' => 5,
     ], $atts);
 
@@ -124,10 +145,12 @@ add_shortcode('inmovilla_pagination', function($atts) {
  * Uso: [inmovilla_results_summary template="modern"]
  */
 add_shortcode('inmovilla_results_summary', function($atts) {
+    $ui_options = inmovilla_get_element_options();
+
     $atts = shortcode_atts([
-        'template' => 'modern',
-        'format' => 'Mostrando {from}-{to} de {total} inmuebles',
-        'empty_text' => 'No se encontraron resultados',
+        'template' => $ui_options['default_template'],
+        'format' => $ui_options['results_format'],
+        'empty_text' => $ui_options['results_empty_text'],
     ], $atts);
 
     if (!class_exists('Inmovilla_Query_State')) {
@@ -160,8 +183,10 @@ add_shortcode('inmovilla_results_summary', function($atts) {
  * Uso: [inmovilla_order_select template="modern" label="Ordenar por:"]
  */
 add_shortcode('inmovilla_order_select', function($atts) {
+    $ui_options = inmovilla_get_element_options();
+
     $atts = shortcode_atts([
-        'template' => 'modern',
+        'template' => $ui_options['default_template'],
         'label' => 'Ordenar por:',
         'default' => '',
         'show_label' => 'true',
@@ -195,8 +220,10 @@ add_shortcode('inmovilla_order_select', function($atts) {
  * Uso: [inmovilla_filter_select field="keyacci" template="modern"]
  */
 add_shortcode('inmovilla_filter_select', function($atts) {
+    $ui_options = inmovilla_get_element_options();
+
     $atts = shortcode_atts([
-        'template' => 'modern',
+        'template' => $ui_options['default_template'],
         'field' => '',
         'label' => '',
         'placeholder' => 'Todos',
@@ -246,8 +273,10 @@ add_shortcode('inmovilla_filter_select', function($atts) {
  * Uso: [inmovilla_filter_range field="precio" template="modern"]
  */
 add_shortcode('inmovilla_filter_range', function($atts) {
+    $ui_options = inmovilla_get_element_options();
+
     $atts = shortcode_atts([
-        'template' => 'modern',
+        'template' => $ui_options['default_template'],
         'field' => '',
         'label' => '',
         'min' => '0',
@@ -288,13 +317,15 @@ add_shortcode('inmovilla_filter_range', function($atts) {
  * Uso: [inmovilla_filters_form template="modern"]...[/inmovilla_filters_form]
  */
 add_shortcode('inmovilla_filters_form', function($atts, $content = null) {
+    $ui_options = inmovilla_get_element_options();
+
     $atts = shortcode_atts([
-        'template' => 'modern',
+        'template' => $ui_options['default_template'],
         'layout' => 'horizontal', // horizontal, vertical, grid
-        'submit_text' => 'Buscar',
+        'submit_text' => $ui_options['filter_submit_text'],
         'show_submit' => 'true',
         'show_clear' => 'true',
-        'clear_text' => 'Limpiar',
+        'clear_text' => $ui_options['filter_clear_text'],
     ], $atts);
 
     $template = esc_attr($atts['template']);
@@ -326,9 +357,11 @@ add_shortcode('inmovilla_filters_form', function($atts, $content = null) {
  * Shortcode: Botón limpiar filtros
  */
 add_shortcode('inmovilla_clear_filters', function($atts) {
+    $ui_options = inmovilla_get_element_options();
+
     $atts = shortcode_atts([
-        'template' => 'modern',
-        'text' => 'Limpiar filtros',
+        'template' => $ui_options['default_template'],
+        'text' => $ui_options['filter_clear_text'],
     ], $atts);
 
     $base_url = strtok($_SERVER['REQUEST_URI'], '?');
@@ -387,28 +420,10 @@ function inmovilla_get_filter_options($source_type) {
 }
 
 /**
- * Registrar estilos CSS de los templates
+ * Obtener estilos CSS de los elementos (sin variables, esas se definen en inmovilla-settings.php)
  */
-add_action('wp_head', function() {
-    ?>
-    <style id="inmovilla-elements-styles">
-    /* ============================================
-       VARIABLES CSS PERSONALIZABLES
-       ============================================ */
-    :root {
-        --inmovilla-primary: #2563eb;
-        --inmovilla-primary-hover: #1d4ed8;
-        --inmovilla-secondary: #64748b;
-        --inmovilla-border: #e2e8f0;
-        --inmovilla-bg: #ffffff;
-        --inmovilla-bg-hover: #f8fafc;
-        --inmovilla-text: #334155;
-        --inmovilla-text-light: #64748b;
-        --inmovilla-radius: 8px;
-        --inmovilla-shadow: 0 1px 3px rgba(0,0,0,0.1);
-        --inmovilla-transition: all 0.2s ease;
-    }
-
+function inmovilla_get_element_styles() {
+    return '
     /* ============================================
        ESTILOS BASE (Compartidos)
        ============================================ */
@@ -831,9 +846,15 @@ add_action('wp_head', function() {
             width: 100%;
         }
     }
-    </style>
-    <?php
-});
+    ';
+}
+
+/**
+ * Registrar estilos CSS de los templates
+ */
+add_action('wp_head', function() {
+    echo '<style id="inmovilla-elements-styles">' . inmovilla_get_element_styles() . '</style>';
+}, 101); // Después de inmovilla-custom-styles (100)
 
 /**
  * Registrar JavaScript

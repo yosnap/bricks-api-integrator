@@ -40,6 +40,7 @@ require_once BRICKS_API_INTEGRATOR_PATH . 'includes/inmovilla-auto-endpoints.php
 require_once BRICKS_API_INTEGRATOR_PATH . 'includes/inmovilla-query-state.php';
 require_once BRICKS_API_INTEGRATOR_PATH . 'includes/inmovilla-sources.php';
 require_once BRICKS_API_INTEGRATOR_PATH . 'includes/inmovilla-elements.php';
+require_once BRICKS_API_INTEGRATOR_PATH . 'includes/inmovilla-settings.php';
 
 // Archivos necesarios para el admin - HABILITAR SOLO LOS NECESARIOS
 if (file_exists(BRICKS_API_INTEGRATOR_PATH . 'includes/sources.php')) {

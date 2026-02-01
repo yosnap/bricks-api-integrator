@@ -1,5 +1,47 @@
 # Changelog - Bricks API Integrator
 
+## [0.2.1-beta] - 2026-02-01
+
+### Panel de Configuración Inmovilla UI
+
+#### **Nueva Funcionalidad**
+Panel de administración para personalizar los estilos de los shortcodes de Inmovilla.
+
+**Nuevo archivo** `includes/inmovilla-settings.php`:
+- Submenú "Inmovilla UI" en API Integrator
+- 5 pestañas de configuración con URLs amigables
+
+**Pestañas Disponibles:**
+
+1. **General**
+   - Selector de plantilla por defecto (modern, classic, minimal, custom)
+   - Border radius configurable
+
+2. **Colores**
+   - Color principal y hover
+   - Color secundario
+   - Colores de borde y fondo
+   - Colores de texto
+
+3. **Textos**
+   - Texto de paginación (Anterior/Siguiente)
+   - Formato del resumen de resultados
+   - Textos de botones (Buscar/Limpiar)
+
+4. **CSS Personalizado**
+   - Editor de CSS con vista previa de variables
+   - Documentación de clases CSS
+
+5. **Vista Previa**
+   - Preview en tiempo real de todos los elementos
+   - Muestra paginación, filtros y resumen con estilos aplicados
+
+**Archivos Modificados:**
+- `includes/inmovilla-elements.php` - Usa opciones del admin como defaults
+- `bricks-api-integrator.php` - Include del nuevo archivo
+
+---
+
 ## [0.2-beta] - 2026-02-01
 
 ### Paginación, Filtros y Ordenamiento para Inmovilla
