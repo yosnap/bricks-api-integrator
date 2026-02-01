@@ -1147,13 +1147,30 @@ class BricksAPIIntegrator {
      * Formato unificado: {snap_source-slug_field}
      */
     public function render_single_dynamic_tag($tag, $post, $context) {
+        // Solo procesar tags que contienen 'snap_'
+        if (strpos($tag, 'snap_') === false) {
+            return $tag;
+        }
+
+        if (defined('WP_DEBUG') && WP_DEBUG) {
+            error_log('SNAP RENDER_TAG: Procesando tag: ' . $tag);
+        }
+
         // Formato unificado: {snap_source-slug_field} o {snap_endpoint-slug_field}
-        if (preg_match('/^\{?snap_([a-zA-Z0-9-]+)_([a-zA-Z0-9_.-]+)\}?$/', $tag, $matches)) {
+        if (preg_match('/^\{?snap_([a-zA-Z0-9_-]+)_([a-zA-Z0-9_.-]+)\}?$/', $tag, $matches)) {
             $source_slug = $matches[1]; // ej: inmovilla-inmuebles, endpoint-slug
             $field = $matches[2];
 
+            if (defined('WP_DEBUG') && WP_DEBUG) {
+                error_log('SNAP RENDER_TAG: Regex match - source_slug=' . $source_slug . ' | field=' . $field);
+            }
+
             // Obtener desde el loop object actual
             $loop_object = \Bricks\Query::get_loop_object();
+
+            if (defined('WP_DEBUG') && WP_DEBUG) {
+                error_log('SNAP RENDER_TAG: loop_object = ' . (empty($loop_object) ? 'VACIO' : 'OK'));
+            }
 
             if (!empty($loop_object)) {
                 if (is_array($loop_object)) {
@@ -1163,14 +1180,26 @@ class BricksAPIIntegrator {
                 // Intentar acceso directo al campo
                 $value = bricks_api_safe_get($loop_object, $field);
                 if ($value !== null) {
-                    return $this->format_field_output($value, $field);
+                    $formatted = $this->format_field_output($value, $field);
+                    if (defined('WP_DEBUG') && WP_DEBUG) {
+                        error_log('SNAP RENDER_TAG: Campo "' . $field . '" encontrado, valor = ' . (is_string($formatted) ? substr($formatted, 0, 100) : gettype($formatted)));
+                    }
+                    return $formatted;
                 }
 
                 // Intentar con campo normalizado (guiones a guiones bajos)
                 $normalized_field = str_replace(['-', '.'], '_', $field);
                 $value = bricks_api_safe_get($loop_object, $normalized_field);
                 if ($value !== null) {
-                    return $this->format_field_output($value, $field);
+                    $formatted = $this->format_field_output($value, $field);
+                    if (defined('WP_DEBUG') && WP_DEBUG) {
+                        error_log('SNAP RENDER_TAG: Campo normalizado "' . $normalized_field . '" encontrado, valor = ' . (is_string($formatted) ? substr($formatted, 0, 100) : gettype($formatted)));
+                    }
+                    return $formatted;
+                }
+
+                if (defined('WP_DEBUG') && WP_DEBUG) {
+                    error_log('SNAP RENDER_TAG: Campo "' . $field . '" NO encontrado. Campos: ' . implode(', ', array_keys((array)$loop_object)));
                 }
             }
         }
@@ -1743,7 +1772,14 @@ class BricksAPIIntegrator {
             
         } else {
             // Valor escalar (string, number)
-            return sanitize_text_field((string) $value);
+            $str_value = (string) $value;
+
+            // Si parece una URL, usar esc_url para preservarla correctamente
+            if (filter_var($str_value, FILTER_VALIDATE_URL) || preg_match('/^https?:\/\//i', $str_value)) {
+                return esc_url($str_value);
+            }
+
+            return sanitize_text_field($str_value);
         }
     }
     
