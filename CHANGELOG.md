@@ -1,6 +1,86 @@
 # Changelog - Bricks API Integrator
 
-## [0.2-beta] - 2025-11-02
+## [0.2-beta] - 2026-02-01
+
+### Paginación, Filtros y Ordenamiento para Inmovilla
+
+#### **Problema Resuelto**
+Los elementos nativos de Bricks (Pagination, Filter Select, Query Results Summary) no funcionan con APIs externas como Inmovilla porque están diseñados para WP_Query.
+
+#### **Solución Implementada**
+
+**Nueva clase `Inmovilla_Query_State`** (`includes/inmovilla-query-state.php`)
+- Almacena estado de queries (total, max_pages, page, per_page)
+- Filtros `bricks/query/result_count` y `bricks/query/result_max_num_pages`
+- Comunicación con elementos nativos de Bricks
+
+**Sistema de Filtros Mejorado** (`includes/inmovilla-sources.php`)
+- Función `inmovilla_get_filter_fields()` con 11 campos de filtro
+- Función `inmovilla_get_order_fields()` con 9 opciones de ordenamiento
+- Captura de filtros desde URL (soporta prefijo `brx_` de Bricks)
+- Construcción automática de cláusula WHERE para Inmovilla
+
+**Shortcodes UI Personalizados** (`includes/inmovilla-elements.php`)
+- `[inmovilla_results_summary]` - Resumen de resultados
+- `[inmovilla_pagination]` - Navegación de páginas
+- `[inmovilla_order_select]` - Selector de ordenamiento
+- `[inmovilla_filter_select field="..."]` - Filtros desplegables
+- `[inmovilla_filter_range field="..."]` - Filtros de rango numérico
+- `[inmovilla_filters_form]...[/inmovilla_filters_form]` - Contenedor de filtros
+- `[inmovilla_clear_filters]` - Botón limpiar filtros
+
+**4 Templates de Estilo**
+- `modern` - Moderno con sombras y bordes redondeados (default)
+- `classic` - Tradicional con bordes sutiles
+- `minimal` - Minimalista sin bordes
+- `custom` - Base para personalización CSS
+
+#### **Campos de Filtro Disponibles**
+| Campo | Descripción |
+|-------|-------------|
+| `keyacci` | Operación (Venta/Alquiler) |
+| `key_tipo` | Tipo de inmueble |
+| `key_loca` | Ciudad |
+| `key_zona` | Zona |
+| `precio_desde/hasta` | Rango de precio |
+| `habitaciones` | Habitaciones mínimas |
+| `metros_desde/hasta` | Rango de metros |
+
+#### **Opciones de Ordenamiento**
+- Precio (asc/desc)
+- Fecha (asc/desc)
+- Metros cuadrados
+- Habitaciones
+- Referencia
+
+#### **Archivos Creados**
+- `includes/inmovilla-query-state.php`
+- `includes/inmovilla-elements.php`
+- `docs/inmovilla-elementos-ui.md`
+
+#### **Archivos Modificados**
+- `bricks-api-integrator.php` - Includes de nuevos archivos
+- `includes/inmovilla-sources.php` - Sistema de filtros y ordenamiento
+- `includes/sources/sources-hooks.php` - Evitar conflictos con Inmovilla
+
+#### **Ejemplo de Uso**
+```
+[inmovilla_filters_form layout="horizontal" template="modern"]
+  [inmovilla_filter_select field="keyacci" label="Operación"]
+  [inmovilla_filter_select field="key_tipo" label="Tipo"]
+  [inmovilla_order_select label="Ordenar"]
+[/inmovilla_filters_form]
+
+[inmovilla_results_summary]
+
+<!-- Query Loop de Bricks aquí -->
+
+[inmovilla_pagination]
+```
+
+---
+
+## [0.1-beta] - 2025-11-02
 
 ### 🔒 **Nuevo: Sistema de Proxy Seguro para Imágenes**
 

@@ -2,10 +2,140 @@
 /**
  * Sources automáticos para Inmovilla
  * Crea query types predefinidos con soporte completo para filtros, paginación y sorting
+ *
+ * @package Bricks_API_Integrator
+ * @version 0.3-beta
  */
 
 if (!defined('ABSPATH')) {
     exit;
+}
+
+/**
+ * Configuración de campos de filtro de Inmovilla
+ * Mapea nombres de parámetros a configuración para integración con Bricks
+ */
+function inmovilla_get_filter_fields() {
+    return [
+        'key_tipo' => [
+            'label' => 'Tipo de inmueble',
+            'inmovilla_field' => 'key_tipo',
+            'source_type' => 'tipos',
+            'type' => 'select',
+        ],
+        'key_loca' => [
+            'label' => 'Ciudad',
+            'inmovilla_field' => 'key_loca',
+            'source_type' => 'ciudades',
+            'type' => 'select',
+        ],
+        'key_zona' => [
+            'label' => 'Zona',
+            'inmovilla_field' => 'key_zona',
+            'source_type' => 'zonas',
+            'type' => 'select',
+        ],
+        'keyprov' => [
+            'label' => 'Provincia',
+            'inmovilla_field' => 'keyprov',
+            'type' => 'text',
+        ],
+        'keyacci' => [
+            'label' => 'Acción',
+            'inmovilla_field' => 'keyacci',
+            'type' => 'select',
+            'options' => [
+                '1' => 'Venta',
+                '2' => 'Alquiler',
+                '3' => 'Alquiler con opción a compra',
+                '4' => 'Traspaso',
+            ],
+        ],
+        'precio_desde' => [
+            'label' => 'Precio desde',
+            'inmovilla_field' => 'precioinmo',
+            'operator' => '>=',
+            'type' => 'number',
+        ],
+        'precio_hasta' => [
+            'label' => 'Precio hasta',
+            'inmovilla_field' => 'precioinmo',
+            'operator' => '<=',
+            'type' => 'number',
+        ],
+        'habitaciones' => [
+            'label' => 'Habitaciones mínimas',
+            'inmovilla_field' => 'habitaciones',
+            'operator' => '>=',
+            'type' => 'number',
+        ],
+        'banyos' => [
+            'label' => 'Baños mínimos',
+            'inmovilla_field' => 'banyos',
+            'operator' => '>=',
+            'type' => 'number',
+        ],
+        'metros_desde' => [
+            'label' => 'Metros desde',
+            'inmovilla_field' => 'm_cons',
+            'operator' => '>=',
+            'type' => 'number',
+        ],
+        'metros_hasta' => [
+            'label' => 'Metros hasta',
+            'inmovilla_field' => 'm_cons',
+            'operator' => '<=',
+            'type' => 'number',
+        ],
+    ];
+}
+
+/**
+ * Configuración de campos de ordenamiento de Inmovilla
+ */
+function inmovilla_get_order_fields() {
+    return [
+        'precio' => [
+            'label' => 'Precio',
+            'inmovilla_field' => 'precioinmo',
+        ],
+        'precio_asc' => [
+            'label' => 'Precio (menor a mayor)',
+            'inmovilla_field' => 'precioinmo',
+            'direction' => 'ASC',
+        ],
+        'precio_desc' => [
+            'label' => 'Precio (mayor a menor)',
+            'inmovilla_field' => 'precioinmo',
+            'direction' => 'DESC',
+        ],
+        'fecha' => [
+            'label' => 'Fecha',
+            'inmovilla_field' => 'fecha_alta',
+        ],
+        'fecha_asc' => [
+            'label' => 'Fecha (más antiguos)',
+            'inmovilla_field' => 'fecha_alta',
+            'direction' => 'ASC',
+        ],
+        'fecha_desc' => [
+            'label' => 'Fecha (más recientes)',
+            'inmovilla_field' => 'fecha_alta',
+            'direction' => 'DESC',
+        ],
+        'metros' => [
+            'label' => 'Metros cuadrados',
+            'inmovilla_field' => 'm_cons',
+        ],
+        'habitaciones' => [
+            'label' => 'Habitaciones',
+            'inmovilla_field' => 'habitaciones',
+        ],
+        'referencia' => [
+            'label' => 'Referencia',
+            'inmovilla_field' => 'ref',
+        ],
+    ];
 }
 
 /**
@@ -44,6 +174,7 @@ function register_inmovilla_sources() {
             'per_page_param' => 'num_elementos',
             'supports_filters' => true,
             'supports_sorting' => true,
+            'supports_pagination' => true,
         ],
         'inmovilla_destacados' => [
             'name' => 'Inmovilla - Destacados',
@@ -56,6 +187,7 @@ function register_inmovilla_sources() {
             'per_page_param' => 'num_elementos',
             'supports_filters' => false,
             'supports_sorting' => true,
+            'supports_pagination' => true,
         ],
         'inmovilla_tipos' => [
             'name' => 'Inmovilla - Tipos',
@@ -66,6 +198,7 @@ function register_inmovilla_sources() {
             'pagination_type' => 'none',
             'supports_filters' => false,
             'supports_sorting' => false,
+            'supports_pagination' => false,
         ],
         'inmovilla_ciudades' => [
             'name' => 'Inmovilla - Ciudades',
@@ -76,6 +209,7 @@ function register_inmovilla_sources() {
             'pagination_type' => 'none',
             'supports_filters' => false,
             'supports_sorting' => false,
+            'supports_pagination' => false,
         ],
         'inmovilla_zonas' => [
             'name' => 'Inmovilla - Zonas',
@@ -86,6 +220,7 @@ function register_inmovilla_sources() {
             'pagination_type' => 'none',
             'supports_filters' => true,
             'supports_sorting' => false,
+            'supports_pagination' => false,
             'required_filter' => 'cod_ciu',
             'filter_note' => 'Requiere código de ciudad (cod_ciu). Primero obtén las ciudades.',
             'dynamic_params' => [
@@ -148,7 +283,8 @@ function force_update_inmovilla_zonas_source() {
 add_action('admin_init', 'force_update_inmovilla_zonas_source', 20);
 
 /**
- * Clase para manejar las consultas de Inmovilla
+ * Clase para manejar las consultas de Inmovilla con soporte completo de paginación,
+ * filtros y ordenamiento integrado con Bricks Builder
  */
 class Inmovilla_Query_Handler {
 
@@ -162,9 +298,170 @@ class Inmovilla_Query_Handler {
     }
 
     /**
-     * Ejecutar consulta a Inmovilla
+     * Capturar filtros desde parámetros URL
+     * Soporta tanto nombres directos como prefijo brx_ de Bricks
+     *
+     * @return array Filtros capturados
      */
-    public function execute_query($source_config, $query_args = []) {
+    public function capture_filters_from_url() {
+        $filter_fields = inmovilla_get_filter_fields();
+        $filters = [];
+
+        foreach ($_GET as $key => $value) {
+            if (empty($value)) {
+                continue;
+            }
+
+            // Remover prefijo brx_ si existe
+            $filter_key = preg_replace('/^brx_/', '', $key);
+
+            // Verificar si es un campo de filtro conocido
+            if (isset($filter_fields[$filter_key])) {
+                $filters[$filter_key] = sanitize_text_field($value);
+            }
+        }
+
+        if (defined('WP_DEBUG') && WP_DEBUG && !empty($filters)) {
+            error_log('INMOVILLA FILTERS: Capturados desde URL: ' . print_r($filters, true));
+        }
+
+        return $filters;
+    }
+
+    /**
+     * Construir cláusula WHERE para Inmovilla
+     *
+     * @param array $filters Filtros a aplicar
+     * @return string Cláusula WHERE
+     */
+    public function build_where_clause($filters) {
+        if (empty($filters)) {
+            return '';
+        }
+
+        $filter_fields = inmovilla_get_filter_fields();
+        $where_parts = [];
+
+        foreach ($filters as $key => $value) {
+            if (empty($value) || !isset($filter_fields[$key])) {
+                continue;
+            }
+
+            $config = $filter_fields[$key];
+            $field = $config['inmovilla_field'];
+            $operator = $config['operator'] ?? '=';
+
+            // Construir condición según operador
+            switch ($operator) {
+                case '>=':
+                    $where_parts[] = $field . '>=' . $value;
+                    break;
+                case '<=':
+                    $where_parts[] = $field . '<=' . $value;
+                    break;
+                case '>':
+                    $where_parts[] = $field . '>' . $value;
+                    break;
+                case '<':
+                    $where_parts[] = $field . '<' . $value;
+                    break;
+                case '=':
+                default:
+                    $where_parts[] = $field . '=' . $value;
+                    break;
+            }
+        }
+
+        $where = implode(' AND ', $where_parts);
+
+        if (defined('WP_DEBUG') && WP_DEBUG && !empty($where)) {
+            error_log('INMOVILLA WHERE: ' . $where);
+        }
+
+        return $where;
+    }
+
+    /**
+     * Capturar y construir ordenamiento
+     *
+     * @param object|null $query Objeto query de Bricks
+     * @return string Parámetro de orden para Inmovilla
+     */
+    public function capture_order($query = null) {
+        $order_fields = inmovilla_get_order_fields();
+
+        // Prioridad 1: Parámetro orden de URL
+        if (!empty($_GET['orden'])) {
+            return sanitize_text_field($_GET['orden']);
+        }
+
+        // Prioridad 2: Parámetro orderby de URL (compatible con Bricks)
+        $orderby = $_GET['orderby'] ?? $_GET['brx_orderby'] ?? '';
+        $order = strtoupper($_GET['order'] ?? $_GET['brx_order'] ?? 'ASC');
+
+        if (!empty($orderby)) {
+            // Buscar en campos predefinidos
+            if (isset($order_fields[$orderby])) {
+                $config = $order_fields[$orderby];
+                $field = $config['inmovilla_field'];
+                $direction = $config['direction'] ?? $order;
+                return $field . ' ' . $direction;
+            }
+
+            // Si no está en predefinidos, usar directamente
+            return $orderby . ' ' . $order;
+        }
+
+        // Prioridad 3: Query vars de Bricks
+        if ($query && isset($query->query_vars['orderby'])) {
+            $bricks_orderby = $query->query_vars['orderby'];
+            $bricks_order = strtoupper($query->query_vars['order'] ?? 'ASC');
+
+            if (isset($order_fields[$bricks_orderby])) {
+                $config = $order_fields[$bricks_orderby];
+                $field = $config['inmovilla_field'];
+                $direction = $config['direction'] ?? $bricks_order;
+                return $field . ' ' . $direction;
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * Obtener página actual desde múltiples fuentes
+     *
+     * @return int Número de página (basado en 1)
+     */
+    public function get_current_page() {
+        // Prioridad 1: Parámetro paged de WordPress
+        if (!empty($_GET['paged'])) {
+            return max(1, intval($_GET['paged']));
+        }
+
+        // Prioridad 2: Parámetro page
+        if (!empty($_GET['page']) && is_numeric($_GET['page'])) {
+            return max(1, intval($_GET['page']));
+        }
+
+        // Prioridad 3: Query var de WordPress
+        $paged = get_query_var('paged');
+        if ($paged > 0) {
+            return intval($paged);
+        }
+
+        return 1;
+    }
+
+    /**
+     * Ejecutar consulta a Inmovilla con soporte completo
+     *
+     * @param array $source_config Configuración del source
+     * @param array $query_args Argumentos de la query
+     * @param object|null $bricks_query Objeto query de Bricks (opcional)
+     * @return array Resultado con items, total, página, etc.
+     */
+    public function execute_query($source_config, $query_args = [], $bricks_query = null) {
         $endpoints = get_option('bricks_api_endpoints', []);
         $endpoint_id = $source_config['endpoint_id'] ?? '';
 
@@ -184,28 +481,33 @@ class Inmovilla_Query_Handler {
             }
         }
 
-        // Sobrescribir con configuración del source
+        // Tipo de consulta
         $tipo = $source_config['tipo'] ?? 'paginacion';
 
-        // Parámetros de paginación
-        $page = isset($query_args['page']) ? intval($query_args['page']) : 1;
-        $per_page = isset($query_args['per_page']) ? intval($query_args['per_page']) : 20;
+        // Paginación
+        $page = $query_args['page'] ?? $this->get_current_page();
+        $per_page = $query_args['per_page'] ?? 20;
         $pos = (($page - 1) * $per_page) + 1;
 
-        // Filtros (where)
-        $where = '';
-        if (!empty($query_args['filters'])) {
-            $where_parts = [];
-            foreach ($query_args['filters'] as $field => $value) {
-                if (!empty($value)) {
-                    $where_parts[] = $field . '=' . $value;
-                }
+        // Filtros - combinar de query_args y URL
+        $url_filters = $this->capture_filters_from_url();
+        $arg_filters = $query_args['filters'] ?? [];
+        $all_filters = array_merge($arg_filters, $url_filters);
+
+        // Construir WHERE
+        $where = $this->build_where_clause($all_filters);
+
+        // Si hay where adicional en query_args, combinarlo
+        if (!empty($query_args['where'])) {
+            if (!empty($where)) {
+                $where .= ' AND ' . $query_args['where'];
+            } else {
+                $where = $query_args['where'];
             }
-            $where = implode(' AND ', $where_parts);
         }
 
-        // Orden
-        $orden = $query_args['order'] ?? '';
+        // Ordenamiento
+        $orden = $query_args['order'] ?? $this->capture_order($bricks_query);
 
         // Construir string de parámetros Inmovilla
         $agencia = $params['agencia'] ?? '';
@@ -221,6 +523,10 @@ class Inmovilla_Query_Handler {
         // Realizar petición
         $url = $endpoint['url'];
         $body = 'param=' . rawurlencode($texto) . '&elDominio=' . urlencode($dominio) . '&ia=' . urlencode($ip) . '&json=1';
+
+        if (defined('WP_DEBUG') && WP_DEBUG) {
+            error_log('INMOVILLA QUERY: param=' . $texto);
+        }
 
         $response = wp_remote_post($url, [
             'body' => $body,
@@ -279,11 +585,15 @@ class Inmovilla_Query_Handler {
             }
         }
 
+        // Calcular total de páginas
+        $max_pages = ($total > 0 && $per_page > 0) ? ceil($total / $per_page) : 1;
+
         return [
             'items' => $formatted,
             'total' => $total ?: count($formatted),
             'page' => $page,
             'per_page' => $per_page,
+            'max_pages' => $max_pages,
         ];
     }
 
@@ -329,50 +639,97 @@ class Inmovilla_Query_Handler {
 
 /**
  * Filtro para ejecutar queries de Inmovilla en Bricks
+ * Con soporte completo de paginación, filtros y ordenamiento
  */
 add_filter('bricks/query/run', function($results, $query) {
     $object_type = $query->object_type ?? '';
 
+    if (defined('WP_DEBUG') && WP_DEBUG) {
+        error_log('INMOVILLA SOURCES: Evaluando object_type=' . $object_type);
+    }
+
     // Verificar si es un source de Inmovilla
-    $source_key = str_replace('source_', '', $object_type);
-    if (strpos($source_key, 'inmovilla_') !== 0) {
+    // IMPORTANTE: El orden importa - primero el prefijo más largo
+    $source_key = str_replace(['snap_source_', 'source_'], '', $object_type);
+
+    if (defined('WP_DEBUG') && WP_DEBUG) {
+        error_log('INMOVILLA SOURCES: source_key después de str_replace=' . $source_key);
+        error_log('INMOVILLA SOURCES: strpos inmovilla_=' . var_export(strpos($source_key, 'inmovilla_'), true));
+        error_log('INMOVILLA SOURCES: strpos inmovilla-=' . var_export(strpos($source_key, 'inmovilla-'), true));
+    }
+
+    if (strpos($source_key, 'inmovilla_') !== 0 && strpos($source_key, 'inmovilla-') !== 0) {
+        if (defined('WP_DEBUG') && WP_DEBUG) {
+            error_log('INMOVILLA SOURCES: NO es source de Inmovilla, saliendo');
+        }
         return $results;
+    }
+
+    // Normalizar key (guiones a guiones bajos)
+    $source_key = str_replace('-', '_', $source_key);
+
+    if (defined('WP_DEBUG') && WP_DEBUG) {
+        error_log('INMOVILLA SOURCES: source_key normalizado=' . $source_key);
     }
 
     $sources = get_option('bricks_api_sources', []);
+
+    if (defined('WP_DEBUG') && WP_DEBUG) {
+        error_log('INMOVILLA SOURCES: Keys de sources disponibles: ' . implode(', ', array_keys($sources)));
+    }
+
     if (!isset($sources[$source_key])) {
+        if (defined('WP_DEBUG') && WP_DEBUG) {
+            error_log('INMOVILLA SOURCES: Source NO encontrado para key=' . $source_key);
+        }
         return $results;
     }
 
-    $source_config = $sources[$source_key];
+    if (defined('WP_DEBUG') && WP_DEBUG) {
+        error_log('INMOVILLA SOURCES: Source encontrado, ejecutando query...');
+    }
 
-    // Obtener parámetros de la query
+    $source_config = $sources[$source_key];
+    $handler = Inmovilla_Query_Handler::get_instance();
+
+    // Obtener parámetros de la query de Bricks
+    $per_page = $query->query_vars['posts_per_page'] ?? 20;
+    if ($per_page < 1 || $per_page > 100) {
+        $per_page = 20;
+    }
+
     $query_args = [
-        'page' => isset($_GET['paged']) ? intval($_GET['paged']) : 1,
-        'per_page' => $query->query_vars['posts_per_page'] ?? 20,
+        'page' => $handler->get_current_page(),
+        'per_page' => $per_page,
         'filters' => [],
         'order' => '',
     ];
 
-    // Procesar filtros desde URL
-    $filter_fields = ['key_tipo', 'key_loca', 'key_zona', 'keyprov', 'keyacci'];
-    foreach ($filter_fields as $field) {
-        if (!empty($_GET[$field])) {
-            $query_args['filters'][$field] = sanitize_text_field($_GET[$field]);
-        }
-    }
+    // Ejecutar consulta
+    $result = $handler->execute_query($source_config, $query_args, $query);
 
-    // Procesar orden desde URL
-    if (!empty($_GET['orden'])) {
-        $query_args['order'] = sanitize_text_field($_GET['orden']);
+    if (defined('WP_DEBUG') && WP_DEBUG) {
+        error_log('INMOVILLA SOURCES: Resultado - items=' . count($result['items'] ?? []) . ', total=' . ($result['total'] ?? 0) . ', error=' . ($result['error'] ?? 'ninguno'));
     }
-
-    $handler = Inmovilla_Query_Handler::get_instance();
-    $result = $handler->execute_query($source_config, $query_args);
 
     if (!empty($result['error'])) {
         error_log('Inmovilla Query Error: ' . $result['error']);
         return $results;
+    }
+
+    // Guardar estado para paginación de Bricks
+    if (class_exists('Inmovilla_Query_State')) {
+        $query_id = inmovilla_generate_query_id($query);
+        Inmovilla_Query_State::set($query_id, [
+            'total' => $result['total'],
+            'max_pages' => $result['max_pages'],
+            'page' => $result['page'],
+            'per_page' => $result['per_page'],
+        ]);
+
+        if (defined('WP_DEBUG') && WP_DEBUG) {
+            error_log('INMOVILLA QUERY STATE: Guardado para ' . $query_id . ' - total=' . $result['total'] . ', max_pages=' . $result['max_pages']);
+        }
     }
 
     return $result['items'];

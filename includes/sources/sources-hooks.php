@@ -54,6 +54,12 @@ add_filter('bricks/query/run', function($results, $query_obj) {
     // Normalizar: convertir guiones a guiones bajos para coincidir con keys de sources
     $source_id_normalized = str_replace('-', '_', $source_id);
 
+    // Los sources de Inmovilla se manejan en inmovilla-sources.php
+    // Evitar procesamiento duplicado
+    if (strpos($source_id_normalized, 'inmovilla_') === 0) {
+        return $results;
+    }
+
     if (defined('WP_DEBUG') && WP_DEBUG) {
         error_log('BRICKS API DEBUG: source_id=' . $source_id . ' | normalized=' . $source_id_normalized);
         error_log('BRICKS API DEBUG: api_sources keys=' . implode(', ', array_keys($api_sources)));

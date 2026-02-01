@@ -2,7 +2,7 @@
 /*
     * Plugin Name: Bricks API Integrator
     * Description: Integra el constructor de páginas Bricks con APIs externas de forma dinámica.
-    * Version: 0.1-beta
+    * Version: 0.2-beta
     * Author: sn4p Dev
     * Author URI: https://sn4p.dev
     * License: GPL2
@@ -15,7 +15,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Definir constantes del plugin
-define('BRICKS_API_INTEGRATOR_VERSION', '0.1-beta');
+define('BRICKS_API_INTEGRATOR_VERSION', '0.2-beta');
 define('BRICKS_API_INTEGRATOR_PATH', plugin_dir_path(__FILE__));
 define('BRICKS_API_INTEGRATOR_URL', plugin_dir_url(__FILE__));
 
@@ -37,7 +37,9 @@ require_once BRICKS_API_INTEGRATOR_PATH . 'includes/cleaner.php';
 require_once BRICKS_API_INTEGRATOR_PATH . 'includes/image-proxy.php';
 require_once BRICKS_API_INTEGRATOR_PATH . 'includes/inmovilla-fields.php';
 require_once BRICKS_API_INTEGRATOR_PATH . 'includes/inmovilla-auto-endpoints.php';
+require_once BRICKS_API_INTEGRATOR_PATH . 'includes/inmovilla-query-state.php';
 require_once BRICKS_API_INTEGRATOR_PATH . 'includes/inmovilla-sources.php';
+require_once BRICKS_API_INTEGRATOR_PATH . 'includes/inmovilla-elements.php';
 
 // Archivos necesarios para el admin - HABILITAR SOLO LOS NECESARIOS
 if (file_exists(BRICKS_API_INTEGRATOR_PATH . 'includes/sources.php')) {
