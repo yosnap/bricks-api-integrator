@@ -35,36 +35,56 @@ add_filter('bricks/query/run', function($results, $query_obj) {
     if (defined('WP_DEBUG') && WP_DEBUG) {
         error_log('BRICKS API DEBUG: bricks/query/run ejecutado para ' . $query_obj->object_type);
     }
-    
+
     $object_type = isset($query_obj->object_type) ? $query_obj->object_type : '';
-    
+
+    // Obtener sources PRIMERO para poder verificar
+    $api_sources = get_option('bricks_api_sources', []);
+
     // Aceptar tanto 'source_' como 'snap_source_' como prefijo
-    if (strpos($object_type, 'source_') === 0) {
-        $source_id = str_replace('source_', '', $object_type);
-    } elseif (strpos($object_type, 'snap_source_') === 0) {
+    $source_id = '';
+    if (strpos($object_type, 'snap_source_') === 0) {
         $source_id = str_replace('snap_source_', '', $object_type);
-        if (!isset($api_sources[$source_id])) {
-            $source_id = 'query_type_' . $source_id;
-        }
+    } elseif (strpos($object_type, 'source_') === 0) {
+        $source_id = str_replace('source_', '', $object_type);
     } else {
         return $results;
     }
-    
-    $api_sources = get_option('bricks_api_sources', []);
-    if (!isset($api_sources[$source_id])) {
-        if (strpos($source_id, 'query_type_') === 0) {
-            $alt_id = str_replace('query_type_', '', $source_id);
-            if (isset($api_sources[$alt_id])) {
-                $source_id = $alt_id;
-                $source = $api_sources[$source_id];
-            } else {
-                return $results;
-            }
-        } else {
-            return $results;
+
+    // Normalizar: convertir guiones a guiones bajos para coincidir con keys de sources
+    $source_id_normalized = str_replace('-', '_', $source_id);
+
+    if (defined('WP_DEBUG') && WP_DEBUG) {
+        error_log('BRICKS API DEBUG: source_id=' . $source_id . ' | normalized=' . $source_id_normalized);
+        error_log('BRICKS API DEBUG: api_sources keys=' . implode(', ', array_keys($api_sources)));
+    }
+
+    // Intentar encontrar el source con diferentes variantes del ID
+    $source = null;
+    $possible_ids = [
+        $source_id,
+        $source_id_normalized,
+        'query_type_' . $source_id,
+        'query_type_' . $source_id_normalized,
+    ];
+
+    foreach ($possible_ids as $try_id) {
+        if (isset($api_sources[$try_id])) {
+            $source_id = $try_id;
+            $source = $api_sources[$try_id];
+            break;
         }
-    } else {
-        $source = $api_sources[$source_id];
+    }
+
+    if (!$source) {
+        if (defined('WP_DEBUG') && WP_DEBUG) {
+            error_log('BRICKS API DEBUG: Source no encontrado para ' . $object_type);
+        }
+        return $results;
+    }
+
+    if (defined('WP_DEBUG') && WP_DEBUG) {
+        error_log('BRICKS API DEBUG: Source encontrado: ' . $source_id);
     }
     
     $endpoints = get_option('bricks_api_endpoints', []);
@@ -150,12 +170,26 @@ add_filter('bricks/query/run', function($results, $query_obj) {
     if (defined('WP_DEBUG') && WP_DEBUG) {
         error_log('BRICKS API DEBUG: URL final: ' . $final_url);
     }
-    
-    $data = get_api_data($final_url, $endpoint);
+
+    // Usar función helper que soporta Inmovilla
+    if (!function_exists('bricks_api_source_make_request')) {
+        require_once __DIR__ . '/sources-helpers.php';
+    }
+
+    $api_result = bricks_api_source_make_request($final_url, $endpoint, $source);
+
+    if (!$api_result['success']) {
+        if (defined('WP_DEBUG') && WP_DEBUG) {
+            error_log('BRICKS API DEBUG: Error en petición: ' . $api_result['error']);
+        }
+        return $results;
+    }
+
+    $data = $api_result['data'];
     if (empty($data) || !is_array($data)) {
         return $results;
     }
-    
+
     $items_path = isset($source['items_path']) ? $source['items_path'] : '';
     $items = $data;
     if (!empty($items_path)) {
@@ -168,7 +202,12 @@ add_filter('bricks/query/run', function($results, $query_obj) {
             }
         }
     }
-    
+
+    // Inmovilla: el primer elemento de 'paginacion' es metadata, saltarlo
+    if (is_array($items) && isset($items[0]['total']) && !isset($items[0]['cod_ofer'])) {
+        array_shift($items);
+    }
+
     // --- Normalización robusta: siempre array indexado de arrays ---
     if (is_object($items)) {
         $items = [ (array)$items ];

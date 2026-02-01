@@ -7,6 +7,87 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
+/**
+ * Obtener IP del cliente para API de Inmovilla
+ * Si estamos en localhost, obtiene la IP pública desde un servicio externo
+ */
+if (!function_exists('bricks_api_get_client_ip')) {
+    function bricks_api_get_client_ip() {
+        // Primero intentar obtener de headers de proxy
+        $proxy_headers = array(
+            'HTTP_CLIENT_IP',
+            'HTTP_X_FORWARDED_FOR',
+            'HTTP_X_FORWARDED',
+            'HTTP_FORWARDED_FOR',
+            'HTTP_FORWARDED',
+            'HTTP_CF_CONNECTING_IP',
+        );
+
+        foreach ($proxy_headers as $key) {
+            if (!empty($_SERVER[$key])) {
+                $ips = explode(',', $_SERVER[$key]);
+                $ip = trim($ips[0]);
+                if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)) {
+                    return $ip;
+                }
+            }
+        }
+
+        // Obtener IP local
+        $local_ip = $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1';
+
+        // Si es localhost o IP privada, obtener IP pública
+        if (in_array($local_ip, ['127.0.0.1', '::1', 'localhost']) ||
+            !filter_var($local_ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)) {
+
+            // Intentar obtener IP pública desde caché
+            $cached_ip = get_transient('bricks_api_public_ip');
+            if ($cached_ip) {
+                return $cached_ip;
+            }
+
+            // Obtener IP pública desde servicio externo
+            $public_ip = bricks_api_fetch_public_ip();
+            if ($public_ip) {
+                // Cachear por 1 hora
+                set_transient('bricks_api_public_ip', $public_ip, HOUR_IN_SECONDS);
+                return $public_ip;
+            }
+        }
+
+        return $local_ip;
+    }
+}
+
+/**
+ * Obtener IP pública desde servicios externos
+ */
+if (!function_exists('bricks_api_fetch_public_ip')) {
+    function bricks_api_fetch_public_ip() {
+        $services = array(
+            'https://api.ipify.org',
+            'https://ifconfig.me/ip',
+            'https://icanhazip.com',
+        );
+
+        foreach ($services as $service) {
+            $response = wp_remote_get($service, array(
+                'timeout' => 5,
+                'sslverify' => false,
+            ));
+
+            if (!is_wp_error($response) && wp_remote_retrieve_response_code($response) === 200) {
+                $ip = trim(wp_remote_retrieve_body($response));
+                if (filter_var($ip, FILTER_VALIDATE_IP)) {
+                    return $ip;
+                }
+            }
+        }
+
+        return null;
+    }
+}
+
 if (!function_exists('render_api_endpoints_page')) {
     function render_api_endpoints_page() {
         // Procesar formulario
@@ -223,6 +304,17 @@ if (!function_exists('render_api_endpoints_page')) {
                     <td><input type="url" id="endpoint_url" name="endpoint_url" class="regular-text" required></td>
                             </tr>
                             <tr>
+                    <th><label for="endpoint_method">Método HTTP</label></th>
+                    <td>
+                      <select id="endpoint_method" name="endpoint_method">
+                        <option value="GET">GET</option>
+                        <option value="POST">POST</option>
+                        <option value="PUT">PUT</option>
+                        <option value="DELETE">DELETE</option>
+                      </select>
+                    </td>
+                            </tr>
+                            <tr>
                     <th><label for="auth_type">Autenticación</label></th>
                                 <td>
                       <select id="auth_type" name="auth_type">
@@ -382,6 +474,7 @@ if (!function_exists('render_api_endpoints_page')) {
                         index: 'new',
                         name: $('#endpoint_name').val().trim(),
                         url: $('#endpoint_url').val().trim(),
+                        method: $('#endpoint_method').val() || 'GET',
                         auth_type: $('#auth_type').val(),
                         token: $('#token').val() || '',
                         basic_user: $('#basic_user').val() || '',
@@ -697,6 +790,7 @@ if (!function_exists('render_api_endpoints_page')) {
                     index: editIndex, // Actualizar endpoint existente
                     name: $('#endpoint_name').val().trim(),
                     url: $('#endpoint_url').val().trim(),
+                    method: $('#endpoint_method').val() || 'GET',
                     auth_type: $('#auth_type').val(),
                     token: $('#token').val() || '',
                     basic_user: $('#basic_user').val() || '',
@@ -727,6 +821,7 @@ if (!function_exists('render_api_endpoints_page')) {
                 $('#endpoint-form-title').text('Editar endpoint: ' + ep.name);
                 $('#endpoint_name').val(ep.name);
                 $('#endpoint_url').val(ep.url);
+                $('#endpoint_method').val(ep.method || 'GET');
                 $('#auth_type').val(ep.auth_type).trigger('change');
                 setTimeout(function(){
                     $('#token').val(ep.token||'');
@@ -865,6 +960,7 @@ if (!function_exists('render_api_endpoints_page')) {
                     action: 'test_api_endpoint',
                     nonce: '<?php echo wp_create_nonce('test_api_endpoint'); ?>',
                     url: $('#endpoint_url').val().trim(),
+                    method: $('#endpoint_method').val() || 'GET',
                     auth_type: $('#auth_type').val(),
                     token: $('#token').val() || '',
                     basic_user: $('#basic_user').val() || '',
@@ -888,6 +984,7 @@ if (!function_exists('render_api_endpoints_page')) {
                     nonce: '<?php echo wp_create_nonce('generate_tags_for_endpoint'); ?>',
                     url: $('#endpoint_url').val().trim(),
                     name: $('#endpoint_name').val().trim(),
+                    method: $('#endpoint_method').val() || 'GET',
                     auth_type: $('#auth_type').val(),
                     token: $('#token').val() || '',
                     basic_user: $('#basic_user').val() || '',
@@ -1295,6 +1392,7 @@ add_action('wp_ajax_save_api_endpoint', function() {
     $data = [
         'name' => sanitize_text_field($_POST['name'] ?? ''),
         'url' => preg_replace('/[^a-zA-Z0-9\-\_\:\/\.\?\=\&\{\}]/', '', $_POST['url'] ?? ''),
+        'method' => in_array($_POST['method'] ?? 'GET', ['GET', 'POST', 'PUT', 'DELETE']) ? $_POST['method'] : 'GET',
         'auth_type' => sanitize_text_field($_POST['auth_type'] ?? 'none'),
         'token' => sanitize_text_field($_POST['token'] ?? ''),
         'basic_user' => sanitize_text_field($_POST['basic_user'] ?? ''),
@@ -1349,19 +1447,55 @@ add_action('wp_ajax_test_api_endpoint', function() {
         $header = !empty($_POST['api_key_header']) ? sanitize_text_field($_POST['api_key_header']) : 'X-API-Key';
         $args['headers'][$header] = sanitize_text_field($_POST['api_key']);
     }
+    // Determinar el método (GET o POST) - por defecto GET
+    $method = isset($_POST['method']) && $_POST['method'] === 'POST' ? 'POST' : 'GET';
+
     // Agregar parámetros dinámicos (solo los de tipo 'static' o 'url' con valor por defecto)
+    $params = [];
     if (!empty($_POST['dynamic_params']) && is_array($_POST['dynamic_params'])) {
-        $params = [];
         foreach ($_POST['dynamic_params'] as $param) {
             if (!empty($param['name']) && !empty($param['default']) && in_array($param['source'], ['static','url'])) {
                 $params[$param['name']] = $param['default'];
             }
         }
-        if ($params) {
-            $url = add_query_arg($params, $url);
-        }
     }
-    $response = wp_remote_get($url, $args);
+
+    // Para POST a Inmovilla, usar formato especial de parámetros
+    if ($method === 'POST' && strpos($url, 'apiweb.inmovilla.com') !== false && !empty($params)) {
+        // Construir el string de parámetros en formato Inmovilla
+        $agencia = $params['agencia'] ?? '';
+        $password = $params['password'] ?? '';
+        $idioma = $params['idioma'] ?? '1';
+        $lostipos = $params['lostipos'] ?? 'lostipos';
+        $tipo = $params['tipo'] ?? 'paginacion';
+        $pos = $params['pos'] ?? '1';
+        $num = $params['num_elementos'] ?? '20';
+        $where = $params['where'] ?? '';
+        $orden = $params['orden'] ?? '';
+
+        // Formato: agencia;password;idioma;lostipos;tipo;pos;num;where;orden
+        $texto = $agencia . ';' . $password . ';' . $idioma . ';' . $lostipos . ';' . $tipo . ';' . $pos . ';' . $num . ';' . $where . ';' . $orden;
+
+        $dominio = $_SERVER['SERVER_NAME'] ?? '';
+        // Usar IP del parámetro configurado, o detectar automáticamente
+        $ip = !empty($params['ip']) ? $params['ip'] : bricks_api_get_client_ip();
+
+        // Body en formato x-www-form-urlencoded
+        $args['body'] = 'param=' . rawurlencode($texto) . '&elDominio=' . urlencode($dominio) . '&ia=' . urlencode($ip) . '&json=1';
+        $args['headers']['Content-Type'] = 'application/x-www-form-urlencoded';
+        $args['headers']['Accept'] = 'application/json';
+        $args['headers']['User-Agent'] = 'Mozilla/5.0 (Windows; U; Windows NT 5.1; en-US; rv:1.8.1.3) Gecko/20070309 Firefox/2.0.0.3';
+    } elseif (!empty($params)) {
+        // Para otros métodos, agregar a la URL
+        $url = add_query_arg($params, $url);
+    }
+
+    // Hacer la petición con el método apropiado
+    if ($method === 'POST') {
+        $response = wp_remote_post($url, $args);
+    } else {
+        $response = wp_remote_get($url, $args);
+    }
     if (is_wp_error($response)) {
         wp_send_json_error('Error: ' . $response->get_error_message());
     }
@@ -1428,20 +1562,52 @@ add_action('wp_ajax_generate_tags_for_endpoint', function() {
         }
 
         // Agregar parámetros dinámicos (solo los de tipo 'static' o 'url' con valor por defecto)
+        $params = [];
         if (!empty($_POST['dynamic_params']) && is_array($_POST['dynamic_params'])) {
-            $params = [];
             foreach ($_POST['dynamic_params'] as $param) {
-                if (!empty($param['name']) && !empty($param['default']) && in_array($param['source'], ['static','url'])) {
+                if (!empty($param['name']) && isset($param['default']) && in_array($param['source'], ['static','url'])) {
                     $params[$param['name']] = $param['default'];
                 }
             }
-            if ($params) {
-                $url = add_query_arg($params, $url);
-            }
         }
 
-        // Obtener datos del endpoint CON autenticación
-        $response = wp_remote_get($url, $args);
+        // Determinar método HTTP
+        $method = isset($_POST['method']) && $_POST['method'] === 'POST' ? 'POST' : 'GET';
+
+        // Para POST a Inmovilla, usar formato especial
+        if ($method === 'POST' && strpos($url, 'apiweb.inmovilla.com') !== false && !empty($params)) {
+            $agencia = $params['agencia'] ?? '';
+            $password = $params['password'] ?? '';
+            $idioma = $params['idioma'] ?? '1';
+            $lostipos = $params['lostipos'] ?? 'lostipos';
+            $tipo = $params['tipo'] ?? 'paginacion';
+            $pos = $params['pos'] ?? '1';
+            $num = $params['num_elementos'] ?? '20';
+            $where = $params['where'] ?? '';
+            $orden = $params['orden'] ?? '';
+
+            $texto = $agencia . ';' . $password . ';' . $idioma . ';' . $lostipos . ';' . $tipo . ';' . $pos . ';' . $num . ';' . $where . ';' . $orden;
+            $dominio = $_SERVER['SERVER_NAME'] ?? '';
+            // Usar IP del parámetro configurado, o detectar automáticamente
+            $ip = !empty($params['ip']) ? $params['ip'] : bricks_api_get_client_ip();
+
+            $args['body'] = 'param=' . rawurlencode($texto) . '&elDominio=' . urlencode($dominio) . '&ia=' . urlencode($ip) . '&json=1';
+            $args['headers']['Content-Type'] = 'application/x-www-form-urlencoded';
+            $args['headers']['Accept'] = 'application/json';
+            $args['headers']['User-Agent'] = 'Mozilla/5.0 (Windows; U; Windows NT 5.1; en-US; rv:1.8.1.3) Gecko/20070309 Firefox/2.0.0.3';
+
+            $response = wp_remote_post($url, $args);
+        } elseif ($method === 'POST') {
+            if (!empty($params)) {
+                $args['body'] = $params;
+            }
+            $response = wp_remote_post($url, $args);
+        } else {
+            if (!empty($params)) {
+                $url = add_query_arg($params, $url);
+            }
+            $response = wp_remote_get($url, $args);
+        }
         if (!is_wp_error($response)) {
             $code = wp_remote_retrieve_response_code($response);
             $body = wp_remote_retrieve_body($response);
@@ -1451,8 +1617,12 @@ add_action('wp_ajax_generate_tags_for_endpoint', function() {
                 $data = json_decode($body, true);
 
                 if (json_last_error() === JSON_ERROR_NONE) {
-                    // Detectar si es array de objetos o un objeto único
-                    if (is_array($data) && isset($data[0]) && is_array($data[0])) {
+                    // Detectar estructura de respuesta
+                    // Para Inmovilla: los datos están en paginacion[1] (el [0] es metadata)
+                    if (is_array($data) && isset($data['paginacion']) && is_array($data['paginacion'])) {
+                        // Estructura Inmovilla - tomar el segundo elemento (primer inmueble)
+                        $example = isset($data['paginacion'][1]) ? $data['paginacion'][1] : [];
+                    } elseif (is_array($data) && isset($data[0]) && is_array($data[0])) {
                         $example = $data[0];
                     } elseif (is_array($data)) {
                         $example = $data;

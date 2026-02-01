@@ -11,6 +11,87 @@ if (!defined('ABSPATH')) {
 }
 
 /**
+ * Obtener IP del cliente para API de Inmovilla
+ * Si estamos en localhost, obtiene la IP pública desde un servicio externo
+ */
+if (!function_exists('bricks_api_get_client_ip')) {
+    function bricks_api_get_client_ip() {
+        // Primero intentar obtener de headers de proxy
+        $proxy_headers = array(
+            'HTTP_CLIENT_IP',
+            'HTTP_X_FORWARDED_FOR',
+            'HTTP_X_FORWARDED',
+            'HTTP_FORWARDED_FOR',
+            'HTTP_FORWARDED',
+            'HTTP_CF_CONNECTING_IP',
+        );
+
+        foreach ($proxy_headers as $key) {
+            if (!empty($_SERVER[$key])) {
+                $ips = explode(',', $_SERVER[$key]);
+                $ip = trim($ips[0]);
+                if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)) {
+                    return $ip;
+                }
+            }
+        }
+
+        // Obtener IP local
+        $local_ip = $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1';
+
+        // Si es localhost o IP privada, obtener IP pública
+        if (in_array($local_ip, ['127.0.0.1', '::1', 'localhost']) ||
+            !filter_var($local_ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)) {
+
+            // Intentar obtener IP pública desde caché
+            $cached_ip = get_transient('bricks_api_public_ip');
+            if ($cached_ip) {
+                return $cached_ip;
+            }
+
+            // Obtener IP pública desde servicio externo
+            $public_ip = bricks_api_fetch_public_ip();
+            if ($public_ip) {
+                // Cachear por 1 hora
+                set_transient('bricks_api_public_ip', $public_ip, HOUR_IN_SECONDS);
+                return $public_ip;
+            }
+        }
+
+        return $local_ip;
+    }
+}
+
+/**
+ * Obtener IP pública desde servicios externos
+ */
+if (!function_exists('bricks_api_fetch_public_ip')) {
+    function bricks_api_fetch_public_ip() {
+        $services = array(
+            'https://api.ipify.org',
+            'https://ifconfig.me/ip',
+            'https://icanhazip.com',
+        );
+
+        foreach ($services as $service) {
+            $response = wp_remote_get($service, array(
+                'timeout' => 5,
+                'sslverify' => false,
+            ));
+
+            if (!is_wp_error($response) && wp_remote_retrieve_response_code($response) === 200) {
+                $ip = trim(wp_remote_retrieve_body($response));
+                if (filter_var($ip, FILTER_VALIDATE_IP)) {
+                    return $ip;
+                }
+            }
+        }
+
+        return null;
+    }
+}
+
+/**
  * Trait para gestión de APIs
  */
 trait APIManager {
@@ -160,10 +241,61 @@ trait APIManager {
             'headers' => $headers,
             'timeout' => 30
         ];
-        
+
         // Determinar el método HTTP a usar (GET por defecto)
         $method = isset($endpoint_config['method']) ? strtoupper($endpoint_config['method']) : 'GET';
-        
+
+        // Para POST a Inmovilla, usar formato especial de parámetros
+        if ($method === 'POST' && strpos($processed_url, 'apiweb.inmovilla.com') !== false) {
+            $parsed_url = wp_parse_url($processed_url);
+            $base_url = $parsed_url['scheme'] . '://' . $parsed_url['host'] . $parsed_url['path'];
+
+            // Extraer parámetros dinámicos del endpoint
+            $params = [];
+            if (!empty($endpoint_config['dynamic_params'])) {
+                foreach ($endpoint_config['dynamic_params'] as $param) {
+                    if (!empty($param['name']) && isset($param['default'])) {
+                        $params[$param['name']] = $param['default'];
+                    }
+                }
+            }
+
+            // También extraer de query string si existe
+            if (isset($parsed_url['query'])) {
+                parse_str($parsed_url['query'], $query_params);
+                $params = array_merge($params, $query_params);
+            }
+
+            // Construir el string de parámetros en formato Inmovilla
+            $agencia = $params['agencia'] ?? '';
+            $password = $params['password'] ?? '';
+            $idioma = $params['idioma'] ?? '1';
+            $lostipos = $params['lostipos'] ?? 'lostipos';
+            $tipo = $params['tipo'] ?? 'paginacion';
+            $pos = $params['pos'] ?? '1';
+            $num = $params['num_elementos'] ?? '20';
+            $where = $params['where'] ?? '';
+            $orden = $params['orden'] ?? '';
+
+            // Formato: agencia;password;idioma;lostipos;tipo;pos;num;where;orden
+            $texto = $agencia . ';' . $password . ';' . $idioma . ';' . $lostipos . ';' . $tipo . ';' . $pos . ';' . $num . ';' . $where . ';' . $orden;
+
+            $dominio = $_SERVER['SERVER_NAME'] ?? '';
+            // Usar IP del parámetro configurado, o detectar automáticamente
+            $ip = !empty($params['ip']) ? $params['ip'] : bricks_api_get_client_ip();
+
+            // Body en formato x-www-form-urlencoded
+            $request_options['body'] = 'param=' . rawurlencode($texto) . '&elDominio=' . urlencode($dominio) . '&ia=' . urlencode($ip) . '&json=1';
+            $request_options['headers']['Content-Type'] = 'application/x-www-form-urlencoded';
+            $request_options['headers']['User-Agent'] = 'Mozilla/5.0 (Windows; U; Windows NT 5.1; en-US; rv:1.8.1.3) Gecko/20070309 Firefox/2.0.0.3';
+            $processed_url = $base_url;
+
+            if (defined('WP_DEBUG') && WP_DEBUG) {
+                error_log('INMOVILLA PARAM STRING: ' . $texto);
+                error_log('INMOVILLA URL FINAL: ' . $processed_url);
+            }
+        }
+
         // Realizar petición según el método
         if ($method === 'GET') {
             $response = wp_remote_get($processed_url, $request_options);

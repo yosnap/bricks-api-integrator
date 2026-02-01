@@ -74,33 +74,21 @@ add_action('wp_ajax_generate_source_tags', function() {
         $pagination_config,
         $overrides
     );
-    $args = [
-        'timeout' => 30,
-        'headers' => [
-            'User-Agent' => 'Bricks API Integrator/2.1.1'
-        ]
-    ];
 
-    // Usar sistema unificado de autenticación (soporta Bearer, API Key, Basic Auth)
-    if (!function_exists('bricks_api_proxy_prepare_auth_headers')) {
-        require_once BRICKS_API_INTEGRATOR_PATH . 'includes/image-proxy.php';
+    // Usar función helper que soporta Inmovilla
+    if (!function_exists('bricks_api_source_make_request')) {
+        require_once __DIR__ . '/sources-helpers.php';
     }
-    $auth_headers = bricks_api_proxy_prepare_auth_headers($endpoint);
-    $args['headers'] = array_merge($args['headers'], $auth_headers);
 
-    $response = wp_remote_get($url, $args);
-    // Log de depuración de la respuesta HTTP
-    if (defined('WP_DEBUG') && WP_DEBUG) {
-        $status_code = wp_remote_retrieve_response_code($response);
-        $body = wp_remote_retrieve_body($response);
-        error_log('DEBUG API HTTP STATUS: ' . $status_code);
-        error_log('DEBUG API RAW BODY: ' . $body);
+    $api_result = bricks_api_source_make_request($url, $endpoint, $source);
+
+    if (!$api_result['success']) {
+        wp_send_json_error('Error de API: ' . $api_result['error']);
     }
-    if (is_wp_error($response)) {
-        wp_send_json_error('Error de API: ' . $response->get_error_message());
-    }
-    $body = wp_remote_retrieve_body($response);
-    $items = json_decode($body, true);
+
+    $body = $api_result['body'];
+    $items = $api_result['data'];
+
     if ($debug && !$is_ajax) {
         echo '<pre style="background:#222;color:#fff;padding:10px;">[DEBUG generate_source_tags] BODY:\n' . htmlspecialchars($body) . '\n\nITEMS:\n' . print_r($items, true) . '</pre>';
     }
@@ -123,6 +111,12 @@ add_action('wp_ajax_generate_source_tags', function() {
             }
         }
     }
+
+    // Inmovilla: el primer elemento de 'paginacion' es metadata, saltarlo
+    if (is_array($items_data) && isset($items_data[0]['total']) && !isset($items_data[0]['cod_ofer'])) {
+        array_shift($items_data);
+    }
+
     // --- Normalizar la respuesta: siempre array indexado para generación de tags ---
     if (is_object($items_data)) {
         $items_data = [ (array)$items_data ];
@@ -458,48 +452,53 @@ add_action('wp_ajax_test_source_api_live', function() {
         $pagination_config,
         $overrides
     );
-    $args = [
-        'timeout' => 30,
-        'headers' => [
-            'User-Agent' => 'Bricks API Integrator/2.1.1'
-        ]
+
+    // Construir source_config temporal para la petición
+    // Para Inmovilla, deducir el 'tipo' del items_path
+    $tipo = '';
+    if (strpos($endpoint['url'], 'apiweb.inmovilla.com') !== false && !empty($items_path)) {
+        $tipo = $items_path; // En Inmovilla, items_path coincide con tipo (zonas, ciudades, tipos, etc.)
+    }
+
+    $temp_source_config = [
+        'dynamic_params' => $dynamic_params,
+        'tipo' => $tipo,
     ];
 
-    // Usar sistema unificado de autenticación (soporta Bearer, API Key, Basic Auth)
-    if (!function_exists('bricks_api_proxy_prepare_auth_headers')) {
-        require_once BRICKS_API_INTEGRATOR_PATH . 'includes/image-proxy.php';
+    // Usar función helper que soporta Inmovilla
+    if (!function_exists('bricks_api_source_make_request')) {
+        require_once __DIR__ . '/sources-helpers.php';
     }
-    $auth_headers = bricks_api_proxy_prepare_auth_headers($endpoint);
-    $args['headers'] = array_merge($args['headers'], $auth_headers);
 
-    $response = wp_remote_get($url, $args);
-    if (is_wp_error($response)) {
-        wp_send_json_error('Error de API: ' . $response->get_error_message());
+    $api_result = bricks_api_source_make_request($url, $endpoint, $temp_source_config);
+
+    if (!$api_result['success']) {
+        wp_send_json_error('Error de API: ' . $api_result['error']);
     }
-    $status_code = wp_remote_retrieve_response_code($response);
-    $body = wp_remote_retrieve_body($response);
-    if (defined('WP_DEBUG') && WP_DEBUG) {
-        error_log('TEST SOURCE DEBUG - HTTP STATUS: ' . $status_code);
-        error_log('TEST SOURCE DEBUG - RAW BODY: ' . $body);
-    }
-    if ($status_code !== 200) {
-        wp_send_json_error('Error HTTP: ' . $status_code);
-    }
-    $raw_data = json_decode($body, true);
-    if (json_last_error() !== JSON_ERROR_NONE) {
-        wp_send_json_error('Error de JSON: ' . json_last_error_msg());
-    }
+
+    $raw_data = $api_result['data'];
     $items_data = $raw_data;
     if (!empty($items_path)) {
         $path_parts = explode('.', $items_path);
         foreach ($path_parts as $part) {
-            if (is_array($items_data) && isset($items_data[$part])) {
+            if (is_array($items_data) && array_key_exists($part, $items_data)) {
                 $items_data = $items_data[$part];
             } else {
                 wp_send_json_error('Items path "' . $items_path . '" no encontrado en la respuesta.');
             }
         }
     }
+
+    // Si el resultado es null, tratarlo como array vacío
+    if ($items_data === null) {
+        wp_send_json_error('La API no devolvió datos para esta consulta (resultado null). Verifica que los parámetros sean correctos.');
+    }
+
+    // Inmovilla: el primer elemento de 'paginacion' es metadata, saltarlo
+    if (is_array($items_data) && isset($items_data[0]['total']) && !isset($items_data[0]['cod_ofer'])) {
+        array_shift($items_data);
+    }
+
     $preview = null;
     if (is_array($items_data)) {
         $is_indexed = array_keys($items_data) === range(0, count($items_data) - 1);
@@ -647,33 +646,19 @@ add_action('wp_ajax_preview_source_api', function() {
         $pagination_config,
         $overrides
     );
-    $args = [
-        'timeout' => 30,
-        'headers' => [
-            'User-Agent' => 'Bricks API Integrator/2.1.1'
-        ]
-    ];
 
-    // Usar sistema unificado de autenticación (soporta Bearer, API Key, Basic Auth)
-    if (!function_exists('bricks_api_proxy_prepare_auth_headers')) {
-        require_once BRICKS_API_INTEGRATOR_PATH . 'includes/image-proxy.php';
+    // Usar función helper que soporta Inmovilla
+    if (!function_exists('bricks_api_source_make_request')) {
+        require_once __DIR__ . '/sources-helpers.php';
     }
-    $auth_headers = bricks_api_proxy_prepare_auth_headers($endpoint);
-    $args['headers'] = array_merge($args['headers'], $auth_headers);
 
-    $response = wp_remote_get($url, $args);
-    // Log de depuración de la respuesta HTTP
-    if (defined('WP_DEBUG') && WP_DEBUG) {
-        $status_code = wp_remote_retrieve_response_code($response);
-        $body = wp_remote_retrieve_body($response);
-        error_log('DEBUG API HTTP STATUS: ' . $status_code);
-        error_log('DEBUG API RAW BODY: ' . $body);
+    $api_result = bricks_api_source_make_request($url, $endpoint, $source);
+
+    if (!$api_result['success']) {
+        wp_send_json_error('Error de API: ' . $api_result['error']);
     }
-    if (is_wp_error($response)) {
-        wp_send_json_error('Error de API: ' . $response->get_error_message());
-    }
-    $body = wp_remote_retrieve_body($response);
-    $items = json_decode($body, true);
+
+    $items = $api_result['data'];
     $items_path = !empty($source['items_path']) ? $source['items_path'] : '';
     $items_data = $items;
     if (!empty($items_path)) {
@@ -686,6 +671,12 @@ add_action('wp_ajax_preview_source_api', function() {
             }
         }
     }
+
+    // Inmovilla: el primer elemento de 'paginacion' es metadata, saltarlo
+    if (is_array($items_data) && isset($items_data[0]['total']) && !isset($items_data[0]['cod_ofer'])) {
+        array_shift($items_data);
+    }
+
     // --- Lógica uniforme para preview reforzada y robusta ---
     $preview = [];
     $preview_type = 'object';

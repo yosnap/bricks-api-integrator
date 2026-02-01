@@ -76,7 +76,7 @@ function render_api_sources_page() {
                                     <option value=""><?php esc_html_e('-- Select Endpoint --', 'bricks-api-integrator'); ?></option>
                                     <?php foreach ($endpoints as $index => $endpoint): ?>
                                         <?php $endpoint_name = isset($endpoint['name']) ? $endpoint['name'] : __('Unnamed Endpoint', 'bricks-api-integrator'); ?>
-                                        <option value="<?php echo esc_attr($index); ?>" <?php selected($editing && $source_to_edit['endpoint_id'] == $index); ?>><?php echo esc_html($endpoint_name); ?></option>
+                                        <option value="<?php echo esc_attr($index); ?>" <?php selected($editing && ($source_to_edit['endpoint_id'] ?? '') == $index); ?>><?php echo esc_html($endpoint_name); ?></option>
                                     <?php endforeach; ?>
                                 </select>
                             </td>
@@ -86,7 +86,7 @@ function render_api_sources_page() {
                                 <label for="field_prefix"><?php esc_html_e('Prefijo de Campo', 'bricks-api-integrator'); ?></label>
                             </th>
                             <td>
-                                <input type="text" id="field_prefix" name="field_prefix" class="regular-text" value="<?php echo $editing ? esc_attr($source_to_edit['field_prefix']) : ''; ?>" placeholder="snap_">
+                                <input type="text" id="field_prefix" name="field_prefix" class="regular-text" value="<?php echo $editing ? esc_attr($source_to_edit['field_prefix'] ?? '') : ''; ?>" placeholder="snap_">
                                 <p class="description"><?php esc_html_e('Prefijo opcional para nombres de campo en Bricks. Dejar vacío para no usar prefijo.', 'bricks-api-integrator'); ?></p>
                             </td>
                         </tr>
@@ -96,7 +96,7 @@ function render_api_sources_page() {
                             </th>
                             <td>
                                 <div class="items-path-container" style="display: flex; align-items: center; gap: 10px;">
-                                    <input type="text" id="items_path" name="items_path" class="regular-text" value="<?php echo $editing ? esc_attr($source_to_edit['items_path']) : ''; ?>" style="flex-grow: 1;">
+                                    <input type="text" id="items_path" name="items_path" class="regular-text" value="<?php echo $editing ? esc_attr($source_to_edit['items_path'] ?? '') : ''; ?>" style="flex-grow: 1;">
                                     <?php $test_path_nonce = wp_create_nonce('bricks_api_source_nonce'); ?>
                                     <button type="button" class="button test-items-path" 
                                         data-endpoint-id="<?php echo esc_attr($source_to_edit['endpoint_id'] ?? ''); ?>" 
@@ -138,15 +138,15 @@ function render_api_sources_page() {
                                             // No mostrar parámetros que coincidan con los de paginación
                                             if ($param['name'] === $pagination_param || $param['name'] === $per_page_param) continue;
                                     ?>
-                                            <div class="dynamic-param-row">
-                                                <input type="text" name="param_names[]" placeholder="<?php esc_attr_e('Nombre del Parámetro (ej. id)', 'bricks-api-integrator'); ?>" class="regular-text" value="<?php echo esc_attr($param['name']); ?>">
-                                                <select name="param_sources[]">
+                                            <div class="dynamic-param-row" style="margin-bottom:6px;display:flex;gap:6px;align-items:center;">
+                                                <input type="text" name="param_names[]" placeholder="<?php esc_attr_e('Nombre del Parámetro (ej. id)', 'bricks-api-integrator'); ?>" class="regular-text param-name" value="<?php echo esc_attr($param['name']); ?>">
+                                                <select name="param_sources[]" class="param-source">
                                                     <option value="url" <?php selected($param['source'], 'url'); ?>><?php esc_html_e('Parámetro URL', 'bricks-api-integrator'); ?></option>
                                                     <option value="post" <?php selected($param['source'], 'post'); ?>><?php esc_html_e('ID del Post', 'bricks-api-integrator'); ?></option>
                                                     <option value="user" <?php selected($param['source'], 'user'); ?>><?php esc_html_e('ID del Usuario', 'bricks-api-integrator'); ?></option>
                                                     <option value="static" <?php selected($param['source'], 'static'); ?>><?php esc_html_e('Valor Estático', 'bricks-api-integrator'); ?></option>
                                                 </select>
-                                                <input type="text" name="param_defaults[]" placeholder="<?php esc_attr_e('Valor por Defecto (opcional)', 'bricks-api-integrator'); ?>" class="regular-text" value="<?php echo esc_attr($param['default']); ?>">
+                                                <input type="text" name="param_defaults[]" placeholder="<?php esc_attr_e('Valor por Defecto (opcional)', 'bricks-api-integrator'); ?>" class="regular-text param-default" value="<?php echo esc_attr($param['default']); ?>">
                                                 <button type="button" class="button button-delete-param" style="background:#dc3232;color:#fff;">Eliminar</button>
                                             </div>
                                     <?php
@@ -164,9 +164,9 @@ function render_api_sources_page() {
                             </th>
                             <td>
                                 <select id="pagination_type" name="pagination_type">
-                                    <option value="none" <?php selected($editing && $source_to_edit['pagination_type'] == 'none'); ?>><?php esc_html_e('Ninguno', 'bricks-api-integrator'); ?></option>
-                                    <option value="page_param" <?php selected($editing && $source_to_edit['pagination_type'] == 'page_param'); ?>><?php esc_html_e('Parámetro de Página', 'bricks-api-integrator'); ?></option>
-                                    <option value="offset_param" <?php selected($editing && $source_to_edit['pagination_type'] == 'offset_param'); ?>><?php esc_html_e('Parámetro de Desplazamiento', 'bricks-api-integrator'); ?></option>
+                                    <option value="none" <?php selected($editing && ($source_to_edit['pagination_type'] ?? 'none') == 'none'); ?>><?php esc_html_e('Ninguno', 'bricks-api-integrator'); ?></option>
+                                    <option value="page_param" <?php selected($editing && ($source_to_edit['pagination_type'] ?? '') == 'page_param'); ?>><?php esc_html_e('Parámetro de Página', 'bricks-api-integrator'); ?></option>
+                                    <option value="offset_param" <?php selected($editing && ($source_to_edit['pagination_type'] ?? '') == 'offset_param'); ?>><?php esc_html_e('Parámetro de Desplazamiento', 'bricks-api-integrator'); ?></option>
                                 </select>
                             </td>
                         </tr>
@@ -175,7 +175,7 @@ function render_api_sources_page() {
                                 <label for="pagination_param"><?php esc_html_e('Pagination Parameter', 'bricks-api-integrator'); ?></label>
                             </th>
                             <td>
-                                <input type="text" id="pagination_param" name="pagination_param" class="regular-text" value="<?php echo $editing ? esc_attr($source_to_edit['pagination_param']) : ''; ?>">
+                                <input type="text" id="pagination_param" name="pagination_param" class="regular-text" value="<?php echo $editing ? esc_attr($source_to_edit['pagination_param'] ?? '') : ''; ?>">
                                 <p class="description"><?php esc_html_e('Parameter name for pagination (e.g., "page" or "offset").', 'bricks-api-integrator'); ?></p>
                             </td>
                         </tr>
@@ -184,7 +184,7 @@ function render_api_sources_page() {
                                 <label for="per_page_param"><?php esc_html_e('Per Page Parameter', 'bricks-api-integrator'); ?></label>
                             </th>
                             <td>
-                                <input type="text" id="per_page_param" name="per_page_param" class="regular-text" value="<?php echo $editing ? esc_attr($source_to_edit['per_page_param']) : ''; ?>">
+                                <input type="text" id="per_page_param" name="per_page_param" class="regular-text" value="<?php echo $editing ? esc_attr($source_to_edit['per_page_param'] ?? '') : ''; ?>">
                                 <p class="description"><?php esc_html_e('Parameter name for items per page (e.g., "per_page" or "limit").', 'bricks-api-integrator'); ?></p>
                             </td>
                         </tr>
@@ -269,21 +269,24 @@ function render_api_sources_page() {
         function addParamRow(name='', source='url', def='') {
             const row = $(
                 `<div class="dynamic-param-row" style="margin-bottom:6px;display:flex;gap:6px;align-items:center;">
-                    <input type="text" class="regular-text param-name" placeholder="Nombre" value="${name}">
-                    <select class="param-source">
+                    <input type="text" name="param_names[]" class="regular-text param-name" placeholder="Nombre" value="${name}">
+                    <select name="param_sources[]" class="param-source">
                         <option value="url" ${source==='url'?'selected':''}>Parámetro URL</option>
                         <option value="post" ${source==='post'?'selected':''}>ID Post</option>
                         <option value="user" ${source==='user'?'selected':''}>ID Usuario</option>
                         <option value="static" ${source==='static'?'selected':''}>Valor Estático</option>
                     </select>
-                    <input type="text" class="regular-text param-default" placeholder="Valor por defecto" value="${def}">
+                    <input type="text" name="param_defaults[]" class="regular-text param-default" placeholder="Valor por defecto" value="${def}">
                     <button type="button" class="button button-delete-param" style="background:#dc3232;color:#fff;">Eliminar</button>
                 </div>`
             );
-            row.find('.button-delete-param').click(function(){ row.remove(); });
             $('#dynamic-params-container').append(row);
         }
         $('#add-param').click(function(){ addParamRow(); });
+        // Eliminar fila de parámetro (delegado para filas existentes y nuevas)
+        $(document).on('click', '.button-delete-param', function() {
+            $(this).closest('.dynamic-param-row').remove();
+        });
         // --- Modal Preview centrado y cierre robusto ---
         if($('#bricks-source-preview-modal').length === 0){
             $('body').append('<div id="bricks-source-preview-modal" style="display:none;position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.45);z-index:9999;display:flex;align-items:center;justify-content:center;"><div style="background:#fff;padding:28px 24px 18px 24px;border-radius:10px;max-width:600px;max-height:80vh;overflow:auto;position:relative;"><button id="close-source-preview-modal" style="position:absolute;top:10px;right:10px;font-size:18px;background:none;border:none;cursor:pointer;">✖</button><div id="bricks-source-preview-content"></div></div></div>');
@@ -413,6 +416,14 @@ function save_api_source() {
         $param_names = array_map('sanitize_text_field', $_POST['param_names']);
         $param_sources = isset($_POST['param_sources']) ? array_map('sanitize_text_field', $_POST['param_sources']) : [];
         $param_defaults = isset($_POST['param_defaults']) ? array_map('sanitize_text_field', $_POST['param_defaults']) : [];
+
+        // Debug log para verificar qué se recibe
+        if (defined('WP_DEBUG') && WP_DEBUG) {
+            error_log('SAVE SOURCE - param_names: ' . print_r($param_names, true));
+            error_log('SAVE SOURCE - param_sources: ' . print_r($param_sources, true));
+            error_log('SAVE SOURCE - param_defaults: ' . print_r($param_defaults, true));
+        }
+
         foreach ($param_names as $index => $name) {
             if (!empty($name)) {
                 $dynamic_params[] = [
@@ -421,6 +432,10 @@ function save_api_source() {
                     'default' => isset($param_defaults[$index]) ? $param_defaults[$index] : ''
                 ];
             }
+        }
+
+        if (defined('WP_DEBUG') && WP_DEBUG) {
+            error_log('SAVE SOURCE - dynamic_params final: ' . print_r($dynamic_params, true));
         }
     }
     // Obtener sources existentes
@@ -467,9 +482,15 @@ function save_api_source() {
         'last_updated' => current_time('mysql')
     ];
     // Mantener tags y datos relacionados si ya existen y no se están regenerando
+    // También preservar campos específicos de Inmovilla y otros metadatos
     if ($editing && isset($api_sources[$source_id])) {
         $prev = $api_sources[$source_id];
-        foreach(['tags','example','tags_generated','last_tag_generation','disabled_tags'] as $k) {
+        $preserve_fields = [
+            'tags', 'example', 'tags_generated', 'last_tag_generation', 'disabled_tags',
+            // Campos específicos de Inmovilla
+            'tipo', 'required_filter', 'filter_note', 'supports_filters', 'supports_sorting'
+        ];
+        foreach ($preserve_fields as $k) {
             if (isset($prev[$k])) $source_data[$k] = $prev[$k];
         }
     }

@@ -37,6 +37,7 @@ require_once BRICKS_API_INTEGRATOR_PATH . 'includes/cleaner.php';
 require_once BRICKS_API_INTEGRATOR_PATH . 'includes/image-proxy.php';
 require_once BRICKS_API_INTEGRATOR_PATH . 'includes/inmovilla-fields.php';
 require_once BRICKS_API_INTEGRATOR_PATH . 'includes/inmovilla-auto-endpoints.php';
+require_once BRICKS_API_INTEGRATOR_PATH . 'includes/inmovilla-sources.php';
 
 // Archivos necesarios para el admin - HABILITAR SOLO LOS NECESARIOS
 if (file_exists(BRICKS_API_INTEGRATOR_PATH . 'includes/sources.php')) {
@@ -164,7 +165,9 @@ class BricksAPIIntegrator {
         add_filter('bricks/setup/control_options', [$this, 'add_query_types_dynamic']);
         add_filter('bricks/query/run', [$this, 'run_custom_query_dynamic'], 10, 2);
         add_filter('bricks/dynamic_tags_list', [$this, 'add_dynamic_tags_dynamic']);
-        add_filter('bricks/dynamic_data/render_content', [$this, 'render_dynamic_tags_dynamic'], 30, 3);
+        // Prioridad 10 para ejecutarse antes que otros filtros
+        add_filter('bricks/dynamic_data/render_content', [$this, 'render_dynamic_tags_dynamic'], 10, 3);
+        add_filter('bricks/dynamic_data/render_tag', [$this, 'render_single_dynamic_tag'], 10, 3);
         
         // Admin hooks
         add_action('admin_menu', [$this, 'add_admin_menu']);
@@ -1075,55 +1078,43 @@ class BricksAPIIntegrator {
     }
     
     /**
-     * Renderizar Dynamic Tags diferenciados AUTO/MANUAL - CORREGIDO
+     * Renderizar Dynamic Tags con formato unificado
+     * Formato: {snap_source-slug_field} (ej: {snap_inmovilla-inmuebles_ref})
      */
     public function render_dynamic_tags_dynamic($content, $post, $context) {
-        // Buscar cualquier tag con formato {prefijo_slug_campo}
         if (strpos($content, '{') === false) {
             return $content;
         }
-        
-        if (defined('WP_DEBUG') && WP_DEBUG) {
-        }
-        
+
+        // Formato unificado: {snap_source-slug_campo} (ej: {snap_inmovilla-inmuebles_ref})
         $content = preg_replace_callback(
             '/\{([a-zA-Z0-9_]+)_([a-zA-Z0-9-]+)_([a-zA-Z0-9_.-]+)\}/',
             function($matches) use ($post, $context) {
                 $prefix = $matches[1];
                 $identifier = $matches[2];
                 $field = $matches[3];
-                
-                if (defined('WP_DEBUG') && WP_DEBUG) {
-                }
-                
+
                 // Primero intentar obtener desde el loop object actual
                 $loop_object = \Bricks\Query::get_loop_object();
                 if (!empty($loop_object)) {
-                    if (defined('WP_DEBUG') && WP_DEBUG) {
-                    }
-                    
                     // Intentar acceso directo a la propiedad
                     if (is_array($loop_object)) {
                         $loop_object = (object)$loop_object;
                     }
                     $value = bricks_api_safe_get($loop_object, $field);
                     if ($value !== null) {
-                        if (defined('WP_DEBUG') && WP_DEBUG) {
-                        }
                         return $this->format_field_output($value, $field);
                     }
-                    
+
                     // Intentar acceso a través de api_data
                     if (isset($loop_object->api_data)) {
                         $api_data = $loop_object->api_data;
                         $value = $this->get_value_by_dot_notation($api_data, $field);
                         if ($value !== '' && $value !== null) {
-                            if (defined('WP_DEBUG') && WP_DEBUG) {
-                            }
                             return $this->format_field_output($value, $field);
                         }
                     }
-                    
+
                     // Intentar con el campo normalizado
                     if (is_array($loop_object)) {
                         $loop_object = (object)$loop_object;
@@ -1131,31 +1122,130 @@ class BricksAPIIntegrator {
                     $normalized_field = str_replace(['-', '.'], '_', $field);
                     $value = bricks_api_safe_get($loop_object, $normalized_field);
                     if ($value !== null) {
-                        if (defined('WP_DEBUG') && WP_DEBUG) {
-                        }
                         return $this->format_field_output($value, $field);
                     }
                 }
-                
+
                 // Si el prefijo es 'snap', usar lógica de source
                 if ($prefix === 'snap') {
                     $value = $this->get_source_field_value($identifier, $field, $post, $context);
                     if ($value !== '') {
-                        if (defined('WP_DEBUG') && WP_DEBUG) {
-                        }
                         return $value;
                     }
                 }
-                
-                if (defined('WP_DEBUG') && WP_DEBUG) {
-                }
-                
+
                 return $matches[0]; // Devolver el tag original si no se puede resolver
             },
             $content
         );
-        
+
         return $content;
+    }
+
+    /**
+     * Renderizar un tag dinámico individual (para Headings y otros elementos)
+     * Formato unificado: {snap_source-slug_field}
+     */
+    public function render_single_dynamic_tag($tag, $post, $context) {
+        // Formato unificado: {snap_source-slug_field} o {snap_endpoint-slug_field}
+        if (preg_match('/^\{?snap_([a-zA-Z0-9-]+)_([a-zA-Z0-9_.-]+)\}?$/', $tag, $matches)) {
+            $source_slug = $matches[1]; // ej: inmovilla-inmuebles, endpoint-slug
+            $field = $matches[2];
+
+            // Obtener desde el loop object actual
+            $loop_object = \Bricks\Query::get_loop_object();
+
+            if (!empty($loop_object)) {
+                if (is_array($loop_object)) {
+                    $loop_object = (object)$loop_object;
+                }
+
+                // Intentar acceso directo al campo
+                $value = bricks_api_safe_get($loop_object, $field);
+                if ($value !== null) {
+                    return $this->format_field_output($value, $field);
+                }
+
+                // Intentar con campo normalizado (guiones a guiones bajos)
+                $normalized_field = str_replace(['-', '.'], '_', $field);
+                $value = bricks_api_safe_get($loop_object, $normalized_field);
+                if ($value !== null) {
+                    return $this->format_field_output($value, $field);
+                }
+            }
+        }
+
+        return $tag; // Devolver el tag original si no se puede resolver
+    }
+
+    /**
+     * Obtener valor de campo desde source por key directo
+     */
+    private function get_source_field_value_by_key($source_key, $field, $post = null, $context = null) {
+        $sources = get_option('bricks_api_sources', []);
+        $endpoints = get_option('bricks_api_endpoints', []);
+
+        if (!isset($sources[$source_key])) {
+            return '';
+        }
+
+        $target_source = $sources[$source_key];
+        $endpoint_id = $target_source['endpoint_id'] ?? '';
+
+        if (!isset($endpoints[$endpoint_id])) {
+            return '';
+        }
+
+        $endpoint = $endpoints[$endpoint_id];
+
+        try {
+            // Usar helper para petición que soporta Inmovilla
+            if (!function_exists('bricks_api_source_make_request')) {
+                require_once BRICKS_API_INTEGRATOR_PATH . 'includes/sources/sources-helpers.php';
+            }
+
+            $api_result = bricks_api_source_make_request($endpoint['url'], $endpoint, $target_source);
+
+            if (!$api_result['success'] || empty($api_result['data'])) {
+                return '';
+            }
+
+            $raw_data = $api_result['data'];
+
+            // Aplicar items_path si está configurado
+            if (!empty($target_source['items_path'])) {
+                $api_data = $this->extract_nested_items($raw_data, $target_source['items_path']);
+            } else {
+                $api_data = $raw_data;
+            }
+
+            // Saltar metadata de Inmovilla si existe
+            if (is_array($api_data) && isset($api_data[0]['total']) && !isset($api_data[0]['cod_ofer'])) {
+                array_shift($api_data);
+            }
+
+            // Si es un array, tomar el primer elemento
+            if (is_array($api_data) && isset($api_data[0])) {
+                $api_data = $api_data[0];
+            }
+
+            $data_array = (array) $api_data;
+
+            // Buscar el campo
+            if (isset($data_array[$field])) {
+                return $this->format_field_output($data_array[$field], $field);
+            }
+
+            // Intentar con notación de punto
+            $value = $this->get_value_by_dot_notation($data_array, $field);
+            if ($value !== '') {
+                return $this->format_field_output($value, $field);
+            }
+
+            return '';
+        } catch (Exception $e) {
+            return '';
+        }
     }
     
     /**
