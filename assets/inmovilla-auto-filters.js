@@ -18,6 +18,9 @@
      * Inicializar filtros automáticos
      */
     function initAutoFilters() {
+        // Primero, restaurar valores desde URL
+        restoreFilterValuesFromUrl();
+
         // Opción 1: Formularios con la clase inmovilla-filters-form
         const filterForms = document.querySelectorAll('.inmovilla-filters-form');
         if (filterForms.length > 0) {
@@ -30,6 +33,32 @@
         );
         if (filterInputs.length > 0) {
             filterInputs.forEach(attachInputListener);
+        }
+    }
+
+    /**
+     * Restaurar valores de filtros desde parámetros de URL
+     */
+    function restoreFilterValuesFromUrl() {
+        // Obtener parámetros de URL
+        const params = new URLSearchParams(window.location.search);
+
+        // Iterar sobre todos los parámetros
+        for (const [key, value] of params) {
+            // Buscar inputs/selects con este nombre
+            const inputs = document.querySelectorAll(`input[name="${key}"], select[name="${key}"]`);
+
+            inputs.forEach(input => {
+                // Establecer el valor
+                input.value = value;
+
+                // Actualizar el mapa de filtros activos
+                activeFilters.set(key, value);
+
+                // Disparar evento change para actualizar la UI
+                const event = new Event('change', { bubbles: true });
+                input.dispatchEvent(event);
+            });
         }
     }
 
