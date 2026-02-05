@@ -95,10 +95,24 @@ if (!function_exists('bricks_api_source_make_request')) {
             $texto = $agencia . ';' . $password . ';' . $idioma . ';' . $lostipos . ';' . $tipo . ';' . $pos . ';' . $num . ';' . $where . ';' . $orden;
 
             $dominio = $_SERVER['SERVER_NAME'] ?? '';
-            $ip = !empty($params['ip']) ? $params['ip'] : bricks_api_get_client_ip();
+
+            // IMPORTANTE: Para Inmovilla, usar la IP configurada en el endpoint
+            // Si no hay IP configurada, usar localhost que Inmovilla debería aceptar
+            $ip = '';
+            if (!empty($params['ip'])) {
+                $ip = $params['ip'];
+            } else {
+                // Usar localhost como fallback
+                $ip = '127.0.0.1';
+            }
+
+            // Validar que la IP sea válida, si no usar localhost
+            if (empty($ip) || !filter_var($ip, FILTER_VALIDATE_IP)) {
+                $ip = '127.0.0.1';
+            }
 
             // Configurar body y headers para Inmovilla
-            $args['body'] = 'param=' . rawurlencode($texto) . '&elDominio=' . urlencode($dominio) . '&ia=' . urlencode($ip) . '&json=1';
+            $args['body'] = 'param=' . rawurlencode($texto) . '&elDominio=' . urlencode($dominio) . '&ia=' . urlencode($ip) . '&ib=&json=1';
             $args['headers']['Content-Type'] = 'application/x-www-form-urlencoded';
             $args['headers']['User-Agent'] = 'Mozilla/5.0 (Windows; U; Windows NT 5.1; en-US; rv:1.8.1.3) Gecko/20070309 Firefox/2.0.0.3';
 

@@ -281,11 +281,24 @@ trait APIManager {
             $texto = $agencia . ';' . $password . ';' . $idioma . ';' . $lostipos . ';' . $tipo . ';' . $pos . ';' . $num . ';' . $where . ';' . $orden;
 
             $dominio = $_SERVER['SERVER_NAME'] ?? '';
-            // Usar IP del parámetro configurado, o detectar automáticamente
-            $ip = !empty($params['ip']) ? $params['ip'] : bricks_api_get_client_ip();
+
+            // IMPORTANTE: Para Inmovilla, usar la IP configurada en el endpoint
+            // Si no hay IP configurada, usar localhost que Inmovilla debería aceptar
+            $ip = '';
+            if (!empty($params['ip'])) {
+                $ip = $params['ip'];
+            } else {
+                // Usar localhost como fallback
+                $ip = '127.0.0.1';
+            }
+
+            // Validar que la IP sea válida, si no usar localhost
+            if (empty($ip) || !filter_var($ip, FILTER_VALIDATE_IP)) {
+                $ip = '127.0.0.1';
+            }
 
             // Body en formato x-www-form-urlencoded
-            $request_options['body'] = 'param=' . rawurlencode($texto) . '&elDominio=' . urlencode($dominio) . '&ia=' . urlencode($ip) . '&json=1';
+            $request_options['body'] = 'param=' . rawurlencode($texto) . '&elDominio=' . urlencode($dominio) . '&ia=' . urlencode($ip) . '&ib=&json=1';
             $request_options['headers']['Content-Type'] = 'application/x-www-form-urlencoded';
             $request_options['headers']['User-Agent'] = 'Mozilla/5.0 (Windows; U; Windows NT 5.1; en-US; rv:1.8.1.3) Gecko/20070309 Firefox/2.0.0.3';
             $processed_url = $base_url;
@@ -293,6 +306,8 @@ trait APIManager {
             if (defined('WP_DEBUG') && WP_DEBUG) {
                 error_log('INMOVILLA PARAM STRING: ' . $texto);
                 error_log('INMOVILLA URL FINAL: ' . $processed_url);
+                error_log('INMOVILLA BODY: ' . $request_options['body']);
+                error_log('INMOVILLA IP USADO: ' . $ip);
             }
         }
 

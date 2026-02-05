@@ -522,7 +522,7 @@ class Inmovilla_Query_Handler {
 
         // Realizar petición
         $url = $endpoint['url'];
-        $body = 'param=' . rawurlencode($texto) . '&elDominio=' . urlencode($dominio) . '&ia=' . urlencode($ip) . '&json=1';
+        $body = 'param=' . rawurlencode($texto) . '&elDominio=' . urlencode($dominio) . '&ia=' . urlencode($ip) . '&ib=&json=1';
 
         if (defined('WP_DEBUG') && WP_DEBUG) {
             error_log('INMOVILLA QUERY: param=' . $texto);
@@ -598,42 +598,13 @@ class Inmovilla_Query_Handler {
     }
 
     /**
-     * Obtener IP del cliente
+     * Obtener IP del cliente para Inmovilla
+     * IMPORTANTE: Retorna 127.0.0.1 como fallback para evitar errores de "NECESITAMOS RECIBIR LA IP"
      */
     private function get_client_ip() {
-        if (function_exists('bricks_api_get_client_ip')) {
-            return bricks_api_get_client_ip();
-        }
-
-        $proxy_headers = ['HTTP_CLIENT_IP', 'HTTP_X_FORWARDED_FOR', 'HTTP_CF_CONNECTING_IP'];
-        foreach ($proxy_headers as $key) {
-            if (!empty($_SERVER[$key])) {
-                $ips = explode(',', $_SERVER[$key]);
-                $ip = trim($ips[0]);
-                if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)) {
-                    return $ip;
-                }
-            }
-        }
-
-        $local_ip = $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1';
-
-        // Si es localhost, intentar obtener IP pública
-        if (in_array($local_ip, ['127.0.0.1', '::1'])) {
-            $cached = get_transient('bricks_api_public_ip');
-            if ($cached) return $cached;
-
-            $response = wp_remote_get('https://api.ipify.org', ['timeout' => 5, 'sslverify' => false]);
-            if (!is_wp_error($response)) {
-                $ip = trim(wp_remote_retrieve_body($response));
-                if (filter_var($ip, FILTER_VALIDATE_IP)) {
-                    set_transient('bricks_api_public_ip', $ip, HOUR_IN_SECONDS);
-                    return $ip;
-                }
-            }
-        }
-
-        return $local_ip;
+        // Para Inmovilla, siempre usar 127.0.0.1 como fallback por defecto
+        // Esto evita problemas con IPs no autorizadas o no detectadas correctamente
+        return '127.0.0.1';
     }
 }
 

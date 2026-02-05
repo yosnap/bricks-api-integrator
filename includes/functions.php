@@ -64,13 +64,19 @@ if (!function_exists('bricks_api_integrator_assets')) {
     function bricks_api_integrator_assets() {
         // Enqueue CSS
         wp_enqueue_style('bricks-api-integrator-style', BRICKS_API_INTEGRATOR_URL . 'assets/bricks-api-integrator.css');
-        
+
+        // Estilos para filtros automáticos de Inmovilla
+        wp_enqueue_style('inmovilla-filters-style', BRICKS_API_INTEGRATOR_URL . 'assets/inmovilla-filters.css');
+
         // Enqueue JavaScript
         wp_enqueue_script('bricks-api-integrator-script', BRICKS_API_INTEGRATOR_URL . 'assets/bricks-api-integrator.js', ['jquery'], null, true);
         
         // Script para probar items_path
         wp_enqueue_script('bricks-api-items-path-tester', BRICKS_API_INTEGRATOR_URL . 'assets/items-path-tester.js', ['jquery'], null, true);
-        
+
+        // Script para filtros automáticos de Inmovilla
+        wp_enqueue_script('inmovilla-auto-filters', BRICKS_API_INTEGRATOR_URL . 'assets/inmovilla-auto-filters.js', [], null, true);
+
         // Pasar variables al script principal
         wp_localize_script('bricks-api-integrator-script', 'bricks_api_integrator_vars', [
             'nonce' => wp_create_nonce('test_api_endpoint'),
@@ -376,3 +382,138 @@ if (!function_exists('handle_endpoint_management')) {
     }
 }
 add_action('admin_init', 'handle_endpoint_management');
+
+/**
+ * Generar información de debug para soporte de Inmovilla
+ * Accesible en: wp-admin/admin.php?page=bricks-api-integrator&debug_inmovilla=1
+ */
+if (!function_exists('inmovilla_debug_info')) {
+    function inmovilla_debug_info() {
+        if (!current_user_can('manage_options') || empty($_GET['debug_inmovilla'])) {
+            return;
+        }
+
+        // Obtener el endpoint de Inmovilla
+        $endpoints = get_option('bricks_api_endpoints', []);
+        $inmovilla_endpoint = null;
+
+        foreach ($endpoints as $endpoint) {
+            if (strpos($endpoint['url'] ?? '', 'apiweb.inmovilla.com') !== false) {
+                $inmovilla_endpoint = $endpoint;
+                break;
+            }
+        }
+
+        if (!$inmovilla_endpoint) {
+            wp_die('No se encontró endpoint de Inmovilla');
+        }
+
+        // Construir la llamada de ejemplo
+        $params = [];
+        if (!empty($inmovilla_endpoint['dynamic_params'])) {
+            foreach ($inmovilla_endpoint['dynamic_params'] as $param) {
+                if (!empty($param['default'])) {
+                    $params[$param['name']] = $param['default'];
+                }
+            }
+        }
+
+        $agencia = $params['agencia'] ?? '';
+        $password = $params['password'] ?? '';
+        $idioma = $params['idioma'] ?? '1';
+        $lostipos = $params['lostipos'] ?? 'lostipos';
+        $tipo = $params['tipo'] ?? 'paginacion';
+        $pos = $params['pos'] ?? '1';
+        $num = $params['num_elementos'] ?? '20';
+        $where = $params['where'] ?? '';
+        $orden = $params['orden'] ?? '';
+        $ip = $params['ip'] ?? '127.0.0.1';
+
+        $texto = $agencia . ';' . $password . ';' . $idioma . ';' . $lostipos . ';' . $tipo . ';' . $pos . ';' . $num . ';' . $where . ';' . $orden;
+        $dominio = $_SERVER['SERVER_NAME'] ?? '';
+
+        $body = 'param=' . rawurlencode($texto) . '&elDominio=' . urlencode($dominio) . '&ia=' . urlencode($ip) . '&ib=&json=1';
+
+        ?>
+        <div style="background: #f5f5f5; padding: 20px; margin: 20px 0; border-radius: 8px; border-left: 4px solid #2563eb;">
+            <h2>🔧 Información de Debug para Soporte Inmovilla</h2>
+            <p style="color: #666; margin-bottom: 20px;">Copia esta información y envíala a <strong>soporte@inmovilla.com</strong></p>
+
+            <h3>Llamada a la API</h3>
+            <div style="background: white; padding: 15px; border-radius: 4px; margin: 10px 0; border: 1px solid #ddd;">
+                <p><strong>URL:</strong></p>
+                <code style="display: block; padding: 10px; background: #f9f9f9; border-radius: 4px; word-wrap: break-word;"><?php echo esc_html($inmovilla_endpoint['url']); ?></code>
+
+                <p style="margin-top: 15px;"><strong>Método:</strong></p>
+                <code style="display: block; padding: 10px; background: #f9f9f9; border-radius: 4px;">POST</code>
+
+                <p style="margin-top: 15px;"><strong>Body (parámetros):</strong></p>
+                <code style="display: block; padding: 10px; background: #f9f9f9; border-radius: 4px; word-wrap: break-word; white-space: normal;">
+                    param=<?php echo esc_html(rawurlencode($texto)); ?>&elDominio=<?php echo esc_html(urlencode($dominio)); ?>&ia=<?php echo esc_html(urlencode($ip)); ?>&ib=&json=1
+                </code>
+
+                <p style="margin-top: 15px;"><strong>Desglose de parámetros:</strong></p>
+                <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+                    <tr style="background: #f0f0f0;">
+                        <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Parámetro</th>
+                        <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Valor</th>
+                    </tr>
+                    <tr>
+                        <td style="border: 1px solid #ddd; padding: 8px;">agencia</td>
+                        <td style="border: 1px solid #ddd; padding: 8px;"><code><?php echo esc_html($agencia); ?></code></td>
+                    </tr>
+                    <tr>
+                        <td style="border: 1px solid #ddd; padding: 8px;">password</td>
+                        <td style="border: 1px solid #ddd; padding: 8px;"><code><?php echo esc_html($password); ?></code></td>
+                    </tr>
+                    <tr>
+                        <td style="border: 1px solid #ddd; padding: 8px;">idioma</td>
+                        <td style="border: 1px solid #ddd; padding: 8px;"><code><?php echo esc_html($idioma); ?></code></td>
+                    </tr>
+                    <tr>
+                        <td style="border: 1px solid #ddd; padding: 8px;">tipo</td>
+                        <td style="border: 1px solid #ddd; padding: 8px;"><code><?php echo esc_html($tipo); ?></code></td>
+                    </tr>
+                    <tr>
+                        <td style="border: 1px solid #ddd; padding: 8px;">IP (ia)</td>
+                        <td style="border: 1px solid #ddd; padding: 8px;"><code><?php echo esc_html($ip); ?></code></td>
+                    </tr>
+                    <tr>
+                        <td style="border: 1px solid #ddd; padding: 8px;">dominio (elDominio)</td>
+                        <td style="border: 1px solid #ddd; padding: 8px;"><code><?php echo esc_html($dominio); ?></code></td>
+                    </tr>
+                </table>
+            </div>
+
+            <h3>Información del Servidor</h3>
+            <table style="width: 100%; border-collapse: collapse; font-size: 13px; background: white; border: 1px solid #ddd; border-radius: 4px;">
+                <tr style="background: #f0f0f0;">
+                    <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Propiedad</th>
+                    <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Valor</th>
+                </tr>
+                <tr>
+                    <td style="border: 1px solid #ddd; padding: 8px;">Servidor</td>
+                    <td style="border: 1px solid #ddd; padding: 8px;"><code><?php echo esc_html($dominio); ?></code></td>
+                </tr>
+                <tr>
+                    <td style="border: 1px solid #ddd; padding: 8px;">IP del Servidor</td>
+                    <td style="border: 1px solid #ddd; padding: 8px;"><code><?php echo esc_html($ip); ?></code></td>
+                </tr>
+                <tr>
+                    <td style="border: 1px solid #ddd; padding: 8px;">WordPress Version</td>
+                    <td style="border: 1px solid #ddd; padding: 8px;"><code><?php echo esc_html(get_bloginfo('version')); ?></code></td>
+                </tr>
+                <tr>
+                    <td style="border: 1px solid #ddd; padding: 8px;">Plugin Version</td>
+                    <td style="border: 1px solid #ddd; padding: 8px;"><code>2.1.1</code></td>
+                </tr>
+            </table>
+
+            <p style="margin-top: 20px; color: #888; font-size: 12px;">
+                <strong>Instrucciones:</strong> Copia toda la información de "Llamada a la API" y envíala a soporte@inmovilla.com explicando que necesitas autorizar tu IP para esta agencia.
+            </p>
+        </div>
+        <?php
+    }
+}
+add_action('admin_notices', 'inmovilla_debug_info');

@@ -176,7 +176,10 @@ class BricksAPIIntegrator {
         add_action('admin_menu', [$this, 'add_admin_menu']);
         add_action('admin_init', [$this, 'register_settings']);
         add_action('admin_enqueue_scripts', [$this, 'enqueue_admin_scripts']);
-        
+
+        // Frontend hooks
+        add_action('wp_enqueue_scripts', 'bricks_api_integrator_assets');
+
         // AJAX hooks
         add_action('wp_ajax_test_api_endpoint', [$this, 'ajax_test_api_endpoint']);
         add_action('wp_ajax_test_advanced_api_endpoint', [$this, 'ajax_test_advanced_api_endpoint']);

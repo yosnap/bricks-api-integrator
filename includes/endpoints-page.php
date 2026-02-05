@@ -1477,11 +1477,24 @@ add_action('wp_ajax_test_api_endpoint', function() {
         $texto = $agencia . ';' . $password . ';' . $idioma . ';' . $lostipos . ';' . $tipo . ';' . $pos . ';' . $num . ';' . $where . ';' . $orden;
 
         $dominio = $_SERVER['SERVER_NAME'] ?? '';
-        // Usar IP del parámetro configurado, o detectar automáticamente
-        $ip = !empty($params['ip']) ? $params['ip'] : bricks_api_get_client_ip();
+
+        // IMPORTANTE: Para Inmovilla, usar la IP configurada en el endpoint
+        // Si no hay IP configurada, usar localhost que Inmovilla debería aceptar
+        $ip = '';
+        if (!empty($params['ip'])) {
+            $ip = $params['ip'];
+        } else {
+            // Usar localhost como fallback
+            $ip = '127.0.0.1';
+        }
+
+        // Validar que la IP sea válida, si no usar localhost
+        if (empty($ip) || !filter_var($ip, FILTER_VALIDATE_IP)) {
+            $ip = '127.0.0.1';
+        }
 
         // Body en formato x-www-form-urlencoded
-        $args['body'] = 'param=' . rawurlencode($texto) . '&elDominio=' . urlencode($dominio) . '&ia=' . urlencode($ip) . '&json=1';
+        $args['body'] = 'param=' . rawurlencode($texto) . '&elDominio=' . urlencode($dominio) . '&ia=' . urlencode($ip) . '&ib=&json=1';
         $args['headers']['Content-Type'] = 'application/x-www-form-urlencoded';
         $args['headers']['Accept'] = 'application/json';
         $args['headers']['User-Agent'] = 'Mozilla/5.0 (Windows; U; Windows NT 5.1; en-US; rv:1.8.1.3) Gecko/20070309 Firefox/2.0.0.3';
@@ -1502,6 +1515,22 @@ add_action('wp_ajax_test_api_endpoint', function() {
     $code = wp_remote_retrieve_response_code($response);
     $body = wp_remote_retrieve_body($response);
     $html = '<div><strong>HTTP ' . esc_html($code) . '</strong></div>';
+
+    // AGREGAR INFORMACIÓN DE DEBUG PARA INMOVILLA
+    if (strpos($url, 'apiweb.inmovilla.com') !== false) {
+        $html .= '<div style="background: #fff3cd; padding: 12px; margin-top: 12px; border-radius: 4px; border-left: 4px solid #ffc107;">';
+        $html .= '<strong style="color: #856404;">📋 Información para Soporte Inmovilla:</strong>';
+        $html .= '<pre style="margin: 8px 0; background: white; padding: 8px; border-radius: 4px; font-size: 12px; overflow-x: auto;">';
+        $html .= '<strong>URL:</strong> ' . esc_html($url) . "\n";
+        $html .= '<strong>Método:</strong> ' . esc_html($method) . "\n";
+        if ($method === 'POST' && !empty($args['body'])) {
+            $html .= '<strong>Body:</strong> ' . esc_html($args['body']) . "\n";
+        }
+        $html .= '<strong>Respuesta (Raw):</strong> ' . esc_html(substr($body, 0, 500)) . (strlen($body) > 500 ? '...' : '') . "\n";
+        $html .= '</pre>';
+        $html .= '<p style="font-size: 12px; color: #856404; margin: 8px 0;">Copia esta información y envíala a <strong>soporte@inmovilla.com</strong> explicando el error que recibes.</p>';
+        $html .= '</div>';
+    }
     if ($code >= 200 && $code < 300) {
         $data = json_decode($body, true);
         if (json_last_error() === JSON_ERROR_NONE) {
@@ -1588,10 +1617,23 @@ add_action('wp_ajax_generate_tags_for_endpoint', function() {
 
             $texto = $agencia . ';' . $password . ';' . $idioma . ';' . $lostipos . ';' . $tipo . ';' . $pos . ';' . $num . ';' . $where . ';' . $orden;
             $dominio = $_SERVER['SERVER_NAME'] ?? '';
-            // Usar IP del parámetro configurado, o detectar automáticamente
-            $ip = !empty($params['ip']) ? $params['ip'] : bricks_api_get_client_ip();
 
-            $args['body'] = 'param=' . rawurlencode($texto) . '&elDominio=' . urlencode($dominio) . '&ia=' . urlencode($ip) . '&json=1';
+            // IMPORTANTE: Para Inmovilla, usar la IP configurada en el endpoint
+            // Si no hay IP configurada, usar localhost que Inmovilla debería aceptar
+            $ip = '';
+            if (!empty($params['ip'])) {
+                $ip = $params['ip'];
+            } else {
+                // Usar localhost como fallback
+                $ip = '127.0.0.1';
+            }
+
+            // Validar que la IP sea válida, si no usar localhost
+            if (empty($ip) || !filter_var($ip, FILTER_VALIDATE_IP)) {
+                $ip = '127.0.0.1';
+            }
+
+            $args['body'] = 'param=' . rawurlencode($texto) . '&elDominio=' . urlencode($dominio) . '&ia=' . urlencode($ip) . '&ib=&json=1';
             $args['headers']['Content-Type'] = 'application/x-www-form-urlencoded';
             $args['headers']['Accept'] = 'application/json';
             $args['headers']['User-Agent'] = 'Mozilla/5.0 (Windows; U; Windows NT 5.1; en-US; rv:1.8.1.3) Gecko/20070309 Firefox/2.0.0.3';

@@ -1,0 +1,133 @@
+/**
+ * Estilos para Filtros Automáticos de Inmovilla
+ * @version 1.0
+ */
+
+/* Indicador de carga en los filtros */
+.inmovilla-filters-form.inmovilla-loading {
+    pointer-events: none;
+}
+
+.inmovilla-filters-form.inmovilla-loading .inmovilla-filters-wrapper {
+    position: relative;
+}
+
+.inmovilla-filters-form.inmovilla-loading .inmovilla-filters-wrapper::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(255, 255, 255, 0.5);
+    border-radius: 4px;
+    z-index: 10;
+}
+
+/* Spinner de carga */
+.inmovilla-filters-wrapper.inmovilla-loading::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 24px;
+    height: 24px;
+    border: 3px solid rgba(0, 0, 0, 0.1);
+    border-top-color: #2563eb;
+    border-radius: 50%;
+    animation: inmovilla-spin 0.8s linear infinite;
+    z-index: 11;
+}
+
+@keyframes inmovilla-spin {
+    to {
+        transform: translate(-50%, -50%) rotate(360deg);
+    }
+}
+
+/* Transiciones suaves para inputs */
+.inmovilla-filters-form input,
+.inmovilla-filters-form select,
+.inmovilla-filters-form textarea {
+    transition: all 0.3s ease;
+}
+
+.inmovilla-filters-form input:focus,
+.inmovilla-filters-form select:focus,
+.inmovilla-filters-form textarea:focus {
+    transition: all 0.2s ease;
+}
+
+/* Estilo de botones */
+.inmovilla-btn {
+    transition: all 0.3s ease;
+}
+
+.inmovilla-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.inmovilla-btn:active {
+    transform: translateY(0);
+}
+
+/* Clase para desabilitar temporalmente inputs durante la carga */
+.inmovilla-filters-form.inmovilla-loading input,
+.inmovilla-filters-form.inmovilla-loading select,
+.inmovilla-filters-form.inmovilla-loading textarea {
+    opacity: 0.6;
+    cursor: wait;
+}
+
+/* Separador visual para filtros */
+.inmovilla-filter-group {
+    transition: all 0.3s ease;
+}
+
+.inmovilla-filter-group:hover {
+    background-color: rgba(37, 99, 235, 0.02);
+}
+
+/* Estilos para los contadores/badges */
+.inmovilla-filter-count,
+.inmovilla-counter {
+    display: inline-block;
+    background-color: #2563eb;
+    color: white;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 600;
+    margin-left: 4px;
+    animation: inmovilla-pulse 0.5s ease-in-out;
+}
+
+@keyframes inmovilla-pulse {
+    0%, 100% {
+        transform: scale(1);
+    }
+    50% {
+        transform: scale(1.1);
+    }
+}
+
+/* Feedback visual cuando se cambian filtros */
+.inmovilla-filters-form.inmovilla-filters-changed {
+    border-left: 3px solid #10b981;
+}
+
+/* Resultado de búsqueda vacío */
+.inmovilla-no-results {
+    padding: 40px 20px;
+    text-align: center;
+    color: #666;
+}
+
+.inmovilla-no-results svg {
+    width: 48px;
+    height: 48px;
+    margin-bottom: 16px;
+    opacity: 0.5;
+}
