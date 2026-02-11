@@ -1,0 +1,124 @@
+/**
+ * Fix para visibilidad de selects en filtros de Inmovilla
+ * Asegura que los selects muestren opciones visibles
+ * @version 1.0
+ */
+
+/* Estilos básicos para selects */
+select {
+    position: relative;
+    display: inline-block;
+    vertical-align: middle;
+    overflow: visible;
+    line-height: inherit;
+    font-family: inherit;
+    font-size: inherit;
+}
+
+/* Asegurar que los selects sean clickeables y sus opciones visibles */
+.inmovilla-filter-select select,
+.inmovilla-order-select select {
+    appearance: menulist !important;
+    -webkit-appearance: menulist !important;
+    -moz-appearance: menulist !important;
+    cursor: pointer;
+    overflow: visible;
+    z-index: 1000;
+}
+
+/* Asegurar que la opciones sean visibles */
+.inmovilla-filter-select select option,
+.inmovilla-order-select select option {
+    padding: 4px 8px;
+    background-color: white;
+    color: #333;
+    display: block;
+    overflow: visible;
+}
+
+/* Estilos específicos para template modern */
+.inmovilla-template-modern select {
+    appearance: menulist !important;
+    -webkit-appearance: menulist !important;
+    -moz-appearance: menulist !important;
+    background: white !important;
+    color: var(--inmovilla-text) !important;
+    cursor: pointer;
+}
+
+.inmovilla-template-modern select option {
+    background-color: white;
+    color: var(--inmovilla-text);
+    padding: 4px 8px;
+}
+
+.inmovilla-template-modern select:focus {
+    outline: 1px solid var(--t-primary);
+}
+
+/* Estilos específicos para template classic */
+.inmovilla-template-classic select {
+    appearance: menulist !important;
+    -webkit-appearance: menulist !important;
+    -moz-appearance: menulist !important;
+    background: white !important;
+    color: #333 !important;
+    cursor: pointer;
+}
+
+.inmovilla-template-classic select option {
+    background-color: white;
+    color: #333;
+    padding: 4px 8px;
+}
+
+.inmovilla-template-classic select:focus {
+    outline: 1px solid #333;
+}
+
+/* Estilos específicos para template minimal */
+.inmovilla-template-minimal select {
+    appearance: menulist !important;
+    -webkit-appearance: menulist !important;
+    -moz-appearance: menulist !important;
+    background: white !important;
+    color: #18181b !important;
+    cursor: pointer;
+    border-bottom: 1px solid #e4e4e7 !important;
+}
+
+.inmovilla-template-minimal select option {
+    background-color: white;
+    color: #18181b;
+    padding: 4px 8px;
+}
+
+.inmovilla-template-minimal select:focus {
+    outline: 1px solid #18181b;
+}
+
+/* Prevenir que los selectsea afectados por estilos conflictivos */
+select {
+    box-sizing: border-box;
+}
+
+/* Asegurar que el select dropdown sea visible sobre otros elementos */
+select {
+    z-index: auto !important;
+    position: relative !important;
+}
+
+/* Sobreescribir cualquier estilos que oculte opciones */
+select option {
+    display: list-item;
+    white-space: pre;
+    padding: 4px 8px;
+}
+
+/* Compatibility con navegadores Firefox */
+@-moz-document url-prefix() {
+    select {
+        appearance: menulist !important;
+        background-image: none !important;
+    }
+}

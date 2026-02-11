@@ -248,19 +248,41 @@ add_shortcode('inmovilla_filter_select', function($atts) {
     }
 
     $output .= '<select id="inmovilla-filter-' . esc_attr($atts['field']) . '" name="' . esc_attr($atts['field']) . '" onchange="inmovilla_apply_filter(this)">';
-    $output .= '<option value="">' . esc_html($atts['placeholder']) . '</option>';
 
-    $options = [];
-    if (!empty($field_config['options'])) {
-        $options = $field_config['options'];
-    } elseif (!empty($atts['source']) || !empty($field_config['source_type'])) {
-        $source_type = !empty($atts['source']) ? $atts['source'] : $field_config['source_type'];
-        $options = inmovilla_get_filter_options($source_type);
+    // Determinar el source_type
+    $source_type = '';
+    if (!empty($atts['source'])) {
+        $source_type = $atts['source'];
+    } elseif (!empty($field_config['source_type'])) {
+        $source_type = $field_config['source_type'];
     }
 
-    foreach ($options as $value => $text) {
-        $selected = ((string)$current_value === (string)$value) ? ' selected' : '';
-        $output .= '<option value="' . esc_attr($value) . '"' . $selected . '>' . esc_html($text) . '</option>';
+    // Para zonas: requiere ciudad seleccionada
+    if ($source_type === 'zonas' && empty($_GET['key_loca'])) {
+        $output .= '<option value="">-- Selecciona ciudad primero --</option>';
+    } else {
+        $output .= '<option value="">' . esc_html($atts['placeholder']) . '</option>';
+
+        $options = [];
+
+        if (!empty($field_config['options'])) {
+            $options = $field_config['options'];
+        } elseif (!empty($source_type)) {
+            $filter_params = [];
+            if ($source_type === 'zonas' && !empty($_GET['key_loca'])) {
+                $filter_params['cod_ciu'] = sanitize_text_field($_GET['key_loca']);
+            }
+            $options = inmovilla_get_filter_options($source_type, $filter_params);
+        }
+
+        if (defined('WP_DEBUG') && WP_DEBUG && !empty($source_type)) {
+            error_log('INMOVILLA SELECT: field=' . $atts['field'] . ' | source_type=' . $source_type . ' | opciones=' . count($options));
+        }
+
+        foreach ($options as $value => $text) {
+            $selected = ((string)$current_value === (string)$value) ? ' selected' : '';
+            $output .= '<option value="' . esc_attr($value) . '"' . $selected . '>' . esc_html($text) . '</option>';
+        }
     }
 
     $output .= '</select></div>';
@@ -339,7 +361,27 @@ add_shortcode('inmovilla_filters_form', function($atts, $content = null) {
     if ($atts['show_submit'] === 'true' || $atts['show_clear'] === 'true') {
         $output .= '<div class="inmovilla-filters-actions">';
         if ($atts['show_submit'] === 'true') {
-            $output .= '<button type="submit" class="inmovilla-btn inmovilla-btn-primary">' . esc_html($atts['submit_text']) . '</button>';
+            $ui_cfg = function_exists('inmovilla_get_ui_options') ? inmovilla_get_ui_options() : [];
+            $btn_bg = !empty($ui_cfg['primary_color']) ? $ui_cfg['primary_color'] : '#2563eb';
+            $btn_hover = !empty($ui_cfg['primary_hover_color']) ? $ui_cfg['primary_hover_color'] : '#1d4ed8';
+            $btn_radius = (!empty($ui_cfg['border_radius']) ? $ui_cfg['border_radius'] : 8) . 'px';
+            $btn_text_color = '#ffffff';
+
+            $output .= '<button type="submit" class="inmovilla-btn inmovilla-btn-primary" style="'
+                . 'background-color:' . esc_attr($btn_bg) . ' !important;'
+                . 'color:' . esc_attr($btn_text_color) . ' !important;'
+                . 'font-size:14px !important;'
+                . 'font-weight:600 !important;'
+                . 'padding:12px 24px !important;'
+                . 'border:none !important;'
+                . 'border-radius:' . esc_attr($btn_radius) . ' !important;'
+                . 'cursor:pointer !important;'
+                . 'line-height:1.4 !important;'
+                . 'display:inline-block !important;'
+                . 'text-align:center !important;'
+                . 'opacity:1 !important;'
+                . 'visibility:visible !important;'
+                . '">' . esc_html($atts['submit_text']) . '</button>';
         }
         if ($atts['show_clear'] === 'true') {
             $base_url = strtok($_SERVER['REQUEST_URI'], '?');
@@ -372,13 +414,28 @@ add_shortcode('inmovilla_clear_filters', function($atts) {
 
 /**
  * Obtener opciones de filtro desde la API
+ * Para zonas, necesita cod_ciu como parámetro
  */
-function inmovilla_get_filter_options($source_type) {
-    $cache_key = 'inmovilla_filter_options_' . $source_type;
-    $cached = get_transient($cache_key);
+function inmovilla_get_filter_options($source_type, $filter_params = []) {
+    // Crear cache key con parámetros si existen
+    $cache_suffix = '';
+    if ($source_type === 'zonas') {
+        $cod_ciu = $filter_params['cod_ciu'] ?? sanitize_text_field($_GET['key_loca'] ?? '');
+        if (!empty($cod_ciu)) {
+            $cache_suffix = '_' . $cod_ciu;
+        }
+    }
 
-    if ($cached !== false) {
+    $cache_key = 'inmovilla_filter_options_' . $source_type . $cache_suffix;
+    // Solo usar cache si tiene datos (no cachear arrays vacíos)
+    $cached = get_transient($cache_key);
+    if ($cached !== false && !empty($cached)) {
         return $cached;
+    }
+
+    // Borrar transient vacío si existe
+    if ($cached !== false && empty($cached)) {
+        delete_transient($cache_key);
     }
 
     $options = [];
@@ -389,8 +446,28 @@ function inmovilla_get_filter_options($source_type) {
         return $options;
     }
 
+    // Para zonas con cod_ciu, pasar en el where
+    $query_args = ['per_page' => 1000, 'skip_url_filters' => true];
+    if ($source_type === 'zonas' && !empty($cod_ciu)) {
+        $query_args['where'] = 'cod_ciu=' . $cod_ciu;
+    }
+
+    // Asegurar que el source tenga el campo 'tipo' correcto
+    if (empty($sources[$source_key]['tipo'])) {
+        $sources[$source_key]['tipo'] = $source_type;
+    }
+
     $handler = Inmovilla_Query_Handler::get_instance();
-    $result = $handler->execute_query($sources[$source_key], ['per_page' => 1000]);
+    $result = $handler->execute_query($sources[$source_key], $query_args);
+
+    if (defined('WP_DEBUG') && WP_DEBUG) {
+        error_log('INMOVILLA FILTER_OPTIONS: source_type=' . $source_type . ' | items=' . count($result['items'] ?? []) . ' | error=' . ($result['error'] ?? 'ninguno'));
+        // Log del primer item para diagnóstico de campos
+        if (!empty($result['items'][0])) {
+            $first = (array) $result['items'][0];
+            error_log('INMOVILLA FILTER_OPTIONS: primer_item_campos=' . implode(',', array_keys($first)));
+        }
+    }
 
     if (empty($result['error']) && !empty($result['items'])) {
         foreach ($result['items'] as $item) {
@@ -415,7 +492,14 @@ function inmovilla_get_filter_options($source_type) {
         }
     }
 
-    set_transient($cache_key, $options, HOUR_IN_SECONDS);
+    if (defined('WP_DEBUG') && WP_DEBUG) {
+        error_log('INMOVILLA FILTER_OPTIONS: resultado_final=' . count($options) . ' opciones | keys=' . implode(',', array_keys($options)));
+    }
+
+    // Solo cachear si hay resultados
+    if (!empty($options)) {
+        set_transient($cache_key, $options, HOUR_IN_SECONDS);
+    }
     return $options;
 }
 
@@ -512,6 +596,15 @@ function inmovilla_get_element_styles() {
         border-radius: var(--t-radius);
         font-size: 13px;
         background: #fff;
+        color: #333;
+    }
+
+    .inmovilla-template-classic select {
+        appearance: none;
+        -webkit-appearance: none;
+        -moz-appearance: none;
+        padding-right: 30px;
+        cursor: pointer;
     }
 
     .inmovilla-template-classic label {
@@ -598,8 +691,17 @@ function inmovilla_get_element_styles() {
         border-radius: var(--t-radius);
         font-size: 14px;
         background: var(--inmovilla-bg);
+        color: var(--inmovilla-text);
         transition: var(--inmovilla-transition);
         box-shadow: var(--inmovilla-shadow);
+    }
+
+    .inmovilla-template-modern select {
+        appearance: none;
+        -webkit-appearance: none;
+        -moz-appearance: none;
+        padding-right: 40px;
+        cursor: pointer;
     }
 
     .inmovilla-template-modern select:focus,
@@ -789,15 +891,28 @@ function inmovilla_get_element_styles() {
         cursor: pointer;
         text-decoration: none;
         transition: var(--inmovilla-transition);
+        line-height: 1.4;
     }
 
+    .inmovilla-filters-form .inmovilla-btn-primary,
+    button.inmovilla-btn-primary,
     .inmovilla-btn-primary {
-        background: var(--inmovilla-primary);
-        color: #fff;
+        background-color: var(--inmovilla-primary, #2563eb) !important;
+        color: #fff !important;
+        font-size: 14px !important;
+        font-weight: 600 !important;
+        opacity: 1 !important;
+        visibility: visible !important;
+        -webkit-appearance: none;
+        -moz-appearance: none;
+        appearance: none;
     }
 
+    .inmovilla-filters-form .inmovilla-btn-primary:hover,
+    button.inmovilla-btn-primary:hover,
     .inmovilla-btn-primary:hover {
-        background: var(--inmovilla-primary-hover);
+        background-color: var(--inmovilla-primary-hover, #1d4ed8) !important;
+        color: #fff !important;
     }
 
     .inmovilla-btn-secondary {
@@ -850,6 +965,33 @@ function inmovilla_get_element_styles() {
 }
 
 /**
+ * Endpoint AJAX para cargar zonas dinámicamente cuando cambia la ciudad
+ */
+add_action('wp_ajax_nopriv_inmovilla_get_zones', function() {
+    $cod_ciu = isset($_GET['cod_ciu']) ? sanitize_text_field($_GET['cod_ciu']) : '';
+
+    if (empty($cod_ciu)) {
+        wp_send_json_error(['message' => 'Código de ciudad requerido']);
+    }
+
+    $options = inmovilla_get_filter_options('zonas', ['cod_ciu' => $cod_ciu]);
+
+    wp_send_json_success(['options' => $options]);
+});
+
+add_action('wp_ajax_inmovilla_get_zones', function() {
+    $cod_ciu = isset($_GET['cod_ciu']) ? sanitize_text_field($_GET['cod_ciu']) : '';
+
+    if (empty($cod_ciu)) {
+        wp_send_json_error(['message' => 'Código de ciudad requerido']);
+    }
+
+    $options = inmovilla_get_filter_options('zonas', ['cod_ciu' => $cod_ciu]);
+
+    wp_send_json_success(['options' => $options]);
+});
+
+/**
  * Registrar estilos CSS de los templates
  */
 add_action('wp_head', function() {
@@ -863,13 +1005,43 @@ add_action('wp_footer', function() {
     ?>
     <script id="inmovilla-elements-scripts">
     function inmovilla_apply_filter(element) {
+        var form = element.closest('.inmovilla-filters-form');
+
+        // Si es la ciudad (key_loca), recargar opciones de zonas siempre
+        if (element.name === 'key_loca') {
+            inmovilla_reload_zone_options(element.value);
+        }
+
+        // Si está dentro de un formulario, solo marcar como changed
+        if (form) {
+            form.classList.add('inmovilla-filters-changed');
+            return false;
+        }
+
+        // Si no está en formulario (filtro independiente), aplicar inmediatamente
         var url = new URL(window.location.href);
         var name = element.name;
         var value = element.value;
 
-        // Reset página al filtrar
-        url.searchParams.delete('paged');
+        // Si es ciudad y hay filtro de zona, no recargar todavía
+        // (el usuario primero seleccionará la zona)
+        if (element.name === 'key_loca') {
+            var zoneSelect = document.querySelector('select[name="key_zona"]');
+            if (zoneSelect) {
+                // Actualizar la URL sin recargar, para que cuando seleccione zona se incluya la ciudad
+                url.searchParams.delete('paged');
+                url.searchParams.delete('key_zona');
+                if (value) {
+                    url.searchParams.set(name, value);
+                } else {
+                    url.searchParams.delete(name);
+                }
+                window.history.replaceState({}, '', url.toString());
+                return;
+            }
+        }
 
+        url.searchParams.delete('paged');
         if (value) {
             url.searchParams.set(name, value);
         } else {
@@ -879,7 +1051,51 @@ add_action('wp_footer', function() {
         window.location.href = url.toString();
     }
 
-    // Submit form sin recargar con enter en inputs
+    // Recargar opciones de zonas cuando cambia la ciudad
+    function inmovilla_reload_zone_options(cod_ciu) {
+        var zoneSelect = document.querySelector('select[name="key_zona"]');
+        if (!zoneSelect) return;
+
+        if (!cod_ciu) {
+            // Si no hay ciudad, limpiar zonas
+            zoneSelect.innerHTML = '<option value="">-- Selecciona ciudad primero --</option>';
+            return;
+        }
+
+        // Mostrar estado de carga
+        zoneSelect.innerHTML = '<option value="">Cargando zonas...</option>';
+
+        // Usar endpoint AJAX de WordPress
+        var ajaxUrl = '<?php echo admin_url("admin-ajax.php"); ?>';
+        var xhr = new XMLHttpRequest();
+        xhr.open('GET', ajaxUrl + '?action=inmovilla_get_zones&cod_ciu=' + encodeURIComponent(cod_ciu), true);
+        xhr.onload = function() {
+            if (xhr.status === 200) {
+                try {
+                    var response = JSON.parse(xhr.responseText);
+                    if (response.success && response.data && response.data.options) {
+                        var html = '<option value="">-- Selecciona zona --</option>';
+                        var options = response.data.options;
+                        for (var value in options) {
+                            html += '<option value="' + value + '">' + options[value] + '</option>';
+                        }
+                        zoneSelect.innerHTML = html;
+                    } else {
+                        zoneSelect.innerHTML = '<option value="">No hay zonas disponibles</option>';
+                    }
+                } catch(e) {
+                    console.error('Error al cargar zonas:', e);
+                    zoneSelect.innerHTML = '<option value="">Error al cargar zonas</option>';
+                }
+            }
+        };
+        xhr.onerror = function() {
+            zoneSelect.innerHTML = '<option value="">Error de conexión</option>';
+        };
+        xhr.send();
+    }
+
+    // Manejar submit del formulario
     document.querySelectorAll('.inmovilla-filters-form').forEach(function(form) {
         form.addEventListener('submit', function(e) {
             e.preventDefault();

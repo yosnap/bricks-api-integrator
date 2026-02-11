@@ -303,12 +303,6 @@ trait APIManager {
             $request_options['headers']['User-Agent'] = 'Mozilla/5.0 (Windows; U; Windows NT 5.1; en-US; rv:1.8.1.3) Gecko/20070309 Firefox/2.0.0.3';
             $processed_url = $base_url;
 
-            if (defined('WP_DEBUG') && WP_DEBUG) {
-                error_log('INMOVILLA PARAM STRING: ' . $texto);
-                error_log('INMOVILLA URL FINAL: ' . $processed_url);
-                error_log('INMOVILLA BODY: ' . $request_options['body']);
-                error_log('INMOVILLA IP USADO: ' . $ip);
-            }
         }
 
         // Realizar petición según el método
@@ -334,12 +328,8 @@ trait APIManager {
         
         // Obtener y procesar el cuerpo de la respuesta
         $body = wp_remote_retrieve_body($response);
-        // Log del body crudo de la API
-        error_log('DEBUG API RAW BODY: ' . $body);
         // Intentar decodificar como JSON
         $data = json_decode($body, true);
-        // Log del array $data justo después de decodificar el JSON
-        error_log('DEBUG API RAW DATA: ' . print_r($data, true));
         
         if (json_last_error() !== JSON_ERROR_NONE) {
             return [];
@@ -499,10 +489,6 @@ trait APIManager {
         if (!empty($final_params)) {
             $query = http_build_query($final_params);
             $base .= '?' . $query;
-        }
-        
-        if (defined('WP_DEBUG') && WP_DEBUG) {
-            error_log('BRICKS API DEBUG: URL construida: ' . $base);
         }
         
         return $base;

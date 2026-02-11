@@ -27,17 +27,24 @@
             filterForms.forEach(attachFormListeners);
         }
 
-        // Opción 2: Selects/inputs individuales con clase inmovilla-filter-select o inmovilla-filter-input
+        // Opción 2: Selects/inputs individuales que NO tengan onchange inline
+        // (los shortcodes de Inmovilla ya tienen su propio onchange via inmovilla_apply_filter)
         const filterInputs = document.querySelectorAll(
-            '.inmovilla-filter-select, .inmovilla-filter-input, input[name^="key_"], select[name^="key_"]'
+            'input[name^="key_"], select[name^="key_"]'
         );
         if (filterInputs.length > 0) {
-            filterInputs.forEach(attachInputListener);
+            filterInputs.forEach(function(input) {
+                // No añadir listener si ya tiene onchange inline (manejado por inmovilla_apply_filter)
+                if (!input.getAttribute('onchange')) {
+                    attachInputListener(input);
+                }
+            });
         }
     }
 
     /**
      * Restaurar valores de filtros desde parámetros de URL
+     * NO dispara eventos change para evitar loops infinitos
      */
     function restoreFilterValuesFromUrl() {
         // Obtener parámetros de URL
@@ -49,15 +56,13 @@
             const inputs = document.querySelectorAll(`input[name="${key}"], select[name="${key}"]`);
 
             inputs.forEach(input => {
-                // Establecer el valor
+                // Establecer el valor sin disparar eventos
                 input.value = value;
 
                 // Actualizar el mapa de filtros activos
                 activeFilters.set(key, value);
 
-                // Disparar evento change para actualizar la UI
-                const event = new Event('change', { bubbles: true });
-                input.dispatchEvent(event);
+                // NO disparar evento change - esto causaba loop infinito
             });
         }
     }

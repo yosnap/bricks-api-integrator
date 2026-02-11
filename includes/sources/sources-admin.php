@@ -417,13 +417,6 @@ function save_api_source() {
         $param_sources = isset($_POST['param_sources']) ? array_map('sanitize_text_field', $_POST['param_sources']) : [];
         $param_defaults = isset($_POST['param_defaults']) ? array_map('sanitize_text_field', $_POST['param_defaults']) : [];
 
-        // Debug log para verificar qué se recibe
-        if (defined('WP_DEBUG') && WP_DEBUG) {
-            error_log('SAVE SOURCE - param_names: ' . print_r($param_names, true));
-            error_log('SAVE SOURCE - param_sources: ' . print_r($param_sources, true));
-            error_log('SAVE SOURCE - param_defaults: ' . print_r($param_defaults, true));
-        }
-
         foreach ($param_names as $index => $name) {
             if (!empty($name)) {
                 $dynamic_params[] = [
@@ -434,9 +427,6 @@ function save_api_source() {
             }
         }
 
-        if (defined('WP_DEBUG') && WP_DEBUG) {
-            error_log('SAVE SOURCE - dynamic_params final: ' . print_r($dynamic_params, true));
-        }
     }
     // Obtener sources existentes
     $api_sources = get_option('bricks_api_sources', []);

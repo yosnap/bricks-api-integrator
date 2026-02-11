@@ -42,10 +42,6 @@ class Inmovilla_Query_State {
             $data
         );
         self::$current_query_id = $query_id;
-
-        if (defined('WP_DEBUG') && WP_DEBUG) {
-            error_log('INMOVILLA_QUERY_STATE: Guardado estado para ' . $query_id . ' - ' . print_r($data, true));
-        }
     }
 
     /**
@@ -203,9 +199,6 @@ add_filter('bricks/query/result_count', function($count, $query) {
     $total = Inmovilla_Query_State::get_total($query_id);
 
     if ($total > 0) {
-        if (defined('WP_DEBUG') && WP_DEBUG) {
-            error_log('INMOVILLA PAGINATION: result_count devolviendo ' . $total . ' para query_id=' . $query_id);
-        }
         return $total;
     }
 
@@ -229,9 +222,6 @@ add_filter('bricks/query/result_max_num_pages', function($max_pages, $query) {
     $pages = Inmovilla_Query_State::get_max_pages($query_id);
 
     if ($pages > 0) {
-        if (defined('WP_DEBUG') && WP_DEBUG) {
-            error_log('INMOVILLA PAGINATION: result_max_num_pages devolviendo ' . $pages . ' para query_id=' . $query_id);
-        }
         return $pages;
     }
 

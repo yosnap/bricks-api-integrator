@@ -547,11 +547,6 @@ function init_api_template_context() {
     if (!isset($wp_query->query_vars['api_template'])) {
         return;
     }
-    // --- DEBUG: Log all query_vars to check if the dynamic parameter arrives ---
-    if (defined('WP_DEBUG') && WP_DEBUG) {
-        error_log('API TEMPLATE DEBUG: $wp_query->query_vars (init_api_template_context)=' . print_r($wp_query->query_vars, true));
-    }
-    
     $template_id = $wp_query->query_vars['api_template'];
     $api_templates = get_option('bricks_api_templates', []);
     
@@ -687,9 +682,6 @@ add_action('wp_footer', 'cleanup_api_template_globals');
  * Set API endpoint for Bricks Query Loop (UPDATED FOR ENDPOINT SYSTEM)
  */
 function set_api_template_source($query_obj) {
-    if (defined('WP_DEBUG') && WP_DEBUG) {
-        error_log('API TEMPLATE DEBUG: set_api_template_source ejecutándose');
-    }
     global $wp_query;
     // Check if this is an API template request
     if (!isset($wp_query->query_vars['api_template'])) {
@@ -703,17 +695,10 @@ function set_api_template_source($query_obj) {
     $api_template = $api_templates[$template_id];
     $endpoint_type = isset($api_template['endpoint_type']) ? $api_template['endpoint_type'] : 'endpoint';
     $endpoint_id = isset($api_template['endpoint_id']) ? $api_template['endpoint_id'] : '';
-    // --- LOG: tipo de plantilla y endpoint/source seleccionado ---
-    if (defined('WP_DEBUG') && WP_DEBUG) {
-        error_log('API TEMPLATE DEBUG: template_id=' . $template_id . ' | endpoint_type=' . $endpoint_type . ' | endpoint_id=' . $endpoint_id);
-    }
     // --- NUEVO: Si es un Source, usar su lógica ---
     if ($endpoint_type === 'source') {
         $sources = get_option('bricks_api_sources', []);
         if (!isset($sources[$endpoint_id])) {
-            if (defined('WP_DEBUG') && WP_DEBUG) {
-                error_log('API TEMPLATE DEBUG: Source no encontrado: ' . $endpoint_id);
-            }
             return $query_obj;
         }
         $source = $sources[$endpoint_id];
@@ -721,9 +706,6 @@ function set_api_template_source($query_obj) {
         $slug = function_exists('bricks_api_normalize_slug') ? bricks_api_normalize_slug($source['name']) : $endpoint_id;
         $query_type = '{snap_' . $slug . '}';
         $query_obj->object_type = $query_type;
-        if (defined('WP_DEBUG') && WP_DEBUG) {
-            error_log('API TEMPLATE DEBUG: object_type generado para Source: ' . $query_type);
-        }
         // Pasar parámetros dinámicos si existen
         if (isset($source['dynamic_params']) && is_array($source['dynamic_params'])) {
             foreach ($source['dynamic_params'] as $param) {
@@ -731,9 +713,6 @@ function set_api_template_source($query_obj) {
                 $param_default = $param['default'] ?? '';
                 if ($param_name && !isset($_GET[$param_name])) {
                     $_GET[$param_name] = $param_default;
-                }
-                if (defined('WP_DEBUG') && WP_DEBUG) {
-                    error_log('API TEMPLATE DEBUG: Param dinámico ' . $param_name . ' = ' . print_r($_GET[$param_name], true));
                 }
             }
         }
@@ -749,13 +728,6 @@ function set_api_template_source($query_obj) {
                     'source_id' => $endpoint_id
                 ];
                 $_GET[$id_param] = $id_value;
-                if (defined('WP_DEBUG') && WP_DEBUG) {
-                    error_log('API TEMPLATE DEBUG: id_param ' . $id_param . ' = ' . $id_value);
-                }
-            } else {
-                if (defined('WP_DEBUG') && WP_DEBUG) {
-                    error_log('API TEMPLATE DEBUG: id_param ' . $id_param . ' NO encontrado en query_vars');
-                }
             }
         }
         return $query_obj;

@@ -1348,10 +1348,6 @@ add_action('wp_ajax_save_api_endpoint', function() {
         $index = isset($_POST['index']) && $_POST['index'] !== '' ? intval($_POST['index']) : null;
     }
     
-    // --- LOG TEMPORAL: Verificar los datos recibidos ---
-    if (defined('WP_DEBUG') && WP_DEBUG) {
-        error_log('ENDPOINT AJAX - dynamic_params recibido: ' . print_r($_POST['dynamic_params'], true));
-    }
     $dynamic_params = [];
     if (!empty($_POST['dynamic_params']) && is_array($_POST['dynamic_params'])) {
         foreach ($_POST['dynamic_params'] as $param) {
@@ -1412,10 +1408,6 @@ add_action('wp_ajax_save_api_endpoint', function() {
     }
     // Guardar los endpoints actualizados
     update_option('bricks_api_endpoints', $endpoints);
-    // --- LOG TEMPORAL: Verificar los endpoints guardados ---
-    if (defined('WP_DEBUG') && WP_DEBUG) {
-        error_log('ENDPOINT AJAX - endpoints guardados: ' . print_r($endpoints, true));
-    }
     // Verificar que los endpoints se guardaron correctamente
     $saved_endpoints = get_option('bricks_api_endpoints', []);
     wp_send_json_success(['endpoints' => $endpoints]);

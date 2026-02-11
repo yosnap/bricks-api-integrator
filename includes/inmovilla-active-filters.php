@@ -24,10 +24,13 @@ function inmovilla_render_active_filters() {
         return '';
     }
 
-    // Filtrar solo parámetros que comienzan con key_
+    // Obtener campos de filtro conocidos
+    $filter_fields = function_exists( 'inmovilla_get_filter_fields' ) ? inmovilla_get_filter_fields() : [];
+
+    // Filtrar parámetros que son filtros conocidos de Inmovilla
     $active_filters = [];
     foreach ( $params as $key => $value ) {
-        if ( strpos( $key, 'key_' ) === 0 && ! empty( $value ) ) {
+        if ( ! empty( $value ) && isset( $filter_fields[ $key ] ) ) {
             $active_filters[ $key ] = $value;
         }
     }
@@ -36,19 +39,26 @@ function inmovilla_render_active_filters() {
         return '';
     }
 
-    $filter_labels = [
-        'key_tipo'      => 'Tipo',
-        'key_loca'      => 'Ubicación',
-        'key_zona'      => 'Zona',
-        'key_precio_min' => 'Precio Min',
-        'key_precio_max' => 'Precio Max',
-    ];
-
     $html = '<div class="inmovilla-active-filters" style="margin: 20px 0; padding: 15px; background: #f3f4f6; border-radius: 8px;">';
     $html .= '<strong style="display: block; margin-bottom: 10px;">Filtros activos:</strong>';
 
     foreach ( $active_filters as $key => $value ) {
-        $label = isset( $filter_labels[ $key ] ) ? $filter_labels[ $key ] : str_replace( 'key_', '', $key );
+        $config = $filter_fields[ $key ];
+        $label  = $config['label'] ?? str_replace( 'key_', '', $key );
+
+        // Resolver valor legible: si el campo tiene opciones, buscar el texto
+        $display_value = $value;
+        if ( ! empty( $config['options'][ $value ] ) ) {
+            $display_value = $config['options'][ $value ];
+        } elseif ( ! empty( $config['source_type'] ) ) {
+            // Obtener opciones desde la API para mostrar nombre legible
+            $options = function_exists( 'inmovilla_get_filter_options' )
+                ? inmovilla_get_filter_options( $config['source_type'] )
+                : [];
+            if ( ! empty( $options[ $value ] ) ) {
+                $display_value = $options[ $value ];
+            }
+        }
 
         // URL sin este filtro
         $clean_params = array_diff_key( $params, [ $key => true ] );
@@ -60,7 +70,7 @@ function inmovilla_render_active_filters() {
                 <a href="%s" style="color: white; text-decoration: none; margin-left: 5px; font-weight: bold;">×</a>
             </span>',
             esc_html( $label ),
-            esc_html( $value ),
+            esc_html( $display_value ),
             esc_url( $clean_url )
         );
     }

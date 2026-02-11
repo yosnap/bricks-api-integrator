@@ -12,7 +12,7 @@ if (!defined('ABSPATH')) {
 /**
  * Registrar submenú de configuración Inmovilla
  */
-add_action('admin_menu', 'inmovilla_register_settings_menu');
+add_action('admin_menu', 'inmovilla_register_settings_menu', 20);
 function inmovilla_register_settings_menu() {
     add_submenu_page(
         'bricks-api-integrator',
@@ -148,6 +148,10 @@ function inmovilla_render_settings_page() {
             <a href="<?php echo esc_url($base_url . '&tab=css'); ?>"
                class="nav-tab <?php echo $current_tab === 'css' ? 'nav-tab-active' : ''; ?>">
                 CSS Personalizado
+            </a>
+            <a href="<?php echo esc_url($base_url . '&tab=shortcodes'); ?>"
+               class="nav-tab <?php echo $current_tab === 'shortcodes' ? 'nav-tab-active' : ''; ?>">
+                Shortcodes
             </a>
             <a href="<?php echo esc_url($base_url . '&tab=preview'); ?>"
                class="nav-tab <?php echo $current_tab === 'preview' ? 'nav-tab-active' : ''; ?>">
@@ -459,6 +463,10 @@ function inmovilla_render_settings_page() {
                     </ul>
                 </div>
 
+                <?php elseif ($current_tab === 'shortcodes'): ?>
+                <!-- Tab Shortcodes -->
+                <?php inmovilla_render_shortcodes_tab(); ?>
+
                 <?php elseif ($current_tab === 'preview'): ?>
                 <!-- Tab Preview -->
                 <h2>Vista Previa de Estilos</h2>
@@ -550,7 +558,7 @@ function inmovilla_render_settings_page() {
 
             </div>
 
-            <?php if ($current_tab !== 'preview'): ?>
+            <?php if (!in_array($current_tab, ['preview', 'shortcodes'])): ?>
             <p class="submit">
                 <input type="submit" name="inmovilla_ui_save" class="button button-primary" value="Guardar Cambios">
                 <a href="<?php echo esc_url($base_url . '&tab=preview'); ?>" class="button">Ver Vista Previa</a>
@@ -560,6 +568,274 @@ function inmovilla_render_settings_page() {
         </form>
     </div>
     <?php
+}
+
+/**
+ * Renderizar pestaña de Shortcodes con referencia y botón copiar
+ */
+function inmovilla_render_shortcodes_tab() {
+    $shortcodes = inmovilla_get_shortcodes_reference();
+    ?>
+    <style>
+    .inmovilla-sc-ref { margin-top: 10px; }
+    .inmovilla-sc-card {
+        background: #fff; border: 1px solid #ddd; border-radius: 6px;
+        padding: 20px; margin-bottom: 20px; position: relative;
+    }
+    .inmovilla-sc-card h3 { margin: 0 0 8px; font-size: 16px; color: #1d2327; }
+    .inmovilla-sc-card .description { margin-bottom: 12px; color: #646970; }
+    .inmovilla-sc-code {
+        background: #f0f0f1; border: 1px solid #ddd; border-radius: 4px;
+        padding: 10px 14px; font-family: monospace; font-size: 13px;
+        display: flex; align-items: center; justify-content: space-between;
+        margin-bottom: 10px; word-break: break-all;
+    }
+    .inmovilla-sc-code code { flex: 1; color: #2271b1; }
+    .inmovilla-sc-copy {
+        background: #2271b1; color: #fff; border: none; border-radius: 3px;
+        padding: 4px 12px; cursor: pointer; font-size: 12px; margin-left: 10px;
+        white-space: nowrap;
+    }
+    .inmovilla-sc-copy:hover { background: #135e96; }
+    .inmovilla-sc-copy.copied { background: #00a32a; }
+    .inmovilla-sc-params { margin-top: 12px; }
+    .inmovilla-sc-params table {
+        width: 100%; border-collapse: collapse; font-size: 13px;
+    }
+    .inmovilla-sc-params th {
+        text-align: left; padding: 6px 10px; background: #f6f7f7;
+        border: 1px solid #ddd; font-weight: 600;
+    }
+    .inmovilla-sc-params td {
+        padding: 6px 10px; border: 1px solid #ddd;
+    }
+    .inmovilla-sc-params code { background: #f0f0f1; padding: 2px 5px; border-radius: 3px; font-size: 12px; }
+    .inmovilla-sc-example {
+        background: #fef8ee; border: 1px solid #f0c36d; border-radius: 4px;
+        padding: 10px 14px; margin-top: 10px; font-size: 13px;
+    }
+    .inmovilla-sc-example strong { display: block; margin-bottom: 4px; color: #826200; }
+    .inmovilla-sc-fields {
+        background: #f0f6fc; border: 1px solid #c3c4c7; border-radius: 6px;
+        padding: 16px 20px; margin-bottom: 20px;
+    }
+    .inmovilla-sc-fields h3 { margin: 0 0 10px; }
+    .inmovilla-sc-fields ul { margin: 0; columns: 2; }
+    .inmovilla-sc-fields li { padding: 3px 0; font-size: 13px; }
+    .inmovilla-sc-fields li code { background: #e7f0f9; padding: 2px 5px; border-radius: 3px; }
+    </style>
+
+    <h2>Referencia de Shortcodes</h2>
+    <p class="description">Todos los shortcodes disponibles para Inmovilla. Haz clic en "Copiar" para copiar el shortcode al portapapeles.</p>
+
+    <div class="inmovilla-sc-ref">
+
+        <!-- Campos de filtro disponibles -->
+        <div class="inmovilla-sc-fields">
+            <h3>Campos de filtro disponibles (para <code>field=""</code>)</h3>
+            <ul>
+                <li><code>key_tipo</code> &mdash; Tipo de inmueble (select, desde API)</li>
+                <li><code>key_loca</code> &mdash; Ciudad (select, desde API)</li>
+                <li><code>key_zona</code> &mdash; Zona (select, requiere ciudad)</li>
+                <li><code>keyacci</code> &mdash; Acción: Venta, Alquiler... (select)</li>
+                <li><code>keyprov</code> &mdash; Provincia (texto)</li>
+                <li><code>precio</code> &mdash; Precio (rango: precio_desde, precio_hasta)</li>
+                <li><code>habitaciones</code> &mdash; Habitaciones mínimas (number)</li>
+                <li><code>banyos</code> &mdash; Baños mínimos (number)</li>
+                <li><code>metros</code> &mdash; Metros construidos (rango: metros_desde, metros_hasta)</li>
+            </ul>
+        </div>
+
+        <?php foreach ($shortcodes as $sc): ?>
+        <div class="inmovilla-sc-card">
+            <h3><?php echo esc_html($sc['name']); ?></h3>
+            <p class="description"><?php echo esc_html($sc['description']); ?></p>
+
+            <div class="inmovilla-sc-code">
+                <code><?php echo esc_html($sc['usage']); ?></code>
+                <button type="button" class="inmovilla-sc-copy" data-code="<?php echo esc_attr($sc['usage']); ?>">Copiar</button>
+            </div>
+
+            <?php if (!empty($sc['params'])): ?>
+            <div class="inmovilla-sc-params">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Parámetro</th>
+                            <th>Por defecto</th>
+                            <th>Descripción</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    <?php foreach ($sc['params'] as $param): ?>
+                        <tr>
+                            <td><code><?php echo esc_html($param['name']); ?></code></td>
+                            <td><code><?php echo esc_html($param['default']); ?></code></td>
+                            <td><?php echo esc_html($param['desc']); ?></td>
+                        </tr>
+                    <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+            <?php endif; ?>
+
+            <?php if (!empty($sc['examples'])): ?>
+            <div class="inmovilla-sc-example">
+                <strong>Ejemplos:</strong>
+                <?php foreach ($sc['examples'] as $ex): ?>
+                <div style="margin-bottom: 4px;">
+                    <code><?php echo esc_html($ex); ?></code>
+                    <button type="button" class="inmovilla-sc-copy" data-code="<?php echo esc_attr($ex); ?>" style="font-size:11px; padding:2px 8px;">Copiar</button>
+                </div>
+                <?php endforeach; ?>
+            </div>
+            <?php endif; ?>
+        </div>
+        <?php endforeach; ?>
+
+    </div>
+
+    <script>
+    document.querySelectorAll('.inmovilla-sc-copy').forEach(function(btn) {
+        btn.addEventListener('click', function(e) {
+            e.preventDefault();
+            var code = this.getAttribute('data-code');
+            navigator.clipboard.writeText(code).then(function() {
+                btn.textContent = 'Copiado!';
+                btn.classList.add('copied');
+                setTimeout(function() {
+                    btn.textContent = 'Copiar';
+                    btn.classList.remove('copied');
+                }, 2000);
+            });
+        });
+    });
+    </script>
+    <?php
+}
+
+/**
+ * Datos de referencia de shortcodes
+ */
+function inmovilla_get_shortcodes_reference() {
+    return [
+        [
+            'name' => 'Formulario de Filtros',
+            'description' => 'Contenedor de filtros con botón de buscar. Envuelve otros shortcodes de filtro.',
+            'usage' => '[inmovilla_filters_form][inmovilla_filter_select field="keyacci"][inmovilla_filter_select field="key_tipo"][inmovilla_filter_select field="key_loca"][inmovilla_filter_select field="key_zona"][/inmovilla_filters_form]',
+            'params' => [
+                ['name' => 'template', 'default' => 'modern', 'desc' => 'Plantilla: modern, classic, minimal, custom'],
+                ['name' => 'layout', 'default' => 'horizontal', 'desc' => 'Distribución: horizontal, vertical, grid'],
+                ['name' => 'submit_text', 'default' => 'Buscar', 'desc' => 'Texto del botón de buscar'],
+                ['name' => 'show_submit', 'default' => 'true', 'desc' => 'Mostrar botón de buscar'],
+                ['name' => 'show_clear', 'default' => 'true', 'desc' => 'Mostrar botón de limpiar'],
+                ['name' => 'clear_text', 'default' => 'Limpiar', 'desc' => 'Texto del botón de limpiar'],
+            ],
+            'examples' => [
+                '[inmovilla_filters_form layout="grid"][inmovilla_filter_select field="keyacci"][inmovilla_filter_select field="key_tipo"][/inmovilla_filters_form]',
+                '[inmovilla_filters_form template="classic" show_clear="false"]...[/inmovilla_filters_form]',
+            ],
+        ],
+        [
+            'name' => 'Filtro Select',
+            'description' => 'Desplegable para filtrar. Si se usa fuera de un formulario, aplica el filtro inmediatamente.',
+            'usage' => '[inmovilla_filter_select field="key_tipo"]',
+            'params' => [
+                ['name' => 'field', 'default' => '(requerido)', 'desc' => 'Campo de filtro: key_tipo, key_loca, key_zona, keyacci'],
+                ['name' => 'template', 'default' => 'modern', 'desc' => 'Plantilla: modern, classic, minimal, custom'],
+                ['name' => 'label', 'default' => '(auto)', 'desc' => 'Etiqueta del filtro. Si se omite, usa la del campo'],
+                ['name' => 'placeholder', 'default' => 'Todos', 'desc' => 'Texto de la opción vacía'],
+                ['name' => 'show_label', 'default' => 'true', 'desc' => 'Mostrar etiqueta'],
+            ],
+            'examples' => [
+                '[inmovilla_filter_select field="keyacci" label="Operación"]',
+                '[inmovilla_filter_select field="key_tipo" placeholder="Selecciona tipo"]',
+                '[inmovilla_filter_select field="key_loca"]',
+                '[inmovilla_filter_select field="key_zona"]',
+            ],
+        ],
+        [
+            'name' => 'Filtro de Rango',
+            'description' => 'Dos inputs numéricos (desde/hasta) para filtrar por rango de valores.',
+            'usage' => '[inmovilla_filter_range field="precio"]',
+            'params' => [
+                ['name' => 'field', 'default' => '(requerido)', 'desc' => 'Campo base: precio, metros, habitaciones, banyos'],
+                ['name' => 'template', 'default' => 'modern', 'desc' => 'Plantilla visual'],
+                ['name' => 'label', 'default' => '(auto)', 'desc' => 'Etiqueta del filtro'],
+                ['name' => 'min', 'default' => '0', 'desc' => 'Valor mínimo'],
+                ['name' => 'max', 'default' => '1000000', 'desc' => 'Valor máximo'],
+                ['name' => 'step', 'default' => '1000', 'desc' => 'Incremento'],
+                ['name' => 'from_placeholder', 'default' => 'Desde', 'desc' => 'Placeholder input desde'],
+                ['name' => 'to_placeholder', 'default' => 'Hasta', 'desc' => 'Placeholder input hasta'],
+            ],
+            'examples' => [
+                '[inmovilla_filter_range field="precio" min="50000" max="500000" step="10000"]',
+                '[inmovilla_filter_range field="metros" label="Superficie (m2)" max="500" step="10"]',
+            ],
+        ],
+        [
+            'name' => 'Paginación',
+            'description' => 'Controles de paginación con info de resultados y enlaces de página.',
+            'usage' => '[inmovilla_pagination]',
+            'params' => [
+                ['name' => 'template', 'default' => 'modern', 'desc' => 'Plantilla visual'],
+                ['name' => 'show_info', 'default' => 'true', 'desc' => 'Mostrar "Mostrando X-Y de Z"'],
+                ['name' => 'prev_text', 'default' => 'Anterior', 'desc' => 'Texto botón anterior'],
+                ['name' => 'next_text', 'default' => 'Siguiente', 'desc' => 'Texto botón siguiente'],
+                ['name' => 'max_links', 'default' => '5', 'desc' => 'Máximo de enlaces de página visibles'],
+            ],
+            'examples' => [
+                '[inmovilla_pagination max_links="3" show_info="false"]',
+                '[inmovilla_pagination template="classic" prev_text="Ant" next_text="Sig"]',
+            ],
+        ],
+        [
+            'name' => 'Resumen de Resultados',
+            'description' => 'Muestra texto con el conteo de resultados: "Mostrando X-Y de Z inmuebles".',
+            'usage' => '[inmovilla_results_summary]',
+            'params' => [
+                ['name' => 'template', 'default' => 'modern', 'desc' => 'Plantilla visual'],
+                ['name' => 'format', 'default' => 'Mostrando {from}-{to} de {total} inmuebles', 'desc' => 'Formato. Variables: {from}, {to}, {total}, {page}, {pages}'],
+                ['name' => 'empty_text', 'default' => 'No se encontraron resultados', 'desc' => 'Texto cuando no hay resultados'],
+            ],
+            'examples' => [
+                '[inmovilla_results_summary format="{total} propiedades encontradas"]',
+                '[inmovilla_results_summary empty_text="Sin resultados para tu búsqueda"]',
+            ],
+        ],
+        [
+            'name' => 'Selector de Ordenamiento',
+            'description' => 'Desplegable para ordenar los resultados por precio, fecha, etc.',
+            'usage' => '[inmovilla_order_select]',
+            'params' => [
+                ['name' => 'template', 'default' => 'modern', 'desc' => 'Plantilla visual'],
+                ['name' => 'label', 'default' => 'Ordenar por:', 'desc' => 'Etiqueta del selector'],
+                ['name' => 'show_label', 'default' => 'true', 'desc' => 'Mostrar etiqueta'],
+            ],
+            'examples' => [
+                '[inmovilla_order_select label="Ordenar:" template="minimal"]',
+            ],
+        ],
+        [
+            'name' => 'Limpiar Filtros',
+            'description' => 'Botón/enlace para eliminar todos los filtros activos de la URL.',
+            'usage' => '[inmovilla_clear_filters]',
+            'params' => [
+                ['name' => 'template', 'default' => 'modern', 'desc' => 'Plantilla visual'],
+                ['name' => 'text', 'default' => 'Limpiar', 'desc' => 'Texto del botón'],
+            ],
+            'examples' => [
+                '[inmovilla_clear_filters text="Borrar filtros"]',
+            ],
+        ],
+        [
+            'name' => 'Filtros Activos',
+            'description' => 'Muestra los filtros actualmente aplicados como etiquetas con opción de eliminar.',
+            'usage' => '[inmovilla_active_filters]',
+            'params' => [],
+            'examples' => [],
+        ],
+    ];
 }
 
 /**

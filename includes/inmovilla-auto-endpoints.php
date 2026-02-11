@@ -118,9 +118,6 @@ function register_inmovilla_api_endpoints() {
     // Guardar
     update_option( 'bricks_api_endpoints', $endpoints );
 
-    if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-        error_log( '[Inmovilla] Endpoint API registrado correctamente' );
-    }
 }
 
 /**
@@ -147,9 +144,6 @@ function force_update_inmovilla_endpoint() {
     // Ahora registrar el nuevo endpoint con los parámetros actualizados
     register_inmovilla_api_endpoints();
 
-    if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-        error_log( '[Inmovilla] Endpoint API actualizado forzadamente' );
-    }
 }
 
 // Registrar inmediatamente al cargar el plugin

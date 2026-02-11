@@ -66,11 +66,7 @@ if (!function_exists('bricks_api_source_make_request')) {
             // Usar tipo del source si está definido, o deducirlo del items_path
             $tipo = $source_config['tipo'] ?? $source_config['items_path'] ?? $params['tipo'] ?? 'paginacion';
 
-            if (defined('WP_DEBUG') && WP_DEBUG) {
-                error_log('INMOVILLA SOURCE - tipo: ' . $tipo . ' | source_config[tipo]: ' . ($source_config['tipo'] ?? 'N/A') . ' | items_path: ' . ($source_config['items_path'] ?? 'N/A'));
-            }
-
-            // Construir string de parámetros en formato Inmovilla
+                // Construir string de parámetros en formato Inmovilla
             $agencia = $params['agencia'] ?? '';
             $password = $params['password'] ?? '';
             $idioma = $params['idioma'] ?? '1';
@@ -84,10 +80,6 @@ if (!function_exists('bricks_api_source_make_request')) {
             if ($tipo === 'zonas') {
                 if (!empty($params['cod_ciu'])) {
                     $where = 'cod_ciu=' . $params['cod_ciu'];
-                }
-                if (defined('WP_DEBUG') && WP_DEBUG) {
-                    error_log('INMOVILLA ZONAS - cod_ciu: ' . ($params['cod_ciu'] ?? 'NO DEFINIDO') . ' | where: ' . $where);
-                    error_log('INMOVILLA ZONAS - params: ' . print_r($params, true));
                 }
             }
 
@@ -116,11 +108,6 @@ if (!function_exists('bricks_api_source_make_request')) {
             $args['headers']['Content-Type'] = 'application/x-www-form-urlencoded';
             $args['headers']['User-Agent'] = 'Mozilla/5.0 (Windows; U; Windows NT 5.1; en-US; rv:1.8.1.3) Gecko/20070309 Firefox/2.0.0.3';
 
-            if (defined('WP_DEBUG') && WP_DEBUG) {
-                error_log('INMOVILLA SOURCE REQUEST - PARAM: ' . $texto);
-                error_log('INMOVILLA SOURCE REQUEST - URL: ' . $base_url);
-            }
-
             $response = wp_remote_post($base_url, $args);
         } elseif ($method === 'POST') {
             // POST genérico
@@ -143,11 +130,6 @@ if (!function_exists('bricks_api_source_make_request')) {
         $status_code = wp_remote_retrieve_response_code($response);
         $body = wp_remote_retrieve_body($response);
 
-        if (defined('WP_DEBUG') && WP_DEBUG) {
-            error_log('SOURCE REQUEST HTTP STATUS: ' . $status_code);
-            error_log('SOURCE REQUEST RAW BODY: ' . substr($body, 0, 500));
-        }
-
         if ($status_code !== 200) {
             return [
                 'success' => false,
@@ -160,8 +142,6 @@ if (!function_exists('bricks_api_source_make_request')) {
         $data = json_decode($body, true);
 
         if (json_last_error() !== JSON_ERROR_NONE) {
-            // Log detallado para depurar respuestas inválidas
-            error_log('SOURCE REQUEST JSON ERROR - Body: ' . substr($body, 0, 1000));
             return [
                 'success' => false,
                 'data' => null,

@@ -1,10 +1,6 @@
 <?php
 // Hooks y filtros para integración de sources personalizados en Bricks
 
-if (defined('WP_DEBUG') && WP_DEBUG) {
-    error_log('BRICKS API DEBUG: sources-hooks.php incluido');
-}
-
 // Registro seguro de la clase y filtro solo si Bricks está cargado
 add_action('init', function() {
     if (defined('BRICKS_VERSION') && class_exists('Bricks_Query_Provider')) {
@@ -32,10 +28,6 @@ if (has_action('bricks/loaded')) {
 
 // Devolver datos para el loop de Bricks desde Sources
 add_filter('bricks/query/run', function($results, $query_obj) {
-    if (defined('WP_DEBUG') && WP_DEBUG) {
-        error_log('BRICKS API DEBUG: bricks/query/run ejecutado para ' . $query_obj->object_type);
-    }
-
     $object_type = isset($query_obj->object_type) ? $query_obj->object_type : '';
 
     // Obtener sources PRIMERO para poder verificar
@@ -60,11 +52,6 @@ add_filter('bricks/query/run', function($results, $query_obj) {
         return $results;
     }
 
-    if (defined('WP_DEBUG') && WP_DEBUG) {
-        error_log('BRICKS API DEBUG: source_id=' . $source_id . ' | normalized=' . $source_id_normalized);
-        error_log('BRICKS API DEBUG: api_sources keys=' . implode(', ', array_keys($api_sources)));
-    }
-
     // Intentar encontrar el source con diferentes variantes del ID
     $source = null;
     $possible_ids = [
@@ -83,16 +70,9 @@ add_filter('bricks/query/run', function($results, $query_obj) {
     }
 
     if (!$source) {
-        if (defined('WP_DEBUG') && WP_DEBUG) {
-            error_log('BRICKS API DEBUG: Source no encontrado para ' . $object_type);
-        }
         return $results;
     }
 
-    if (defined('WP_DEBUG') && WP_DEBUG) {
-        error_log('BRICKS API DEBUG: Source encontrado: ' . $source_id);
-    }
-    
     $endpoints = get_option('bricks_api_endpoints', []);
     $endpoint_id = isset($source['endpoint_id']) ? $source['endpoint_id'] : '';
     
@@ -173,10 +153,6 @@ add_filter('bricks/query/run', function($results, $query_obj) {
         $overrides
     );
     
-    if (defined('WP_DEBUG') && WP_DEBUG) {
-        error_log('BRICKS API DEBUG: URL final: ' . $final_url);
-    }
-
     // Usar función helper que soporta Inmovilla
     if (!function_exists('bricks_api_source_make_request')) {
         require_once __DIR__ . '/sources-helpers.php';
@@ -185,9 +161,6 @@ add_filter('bricks/query/run', function($results, $query_obj) {
     $api_result = bricks_api_source_make_request($final_url, $endpoint, $source);
 
     if (!$api_result['success']) {
-        if (defined('WP_DEBUG') && WP_DEBUG) {
-            error_log('BRICKS API DEBUG: Error en petición: ' . $api_result['error']);
-        }
         return $results;
     }
 
@@ -246,11 +219,6 @@ add_filter('bricks/query/run', function($results, $query_obj) {
     // --- Aplicar transformaciones de campos ---
     $field_transformers = isset($endpoint['field_transformers']) ? $endpoint['field_transformers'] : [];
 
-    if (defined('WP_DEBUG') && WP_DEBUG) {
-        error_log('🔄 SOURCES - Field transformers del endpoint: ' . print_r($field_transformers, true));
-        error_log('🔄 SOURCES - Primer item ANTES de transformar: ' . print_r($formatted[0] ?? 'vacío', true));
-    }
-
     if (!empty($field_transformers)) {
         require_once plugin_dir_path(__FILE__) . '/../field-extractor.php';
 
@@ -262,14 +230,7 @@ add_filter('bricks/query/run', function($results, $query_obj) {
                 $field_name = $transformer['field'] ?? '';
 
                 if (empty($field_name) || !isset($item_array[$field_name])) {
-                    if (defined('WP_DEBUG') && WP_DEBUG) {
-                        error_log("🔄 SOURCES - Campo '$field_name' no encontrado en item. Campos disponibles: " . implode(', ', array_keys($item_array)));
-                    }
                     continue;
-                }
-
-                if (defined('WP_DEBUG') && WP_DEBUG) {
-                    error_log("🔄 SOURCES - Transformando campo '$field_name' con valor: " . print_r($item_array[$field_name], true));
                 }
 
                 // Aplicar transformación al campo
@@ -279,19 +240,12 @@ add_filter('bricks/query/run', function($results, $query_obj) {
                     [$transformer]
                 );
 
-                if (defined('WP_DEBUG') && WP_DEBUG) {
-                    error_log("🔄 SOURCES - Campo '$field_name' transformado a: " . print_r($item_array[$field_name], true));
-                }
             }
 
             // Convertir de vuelta a objeto
             $item = (object)$item_array;
         }
         unset($item);
-
-        if (defined('WP_DEBUG') && WP_DEBUG) {
-            error_log('🔄 SOURCES - Primer item DESPUÉS de transformar: ' . print_r($formatted[0] ?? 'vacío', true));
-        }
     }
 
     // --- Detectar si es single (detalle) o listado ---

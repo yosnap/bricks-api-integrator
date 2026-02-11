@@ -283,6 +283,34 @@ function force_update_inmovilla_zonas_source() {
 add_action('admin_init', 'force_update_inmovilla_zonas_source', 20);
 
 /**
+ * Forzar que todos los sources de Inmovilla tengan el campo 'tipo' correcto
+ */
+function force_update_inmovilla_sources_tipo() {
+    $sources = get_option('bricks_api_sources', []);
+    $expected_tipos = [
+        'inmovilla_inmuebles' => 'paginacion',
+        'inmovilla_destacados' => 'destacados',
+        'inmovilla_tipos' => 'tipos',
+        'inmovilla_ciudades' => 'ciudades',
+        'inmovilla_zonas' => 'zonas',
+    ];
+
+    $updated = false;
+    foreach ($expected_tipos as $key => $tipo) {
+        if (isset($sources[$key]) && ($sources[$key]['tipo'] ?? '') !== $tipo) {
+            $sources[$key]['tipo'] = $tipo;
+            $updated = true;
+        }
+    }
+
+    if ($updated) {
+        update_option('bricks_api_sources', $sources);
+    }
+}
+add_action('admin_init', 'force_update_inmovilla_sources_tipo', 21);
+add_action('plugins_loaded', 'force_update_inmovilla_sources_tipo', 16);
+
+/**
  * Clase para manejar las consultas de Inmovilla con soporte completo de paginación,
  * filtros y ordenamiento integrado con Bricks Builder
  */
@@ -489,8 +517,9 @@ class Inmovilla_Query_Handler {
         $per_page = $query_args['per_page'] ?? 20;
         $pos = (($page - 1) * $per_page) + 1;
 
-        // Filtros - combinar de query_args y URL
-        $url_filters = $this->capture_filters_from_url();
+        // Filtros - combinar de query_args y URL (salvo que se pida omitir URL)
+        $skip_url = !empty($query_args['skip_url_filters']);
+        $url_filters = $skip_url ? [] : $this->capture_filters_from_url();
         $arg_filters = $query_args['filters'] ?? [];
         $all_filters = array_merge($arg_filters, $url_filters);
 
@@ -615,49 +644,21 @@ class Inmovilla_Query_Handler {
 add_filter('bricks/query/run', function($results, $query) {
     $object_type = $query->object_type ?? '';
 
-    if (defined('WP_DEBUG') && WP_DEBUG) {
-        error_log('INMOVILLA SOURCES: Evaluando object_type=' . $object_type);
-    }
-
     // Verificar si es un source de Inmovilla
     // IMPORTANTE: El orden importa - primero el prefijo más largo
     $source_key = str_replace(['snap_source_', 'source_'], '', $object_type);
 
-    if (defined('WP_DEBUG') && WP_DEBUG) {
-        error_log('INMOVILLA SOURCES: source_key después de str_replace=' . $source_key);
-        error_log('INMOVILLA SOURCES: strpos inmovilla_=' . var_export(strpos($source_key, 'inmovilla_'), true));
-        error_log('INMOVILLA SOURCES: strpos inmovilla-=' . var_export(strpos($source_key, 'inmovilla-'), true));
-    }
-
     if (strpos($source_key, 'inmovilla_') !== 0 && strpos($source_key, 'inmovilla-') !== 0) {
-        if (defined('WP_DEBUG') && WP_DEBUG) {
-            error_log('INMOVILLA SOURCES: NO es source de Inmovilla, saliendo');
-        }
         return $results;
     }
 
     // Normalizar key (guiones a guiones bajos)
     $source_key = str_replace('-', '_', $source_key);
 
-    if (defined('WP_DEBUG') && WP_DEBUG) {
-        error_log('INMOVILLA SOURCES: source_key normalizado=' . $source_key);
-    }
-
     $sources = get_option('bricks_api_sources', []);
 
-    if (defined('WP_DEBUG') && WP_DEBUG) {
-        error_log('INMOVILLA SOURCES: Keys de sources disponibles: ' . implode(', ', array_keys($sources)));
-    }
-
     if (!isset($sources[$source_key])) {
-        if (defined('WP_DEBUG') && WP_DEBUG) {
-            error_log('INMOVILLA SOURCES: Source NO encontrado para key=' . $source_key);
-        }
         return $results;
-    }
-
-    if (defined('WP_DEBUG') && WP_DEBUG) {
-        error_log('INMOVILLA SOURCES: Source encontrado, ejecutando query...');
     }
 
     $source_config = $sources[$source_key];
@@ -697,10 +698,6 @@ add_filter('bricks/query/run', function($results, $query) {
             'page' => $result['page'],
             'per_page' => $result['per_page'],
         ]);
-
-        if (defined('WP_DEBUG') && WP_DEBUG) {
-            error_log('INMOVILLA QUERY STATE: Guardado para ' . $query_id . ' - total=' . $result['total'] . ', max_pages=' . $result['max_pages']);
-        }
     }
 
     return $result['items'];

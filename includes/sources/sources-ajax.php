@@ -128,8 +128,6 @@ add_action('wp_ajax_generate_source_tags', function() {
     }
     // Usar el primer elemento para generar los tags
     $first_item = isset($items_data[0]) ? $items_data[0] : [];
-    // Log detallado para depuración
-    error_log('DEBUG TAGS $first_item: ' . print_r($first_item, true));
     // Validar que el objeto tenga campos útiles
     if (empty($first_item) || !is_array($first_item) || count(array_filter(array_keys($first_item), 'is_string')) === 0) {
         wp_send_json_error('La respuesta de la API no contiene datos válidos para generar tags.');
@@ -190,8 +188,6 @@ add_action('wp_ajax_generate_source_tags', function() {
         echo '<b>DEBUG generate_source_tags - ITEMS:</b><br><pre>' . print_r($items, true) . '</pre>';
         echo '</div>';
     }
-    error_log('DEBUG FINAL $items: ' . print_r($items, true));
-    error_log('DEBUG FINAL $first_item: ' . print_r($first_item, true));
     $json_api_response = json_encode($items, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
     $url_real = $url;
     wp_send_json_success([
@@ -740,11 +736,6 @@ add_action('wp_ajax_preview_source_api', function() {
     }
     $items_path_info = !empty($source['items_path']) ? $source['items_path'] : 'Raíz de la respuesta';
     // Log de depuración para ver el preview, overrides y url_real
-    if (defined('WP_DEBUG') && WP_DEBUG) {
-        error_log('DEBUG PREVIEW: ' . print_r($preview, true));
-        error_log('DEBUG OVERRIDES: ' . print_r($overrides, true));
-        error_log('DEBUG URL_REAL: ' . print_r($url_real, true));
-    }
     wp_send_json_success([
         'fields' => $fields,
         'preview' => $preview,
@@ -783,16 +774,9 @@ function get_api_data($url, $endpoint) {
         $args['body'] = $body;
     }
     
-    if (defined('WP_DEBUG') && WP_DEBUG) {
-        error_log('BRICKS API DEBUG: Realizando petición a ' . $url);
-    }
-    
     $response = wp_remote_request($url, $args);
     
     if (is_wp_error($response)) {
-        if (defined('WP_DEBUG') && WP_DEBUG) {
-            error_log('BRICKS API ERROR: ' . $response->get_error_message());
-        }
         return [];
     }
     
@@ -800,9 +784,6 @@ function get_api_data($url, $endpoint) {
     $data = json_decode($body, true);
     
     if (json_last_error() !== JSON_ERROR_NONE) {
-        if (defined('WP_DEBUG') && WP_DEBUG) {
-            error_log('BRICKS API ERROR: Error decodificando JSON - ' . json_last_error_msg());
-        }
         return [];
     }
     

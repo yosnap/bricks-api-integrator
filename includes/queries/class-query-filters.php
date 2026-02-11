@@ -58,11 +58,6 @@ class Bricks_API_Query_Filters {
             return $items;
         }
 
-        // Log de debug
-        if (defined('WP_DEBUG') && WP_DEBUG) {
-            error_log('QUERY FILTERS: Aplicando ' . count($filters_config) . ' filtros a ' . count($items) . ' items');
-        }
-
         $filtered_items = $items;
 
         // Agrupar filtros por lógica (AND/OR)
@@ -111,10 +106,6 @@ class Bricks_API_Query_Filters {
 
         // Reindexar array
         $filtered_items = array_values($filtered_items);
-
-        if (defined('WP_DEBUG') && WP_DEBUG) {
-            error_log('QUERY FILTERS: Resultado: ' . count($filtered_items) . ' items después de filtrar');
-        }
 
         return $filtered_items;
     }

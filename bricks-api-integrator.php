@@ -245,26 +245,36 @@ class BricksAPIIntegrator {
      */
     public function run_custom_query_dynamic($results, $query_object) {
         $object_type = $query_object->object_type ?? '';
-        
-        // ✅ CORREGIR: Procesar tanto endpoints como sources
+
+        // Procesar tanto endpoints como sources
         $is_endpoint = strpos($object_type, 'snap_ep_') === 0;
         $is_source = strpos($object_type, 'snap_source_') === 0;
-        
-        // Debug logging
-        if (defined('WP_DEBUG') && WP_DEBUG) {
-        }
-        
+
         if (!$is_endpoint && !$is_source) {
             return $results;
         }
-        
+
         // Extraer slug según el tipo
         if ($is_endpoint) {
             $slug = str_replace('snap_ep_', '', $object_type);
         } else {
             $slug = str_replace('snap_source_', '', $object_type);
         }
-        
+
+        // Los sources de Inmovilla ya fueron procesados por inmovilla-sources.php
+        // Solo convertir los items al formato pseudo-post que Bricks necesita para el loop
+        $normalized_slug = str_replace('-', '_', $slug);
+        if (strpos($normalized_slug, 'inmovilla_') === 0) {
+            if (!empty($results) && is_array($results)) {
+                $data = [];
+                foreach ($results as $item) {
+                    $data[] = (array) $item;
+                }
+                return $this->convert_api_data_for_bricks($data);
+            }
+            return $results;
+        }
+
         $query_types = get_option('bricks_api_generated_query_types', []);
         if (!isset($query_types[$slug])) {
             return $results;
@@ -423,21 +433,11 @@ class BricksAPIIntegrator {
             // Para endpoints: buscar transformadores en el endpoint
             $endpoint_id = $query_type_info['endpoint_id'] ?? null;
 
-            if (defined('WP_DEBUG') && WP_DEBUG) {
-                error_log('🔄 ENDPOINT - Query type info: ' . print_r($query_type_info, true));
-                error_log('🔄 ENDPOINT - Endpoint ID: ' . ($endpoint_id ?? 'NULL'));
-            }
-
             if ($endpoint_id !== null) {
                 $endpoints = get_option('bricks_api_endpoints', []);
                 if (isset($endpoints[$endpoint_id])) {
                     $endpoint = $endpoints[$endpoint_id];
                     $field_transformers = $endpoint['field_transformers'] ?? [];
-
-                    if (defined('WP_DEBUG') && WP_DEBUG) {
-                        error_log('🔄 ENDPOINT - Field transformers encontrados: ' . print_r($field_transformers, true));
-                        error_log('🔄 ENDPOINT - Primer item ANTES transformar: ' . print_r($data[0] ?? 'vacío', true));
-                    }
 
                     if (!empty($field_transformers)) {
                         require_once plugin_dir_path(__FILE__) . 'includes/field-extractor.php';
@@ -1103,6 +1103,7 @@ class BricksAPIIntegrator {
 
                 // Primero intentar obtener desde el loop object actual
                 $loop_object = \Bricks\Query::get_loop_object();
+
                 if (!empty($loop_object)) {
                     // Intentar acceso directo a la propiedad
                     if (is_array($loop_object)) {
@@ -1110,7 +1111,11 @@ class BricksAPIIntegrator {
                     }
                     $value = bricks_api_safe_get($loop_object, $field);
                     if ($value !== null) {
-                        return $this->format_field_output($value, $field);
+                        $formatted = $this->format_field_output($value, $field);
+                        if (defined('WP_DEBUG') && WP_DEBUG) {
+                            error_log('INMOVILLA RENDER: field=' . $field . ' | valor=' . (is_scalar($formatted) ? substr((string)$formatted, 0, 100) : gettype($formatted)));
+                        }
+                        return $formatted;
                     }
 
                     // Intentar acceso a través de api_data
@@ -1141,6 +1146,9 @@ class BricksAPIIntegrator {
                     }
                 }
 
+                if (defined('WP_DEBUG') && WP_DEBUG) {
+                    error_log('INMOVILLA RENDER FALLO: tag=' . $matches[0] . ' | loop_object=' . (empty($loop_object) ? 'VACIO' : 'TIENE_DATOS'));
+                }
                 return $matches[0]; // Devolver el tag original si no se puede resolver
             },
             $content
@@ -1159,25 +1167,13 @@ class BricksAPIIntegrator {
             return $tag;
         }
 
-        if (defined('WP_DEBUG') && WP_DEBUG) {
-            error_log('SNAP RENDER_TAG: Procesando tag: ' . $tag);
-        }
-
         // Formato unificado: {snap_source-slug_field} o {snap_endpoint-slug_field}
         if (preg_match('/^\{?snap_([a-zA-Z0-9_-]+)_([a-zA-Z0-9_.-]+)\}?$/', $tag, $matches)) {
             $source_slug = $matches[1]; // ej: inmovilla-inmuebles, endpoint-slug
             $field = $matches[2];
 
-            if (defined('WP_DEBUG') && WP_DEBUG) {
-                error_log('SNAP RENDER_TAG: Regex match - source_slug=' . $source_slug . ' | field=' . $field);
-            }
-
             // Obtener desde el loop object actual
             $loop_object = \Bricks\Query::get_loop_object();
-
-            if (defined('WP_DEBUG') && WP_DEBUG) {
-                error_log('SNAP RENDER_TAG: loop_object = ' . (empty($loop_object) ? 'VACIO' : 'OK'));
-            }
 
             if (!empty($loop_object)) {
                 if (is_array($loop_object)) {
@@ -1188,9 +1184,6 @@ class BricksAPIIntegrator {
                 $value = bricks_api_safe_get($loop_object, $field);
                 if ($value !== null) {
                     $formatted = $this->format_field_output($value, $field);
-                    if (defined('WP_DEBUG') && WP_DEBUG) {
-                        error_log('SNAP RENDER_TAG: Campo "' . $field . '" encontrado, valor = ' . (is_string($formatted) ? substr($formatted, 0, 100) : gettype($formatted)));
-                    }
                     return $formatted;
                 }
 
@@ -1199,14 +1192,7 @@ class BricksAPIIntegrator {
                 $value = bricks_api_safe_get($loop_object, $normalized_field);
                 if ($value !== null) {
                     $formatted = $this->format_field_output($value, $field);
-                    if (defined('WP_DEBUG') && WP_DEBUG) {
-                        error_log('SNAP RENDER_TAG: Campo normalizado "' . $normalized_field . '" encontrado, valor = ' . (is_string($formatted) ? substr($formatted, 0, 100) : gettype($formatted)));
-                    }
                     return $formatted;
-                }
-
-                if (defined('WP_DEBUG') && WP_DEBUG) {
-                    error_log('SNAP RENDER_TAG: Campo "' . $field . '" NO encontrado. Campos: ' . implode(', ', array_keys((array)$loop_object)));
                 }
             }
         }
@@ -1887,20 +1873,9 @@ class BricksAPIIntegrator {
                 'headers' => $headers
             ];
 
-            // LOG: Registrar URL y headers antes de la petición
-            if (defined('WP_DEBUG') && WP_DEBUG) {
-                error_log('AJAX TEST - URL: ' . $test_url);
-                error_log('AJAX TEST - Headers: ' . print_r($headers, true));
-            }
-
             // Realizar la petición a la API
             $response = wp_remote_get($test_url, $args);
-            // LOG: Registrar código de estado y cuerpo de la respuesta
-            if (defined('WP_DEBUG') && WP_DEBUG) {
-                $status_code = wp_remote_retrieve_response_code($response);
-                $body = is_wp_error($response) ? $response->get_error_message() : wp_remote_retrieve_body($response);
-            }
-            
+
             if (is_wp_error($response)) {
                 wp_send_json_error([
                     'message' => 'Error de conexión: ' . $response->get_error_message(),
@@ -1920,12 +1895,6 @@ class BricksAPIIntegrator {
                 $decoded_error = json_decode($response_body, true);
                 if (json_last_error() === JSON_ERROR_NONE && !empty($decoded_error)) {
                     $error_details = ' - Detalles: ' . json_encode($decoded_error, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
-                }
-
-                // Registrar información detallada en el log para depuración
-                if (defined('WP_DEBUG') && WP_DEBUG) {
-                    error_log('AJAX TEST ERROR - Status: ' . $status_code);
-                    error_log('AJAX TEST ERROR - Body: ' . $response_body);
                 }
 
                 wp_send_json_error([

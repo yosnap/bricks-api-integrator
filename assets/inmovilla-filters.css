@@ -64,6 +64,33 @@
     transition: all 0.3s ease;
 }
 
+.inmovilla-filters-form .inmovilla-btn.inmovilla-btn-primary,
+button.inmovilla-btn.inmovilla-btn-primary {
+    background-color: var(--inmovilla-primary, #2563eb) !important;
+    color: #ffffff !important;
+    font-size: 14px !important;
+    font-weight: 600 !important;
+    padding: 12px 24px !important;
+    border: none !important;
+    border-radius: var(--inmovilla-radius, 8px) !important;
+    cursor: pointer !important;
+    line-height: 1.4 !important;
+    display: inline-block !important;
+    text-align: center !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+    -webkit-appearance: none !important;
+    appearance: none !important;
+}
+
+.inmovilla-filters-form .inmovilla-btn.inmovilla-btn-primary:hover,
+button.inmovilla-btn.inmovilla-btn-primary:hover {
+    background-color: var(--inmovilla-primary-hover, #1d4ed8) !important;
+    color: #ffffff !important;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
 .inmovilla-btn:hover {
     transform: translateY(-2px);
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
@@ -115,7 +142,7 @@
 
 /* Feedback visual cuando se cambian filtros */
 .inmovilla-filters-form.inmovilla-filters-changed {
-    border-left: 3px solid #10b981;
+    /* Sin borde lateral para evitar desplazamiento del layout */
 }
 
 /* Resultado de búsqueda vacío */

@@ -68,6 +68,9 @@ if (!function_exists('bricks_api_integrator_assets')) {
         // Estilos para filtros automáticos de Inmovilla
         wp_enqueue_style('inmovilla-filters-style', BRICKS_API_INTEGRATOR_URL . 'assets/inmovilla-filters.css');
 
+        // Fix para visibilidad de selects
+        wp_enqueue_style('inmovilla-selects-fix-style', BRICKS_API_INTEGRATOR_URL . 'assets/inmovilla-selects-fix.css');
+
         // Enqueue JavaScript
         wp_enqueue_script('bricks-api-integrator-script', BRICKS_API_INTEGRATOR_URL . 'assets/bricks-api-integrator.js', ['jquery'], null, true);
         

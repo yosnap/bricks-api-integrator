@@ -3,9 +3,6 @@
 
 function register_api_sources_with_bricks($sources) {
     $api_sources = get_option('bricks_api_sources', []);
-    if (defined('WP_DEBUG') && WP_DEBUG) {
-        error_log('BRICKS SOURCES DEBUG: api_sources encontrados: ' . print_r($api_sources, true));
-    }
     if (empty($api_sources)) {
         return $sources;
     }
@@ -21,12 +18,6 @@ function register_api_sources_with_bricks($sources) {
             'name'  => $display_name . ' (ID directo)',
             'class' => 'Bricks_API_Source_Query',
         ];
-        if (defined('WP_DEBUG') && WP_DEBUG) {
-            error_log('BRICKS SOURCES DEBUG: Registrando source con claves source_' . $source_id . ' y ' . $source_id);
-        }
-    }
-    if (defined('WP_DEBUG') && WP_DEBUG) {
-        error_log('BRICKS SOURCES DEBUG: sources registrados en Bricks: ' . print_r($sources, true));
     }
     return $sources;
 }
@@ -46,18 +37,12 @@ add_filter('bricks/query/loop_control_options', function($options) {
             'class' => 'Bricks_API_Source_Query',
         ];
     }
-    if (defined('WP_DEBUG') && WP_DEBUG) {
-        error_log('BRICKS SOURCES DEBUG: Sources registrados en loop_control_options: ' . print_r($options, true));
-    }
     return $options;
 }, 1);
 if (!class_exists('Bricks_API_Source_Query')) {
     if (defined('BRICKS_VERSION') && class_exists('Bricks_Query_Provider')) {
         class Bricks_API_Source_Query extends Bricks_Query_Provider {
             public function __construct() {
-                if (defined('WP_DEBUG') && WP_DEBUG) {
-                    error_log('BRICKS SOURCES DEBUG: Constructor de Bricks_API_Source_Query inicializado (registro inmediato)');
-                }
                 $this->name = 'api_source';
                 $this->label = esc_html__('Query Type API', 'bricks-api-integrator');
                 $this->controls = [
@@ -127,9 +112,6 @@ if (!class_exists('Bricks_API_Source_Query')) {
                 return $options;
             }
             public function get_results($query_args = []) {
-                if (defined('WP_DEBUG') && WP_DEBUG) {
-                    error_log('BRICKS SOURCES DEBUG: get_results llamado con query_args: ' . print_r($query_args, true));
-                }
                 $source_id = isset($query_args['source_id']) ? $query_args['source_id'] : '';
                 if (empty($source_id) || $source_id === 'no_sources') {
                     return [
@@ -192,16 +174,6 @@ if (!class_exists('Bricks_API_Source_Query')) {
                 // ... (resto de la lógica de paginación y obtención de resultados)
                 // ...
                 // --- DEBUG: Log $_GET and $wp_query->query_vars before filtering ---
-                if (defined('WP_DEBUG') && WP_DEBUG) {
-                    global $wp_query;
-                    error_log('BRICKS SOURCES DEBUG: [DETAIL] $_GET=' . print_r($_GET, true));
-                    error_log('BRICKS SOURCES DEBUG: [DETAIL] $wp_query->query_vars=' . print_r($wp_query->query_vars, true));
-                }
-                // --- CLEAN LOGS: Remove all previous logs and add only relevant debug logs for filtering ---
-                if (defined('WP_DEBUG') && WP_DEBUG) {
-                    error_log('BRICKS SOURCES DEBUG: [DETAIL] Filtering by id_param: ' . $id_param . ' | value: ' . print_r($id_value, true));
-                    error_log('BRICKS SOURCES DEBUG: [DETAIL] Items BEFORE filter: ' . print_r($items, true));
-                }
                 // --- FILTER BY id_param: Only return the item that matches the value from the URL ---
                 if (isset($items) && $id_value !== null && is_array($items)) {
                     $items = array_filter($items, function($item) use ($id_param, $id_value) {
@@ -220,9 +192,6 @@ if (!class_exists('Bricks_API_Source_Query')) {
                         return false;
                     });
                     $items = array_values($items); // Reindex
-                    if (defined('WP_DEBUG') && WP_DEBUG) {
-                        error_log('BRICKS SOURCES DEBUG: [DETAIL] Items AFTER filter: ' . print_r($items, true));
-                    }
                 }
                 // --- Normalizar la respuesta: siempre array de objetos stdClass ---
                 $formatted = [];
@@ -247,9 +216,6 @@ if (!class_exists('Bricks_API_Source_Query')) {
                 // --- Devolver solo el array plano de objetos ---
                 return $formatted;
             }
-        }
-        if (defined('WP_DEBUG') && WP_DEBUG) {
-            error_log('BRICKS SOURCES DEBUG: Clase Bricks_API_Source_Query registrada (registro inmediato)');
         }
     }
 }
