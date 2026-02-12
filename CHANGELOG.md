@@ -1,5 +1,22 @@
 # Changelog - Bricks API Integrator
 
+## [0.4.0] - 2026-02-12
+
+### Filtro de Ciudad Corregido
+
+#### **Correcciones**
+- Corregir campo de ciudad en filtros: cambiar `ciudad` por `city` para coincidir con estructura de API
+- Mejorar extracción de metadata de respuesta API (aplica a todos los tipos: ciudades, tipos, zonas)
+- Agregar fallback para crear sources dinámicamente si no están registrados
+- Limpiar transients agresivamente al cargar el plugin para asegurar datos frescos
+- Agregar validación robusta al buscar endpoints de Inmovilla
+
+#### **Archivos modificados**
+- `includes/inmovilla-elements.php` - Campo city, fallback de sources
+- `includes/inmovilla-sources.php` - Extracción metadata, limpieza transients, validación endpoints
+
+---
+
 ## [0.3.0-beta] - 2026-02-12
 
 ### Página de Detalle de Inmuebles
