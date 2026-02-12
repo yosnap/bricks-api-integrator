@@ -650,20 +650,29 @@ class Inmovilla_Query_Handler {
         $items = [];
         $total = 0;
 
-        if (!empty($items_path) && isset($data[$items_path])) {
+        if (!empty($items_path) && array_key_exists($items_path, $data)) {
             $raw_items = $data[$items_path];
 
-            // El primer elemento es siempre metadata (posicion, elementos, total)
-            // Aplica para: paginacion, ciudades, tipos, zonas, destacados, etc.
-            if (!empty($raw_items) && isset($raw_items[0]['total']) && isset($raw_items[0]['posicion'])) {
-                $total = intval($raw_items[0]['total']);
-                // Quitar el primer elemento (metadata)
-                array_shift($raw_items);
-            }
+            // Si el items_path existe pero es null/vacío, no hay resultados
+            if (empty($raw_items) || !is_array($raw_items)) {
+                $items = [];
+            } else {
+                // El primer elemento es siempre metadata (posicion, elementos, total)
+                // Aplica para: paginacion, ciudades, tipos, zonas, destacados, etc.
+                if (isset($raw_items[0]['total']) && isset($raw_items[0]['posicion'])) {
+                    $total = intval($raw_items[0]['total']);
+                    // Quitar el primer elemento (metadata)
+                    array_shift($raw_items);
+                }
 
-            $items = $raw_items;
+                $items = $raw_items;
+            }
         } elseif (is_array($data)) {
-            $items = $data;
+            // Fallback: usar $data directamente, pero solo items numéricos con datos reales
+            $items = array_filter($data, function($item, $key) {
+                return is_numeric($key) && is_array($item) && !empty($item);
+            }, ARRAY_FILTER_USE_BOTH);
+            $items = array_values($items); // Reindexar
         }
 
         // Convertir a objetos
@@ -732,8 +741,21 @@ add_filter('bricks/query/run', function($results, $query) {
         $per_page = 20;
     }
 
+    // Determinar la página actual
+    // Si hay filtros activos en la URL, resetear a página 1
+    // (evita pedir pos=41 cuando el filtro reduce resultados a 2)
+    $current_page = $handler->get_current_page();
+    $url_filters = $handler->capture_filters_from_url();
+    if (!empty($url_filters) && $current_page > 1) {
+        // Verificar si 'paged' está explícitamente en la URL
+        // Si hay filtros pero no hay paged explícito, usar página 1
+        if (empty($_GET['paged'])) {
+            $current_page = 1;
+        }
+    }
+
     $query_args = [
-        'page' => $handler->get_current_page(),
+        'page' => $current_page,
         'per_page' => $per_page,
         'filters' => [],
         'order' => '',

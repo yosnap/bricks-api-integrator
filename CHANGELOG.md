@@ -1,5 +1,21 @@
 # Changelog - Bricks API Integrator
 
+## [0.4.1] - 2026-02-12
+
+### Respuesta API vacía manejada correctamente
+
+#### **Correcciones**
+- Manejar respuesta `null` de la API Inmovilla cuando no hay resultados para un filtro (ej: `paginacion: null`)
+- Usar `array_key_exists` en vez de `isset` para detectar keys con valor null en respuesta API
+- Filtrar items no válidos (null, vacíos, keys no numéricas) en fallback de extracción de datos
+- Eliminar logs de debug temporales de sesiones de depuración anteriores
+
+#### **Archivos modificados**
+- `includes/inmovilla-sources.php` - Manejo de items_path null, fallback robusto
+- `bricks-api-integrator.php` - Limpieza de logs debug temporales
+
+---
+
 ## [0.4.0] - 2026-02-12
 
 ### Filtro de Ciudad Corregido

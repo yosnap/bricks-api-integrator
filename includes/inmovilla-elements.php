@@ -480,7 +480,7 @@ function inmovilla_get_filter_options($source_type, $filter_params = []) {
     }
 
     // Para zonas con cod_ciu, pasar en el where
-    $query_args = ['per_page' => 1000, 'skip_url_filters' => true];
+    $query_args = ['per_page' => 1000, 'page' => 1, 'skip_url_filters' => true];
     if ($source_type === 'zonas' && !empty($cod_ciu)) {
         $query_args['where'] = 'cod_ciu=' . $cod_ciu;
     }

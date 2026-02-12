@@ -2,7 +2,7 @@
 /*
     * Plugin Name: Bricks API Integrator
     * Description: Integra el constructor de páginas Bricks con APIs externas de forma dinámica.
-    * Version: 0.4.0
+    * Version: 0.4.1
     * Author: sn4p Dev
     * Author URI: https://sn4p.dev
     * License: GPL2
@@ -15,7 +15,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Definir constantes del plugin
-define('BRICKS_API_INTEGRATOR_VERSION', '0.4.0');
+define('BRICKS_API_INTEGRATOR_VERSION', '0.4.1');
 define('BRICKS_API_INTEGRATOR_PATH', plugin_dir_path(__FILE__));
 define('BRICKS_API_INTEGRATOR_URL', plugin_dir_url(__FILE__));
 
@@ -262,15 +262,35 @@ class BricksAPIIntegrator {
         }
 
         // Los sources de Inmovilla ya fueron procesados por inmovilla-sources.php
-        // Solo convertir los items al formato pseudo-post que Bricks necesita para el loop
+        // Convertir al formato pseudo-post que Bricks necesita para el loop
         $normalized_slug = str_replace('-', '_', $slug);
         if (strpos($normalized_slug, 'inmovilla_') === 0) {
             if (!empty($results) && is_array($results)) {
-                $data = [];
-                foreach ($results as $item) {
-                    $data[] = (array) $item;
+                $converted = [];
+                foreach ($results as $index => $item) {
+                    $item_array = (array) $item;
+
+                    // Crear pseudo-post con todas las propiedades de la API directamente
+                    $pseudo_post = new stdClass();
+                    $pseudo_post->ID = $index + 1;
+                    $pseudo_post->post_title = '';
+                    $pseudo_post->post_content = '';
+                    $pseudo_post->post_type = 'api_data';
+                    $pseudo_post->post_status = 'publish';
+                    $pseudo_post->post_date = current_time('mysql');
+                    $pseudo_post->post_author = 1;
+                    $pseudo_post->post_name = 'inmovilla-item-' . ($index + 1);
+
+                    // Copiar TODAS las propiedades directamente al pseudo-post
+                    foreach ($item_array as $key => $value) {
+                        if (!property_exists($pseudo_post, $key)) {
+                            $pseudo_post->$key = $value;
+                        }
+                    }
+
+                    $converted[] = $pseudo_post;
                 }
-                return $this->convert_api_data_for_bricks($data);
+                return $converted;
             }
             return $results;
         }
@@ -1120,21 +1140,38 @@ class BricksAPIIntegrator {
                     if (is_array($loop_object)) {
                         $loop_object = (object)$loop_object;
                     }
+
                     $value = bricks_api_safe_get($loop_object, $field);
                     if ($value !== null) {
-                        $formatted = $this->format_field_output($value, $field);
-                        if (defined('WP_DEBUG') && WP_DEBUG) {
-                            error_log('INMOVILLA RENDER: field=' . $field . ' | valor=' . (is_scalar($formatted) ? substr((string)$formatted, 0, 100) : gettype($formatted)));
-                        }
-                        return $formatted;
+                        return $this->format_field_output($value, $field);
                     }
 
                     // Intentar acceso a través de api_data
                     if (isset($loop_object->api_data)) {
                         $api_data = $loop_object->api_data;
+
+                        // Intentar acceso directo primero (para arrays/objetos planos)
+                        if (is_object($api_data) && property_exists($api_data, $field)) {
+                            return $this->format_field_output($api_data->$field, $field);
+                        }
+                        if (is_array($api_data) && isset($api_data[$field])) {
+                            return $this->format_field_output($api_data[$field], $field);
+                        }
+
                         $value = $this->get_value_by_dot_notation($api_data, $field);
                         if ($value !== '' && $value !== null) {
                             return $this->format_field_output($value, $field);
+                        }
+                    }
+
+                    // Intentar acceso a través de api_raw_data
+                    if (isset($loop_object->api_raw_data)) {
+                        $raw = $loop_object->api_raw_data;
+                        if (is_object($raw) && property_exists($raw, $field)) {
+                            return $this->format_field_output($raw->$field, $field);
+                        }
+                        if (is_array($raw) && isset($raw[$field])) {
+                            return $this->format_field_output($raw[$field], $field);
                         }
                     }
 
@@ -1170,9 +1207,6 @@ class BricksAPIIntegrator {
                     }
                 }
 
-                if (defined('WP_DEBUG') && WP_DEBUG) {
-                    error_log('INMOVILLA RENDER FALLO: tag=' . $matches[0] . ' | loop_object=' . (empty($loop_object) ? 'VACIO' : 'TIENE_DATOS'));
-                }
                 return $matches[0]; // Devolver el tag original si no se puede resolver
             },
             $content
