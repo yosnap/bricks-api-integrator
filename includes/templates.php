@@ -593,6 +593,22 @@ function init_api_template_context() {
     
     // Set up postdata
     setup_postdata($post);
+
+    // Si es template single, setear la variable global para que los dynamic tags
+    // puedan resolver datos del inmueble sin necesidad de Query Loop
+    if (isset($api_template['template_type']) && $api_template['template_type'] === 'single' && isset($api_template['id_param'])) {
+        $id_param = $api_template['id_param'];
+        if (isset($wp_query->query_vars[$id_param])) {
+            $id_value = $wp_query->query_vars[$id_param];
+            global $bricks_api_current_item_id;
+            $bricks_api_current_item_id = [
+                'param' => $id_param,
+                'value' => $id_value,
+                'source_id' => isset($api_template['endpoint_id']) ? $api_template['endpoint_id'] : '',
+            ];
+            $_GET[$id_param] = $id_value;
+        }
+    }
 }
 add_action('template_redirect', 'init_api_template_context', 1);
 

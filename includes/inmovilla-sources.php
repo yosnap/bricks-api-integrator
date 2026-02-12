@@ -4,7 +4,7 @@
  * Crea query types predefinidos con soporte completo para filtros, paginación y sorting
  *
  * @package Bricks_API_Integrator
- * @version 0.3-beta
+ * @version 0.3.0-beta
  */
 
 if (!defined('ABSPATH')) {
@@ -309,6 +309,45 @@ function force_update_inmovilla_sources_tipo() {
 }
 add_action('admin_init', 'force_update_inmovilla_sources_tipo', 21);
 add_action('plugins_loaded', 'force_update_inmovilla_sources_tipo', 16);
+
+/**
+ * Registrar template Single automática para detalle de inmuebles
+ * Solo crea la template si no existe ninguna Single para Inmovilla
+ */
+function register_inmovilla_single_template() {
+    $api_templates = get_option('bricks_api_templates', []);
+
+    // Verificar si ya existe una template Single para Inmovilla
+    foreach ($api_templates as $template) {
+        if (
+            isset($template['template_type']) && $template['template_type'] === 'single' &&
+            isset($template['endpoint_type']) && $template['endpoint_type'] === 'source' &&
+            isset($template['endpoint_id']) && strpos($template['endpoint_id'], 'inmovilla') !== false
+        ) {
+            return; // Ya existe, no crear duplicado
+        }
+    }
+
+    // Obtener URL base desde configuración
+    $ui_options = get_option('inmovilla_ui_options', []);
+    $url_base = $ui_options['detail_url_base'] ?? 'inmuebles';
+
+    // Registrar template Single (sin page_id, el usuario debe asignar la página en admin)
+    $template_id = 'inmovilla_single_' . time();
+    $api_templates[$template_id] = [
+        'name' => 'Inmovilla - Detalle Inmueble',
+        'endpoint_type' => 'source',
+        'endpoint_id' => 'inmovilla_inmuebles',
+        'template_type' => 'single',
+        'page_id' => 0,
+        'url_base' => $url_base,
+        'id_param' => 'ref',
+    ];
+
+    update_option('bricks_api_templates', $api_templates);
+    update_option('bricks_api_flush_rewrite_rules', true);
+}
+add_action('admin_init', 'register_inmovilla_single_template', 25);
 
 /**
  * Clase para manejar las consultas de Inmovilla con soporte completo de paginación,
@@ -677,6 +716,18 @@ add_filter('bricks/query/run', function($results, $query) {
         'order' => '',
     ];
 
+    // Detectar si estamos en página de detalle (single)
+    global $bricks_api_current_item_id;
+    if (!empty($bricks_api_current_item_id) && isset($bricks_api_current_item_id['value'])) {
+        $id_param = $bricks_api_current_item_id['param'] ?? 'ref';
+        $id_value = sanitize_text_field($bricks_api_current_item_id['value']);
+        if (!empty($id_value)) {
+            $query_args['where'] = $id_param . '=' . $id_value;
+            $query_args['per_page'] = 1;
+            $query_args['skip_url_filters'] = true;
+        }
+    }
+
     // Ejecutar consulta
     $result = $handler->execute_query($source_config, $query_args, $query);
 
@@ -744,6 +795,7 @@ add_filter('bricks/dynamic_tags_list', function($tags) {
             'calefaccion' => 'Calefacción',
             'plaza_gara' => 'Plazas Garaje',
             'agencia' => 'Agencia',
+            'detail_url' => 'URL Detalle',
         ];
 
         foreach ($fields as $field => $label) {

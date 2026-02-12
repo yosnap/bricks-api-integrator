@@ -2,7 +2,7 @@
 /*
     * Plugin Name: Bricks API Integrator
     * Description: Integra el constructor de páginas Bricks con APIs externas de forma dinámica.
-    * Version: 0.2-beta
+    * Version: 0.3.0-beta
     * Author: sn4p Dev
     * Author URI: https://sn4p.dev
     * License: GPL2
@@ -15,7 +15,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Definir constantes del plugin
-define('BRICKS_API_INTEGRATOR_VERSION', '0.2-beta');
+define('BRICKS_API_INTEGRATOR_VERSION', '0.3.0-beta');
 define('BRICKS_API_INTEGRATOR_PATH', plugin_dir_path(__FILE__));
 define('BRICKS_API_INTEGRATOR_URL', plugin_dir_url(__FILE__));
 
@@ -1104,6 +1104,17 @@ class BricksAPIIntegrator {
                 // Primero intentar obtener desde el loop object actual
                 $loop_object = \Bricks\Query::get_loop_object();
 
+                // Campo especial: detail_url - construir URL de detalle
+                if ($field === 'detail_url' && !empty($loop_object)) {
+                    if (is_array($loop_object)) {
+                        $loop_object = (object)$loop_object;
+                    }
+                    $detail_url = $this->build_inmovilla_detail_url($loop_object);
+                    if ($detail_url) {
+                        return $detail_url;
+                    }
+                }
+
                 if (!empty($loop_object)) {
                     // Intentar acceso directo a la propiedad
                     if (is_array($loop_object)) {
@@ -1138,7 +1149,20 @@ class BricksAPIIntegrator {
                     }
                 }
 
-                // Si el prefijo es 'snap', usar lógica de source
+                // Si estamos en página single de Inmovilla sin Query Loop
+                if ($prefix === 'snap' && strpos($identifier, 'inmovilla') !== false) {
+                    $single_data = $this->get_inmovilla_single_data();
+                    if ($single_data && isset($single_data->$field)) {
+                        return $this->format_field_output($single_data->$field, $field);
+                    }
+                    // Intentar campo normalizado
+                    $normalized_field = str_replace(['-', '.'], '_', $field);
+                    if ($single_data && isset($single_data->$normalized_field)) {
+                        return $this->format_field_output($single_data->$normalized_field, $field);
+                    }
+                }
+
+                // Si el prefijo es 'snap', usar lógica de source genérica
                 if ($prefix === 'snap') {
                     $value = $this->get_source_field_value($identifier, $field, $post, $context);
                     if ($value !== '') {
@@ -1175,6 +1199,17 @@ class BricksAPIIntegrator {
             // Obtener desde el loop object actual
             $loop_object = \Bricks\Query::get_loop_object();
 
+            // Campo especial: detail_url
+            if ($field === 'detail_url' && !empty($loop_object)) {
+                if (is_array($loop_object)) {
+                    $loop_object = (object)$loop_object;
+                }
+                $detail_url = $this->build_inmovilla_detail_url($loop_object);
+                if ($detail_url) {
+                    return $detail_url;
+                }
+            }
+
             if (!empty($loop_object)) {
                 if (is_array($loop_object)) {
                     $loop_object = (object)$loop_object;
@@ -1195,9 +1230,112 @@ class BricksAPIIntegrator {
                     return $formatted;
                 }
             }
+
+            // Sin loop_object: intentar obtener datos single de Inmovilla
+            if (strpos($source_slug, 'inmovilla') !== false) {
+                $single_data = $this->get_inmovilla_single_data();
+                if ($single_data && isset($single_data->$field)) {
+                    return $this->format_field_output($single_data->$field, $field);
+                }
+                $normalized_field = str_replace(['-', '.'], '_', $field);
+                if ($single_data && isset($single_data->$normalized_field)) {
+                    return $this->format_field_output($single_data->$normalized_field, $field);
+                }
+            }
         }
 
         return $tag; // Devolver el tag original si no se puede resolver
+    }
+
+    /**
+     * Construir URL de detalle para un inmueble de Inmovilla
+     *
+     * @param object $loop_object Objeto del inmueble actual
+     * @return string|false URL de detalle o false si no se puede construir
+     */
+    private function build_inmovilla_detail_url($loop_object) {
+        // Obtener referencia del inmueble
+        $ref = bricks_api_safe_get($loop_object, 'ref');
+        if (empty($ref)) {
+            $ref = bricks_api_safe_get($loop_object, 'cod_ofer');
+        }
+        if (empty($ref)) {
+            return false;
+        }
+
+        // Buscar template Single configurada para Inmovilla
+        $api_templates = get_option('bricks_api_templates', []);
+        foreach ($api_templates as $template) {
+            if (
+                isset($template['template_type']) && $template['template_type'] === 'single' &&
+                isset($template['endpoint_type']) && $template['endpoint_type'] === 'source' &&
+                isset($template['endpoint_id']) && strpos($template['endpoint_id'], 'inmovilla') !== false
+            ) {
+                $url_base = $template['url_base'] ?? 'inmuebles';
+                return site_url('/' . $url_base . '/' . urlencode($ref) . '/');
+            }
+        }
+
+        // Fallback: usar configuración de Inmovilla UI o valor por defecto
+        $ui_options = get_option('inmovilla_ui_options', []);
+        $url_base = $ui_options['detail_url_base'] ?? 'inmuebles';
+        return site_url('/' . $url_base . '/' . urlencode($ref) . '/');
+    }
+
+    /**
+     * Obtener datos del inmueble actual en página single de Inmovilla
+     * Usa cache estático para evitar múltiples peticiones a la API
+     *
+     * @return object|null Datos del inmueble o null
+     */
+    private function get_inmovilla_single_data() {
+        // Cache estático para no repetir la petición por cada tag
+        static $cached_data = null;
+        static $cached_ref = null;
+
+        global $bricks_api_current_item_id;
+
+        // Si no estamos en página single, retornar null
+        if (empty($bricks_api_current_item_id) || empty($bricks_api_current_item_id['value'])) {
+            return null;
+        }
+
+        $ref = $bricks_api_current_item_id['value'];
+
+        // Si ya tenemos los datos cacheados para esta ref, retornarlos
+        if ($cached_ref === $ref && $cached_data !== null) {
+            return $cached_data;
+        }
+
+        // Verificar que existe el handler de Inmovilla
+        if (!class_exists('Inmovilla_Query_Handler')) {
+            return null;
+        }
+
+        $sources = get_option('bricks_api_sources', []);
+        $source_id = $bricks_api_current_item_id['source_id'] ?? 'inmovilla_inmuebles';
+
+        if (!isset($sources[$source_id])) {
+            return null;
+        }
+
+        $handler = Inmovilla_Query_Handler::get_instance();
+        $id_param = $bricks_api_current_item_id['param'] ?? 'ref';
+
+        $result = $handler->execute_query($sources[$source_id], [
+            'where' => $id_param . '=' . sanitize_text_field($ref),
+            'per_page' => 1,
+            'page' => 1,
+            'skip_url_filters' => true,
+        ]);
+
+        if (!empty($result['items']) && isset($result['items'][0])) {
+            $cached_ref = $ref;
+            $cached_data = is_object($result['items'][0]) ? $result['items'][0] : (object)$result['items'][0];
+            return $cached_data;
+        }
+
+        return null;
     }
 
     /**

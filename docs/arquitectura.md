@@ -132,16 +132,44 @@ $options['custom_css']           // CSS adicional
 | `[inmovilla_filters_form]` | Contenedor de filtros |
 | `[inmovilla_clear_filters]` | Botón limpiar filtros |
 
+### 5. Página de Detalle (Single)
+
+**templates.php**
+- Rewrite rules automáticas: `/inmuebles/{ref}/` → query_var `ref`
+- `init_api_template_context()` setea `$bricks_api_current_item_id` en `template_redirect`
+- Soporta templates Archive (listado) y Single (detalle)
+
+**bricks-api-integrator.php**
+- `build_inmovilla_detail_url()` - Construye URL de detalle desde loop_object
+- `get_inmovilla_single_data()` - Obtiene datos del inmueble por ref (con cache estático)
+- Dynamic tag `{snap_inmovilla-inmuebles_detail_url}` para enlazar cards
+
+**Flujo de detalle:**
+```
+1. Card en listado usa {snap_inmovilla-inmuebles_detail_url}
+   → Genera: /inmuebles/REF123/
+   ↓
+2. Rewrite rule captura ref=REF123
+   ↓
+3. init_api_template_context() setea $bricks_api_current_item_id
+   ↓
+4. render_dynamic_tags_dynamic() detecta que no hay loop_object
+   ↓
+5. get_inmovilla_single_data() consulta API con WHERE ref=REF123
+   ↓
+6. Tags se resuelven con datos del inmueble individual
+```
+
 ## Flujo de Datos
 
-### Query Loop de Inmovilla
+### Query Loop de Inmovilla (Listado)
 
 ```
 1. Bricks renderiza Query Loop
    ↓
 2. Hook bricks/query/run captura query
    ↓
-3. Inmovilla_Query_Handler::run_query()
+3. Inmovilla_Query_Handler::execute_query()
    ├── Captura filtros de $_GET
    ├── Captura ordenamiento
    ├── Construye parámetros API
@@ -174,6 +202,9 @@ Los filtros se pasan como parámetros GET:
 | `bricks/query/result_max_num_pages` | inmovilla-query-state.php | Total de páginas |
 | `bricks/setup/control_options` | sources.php | Registrar query types |
 | `bricks/dynamic_tags_list` | dynamic-tags.php | Registrar tags |
+| `bricks/query/before_query` | templates.php | Setear source en single |
+| `template_redirect` | templates.php | Contexto single + $bricks_api_current_item_id |
+| `template_include` | templates.php | Cargar página correcta |
 
 ## Variables CSS
 

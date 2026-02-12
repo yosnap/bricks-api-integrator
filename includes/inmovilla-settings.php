@@ -68,6 +68,9 @@ function inmovilla_sanitize_options($input) {
     // CSS personalizado
     $sanitized['custom_css'] = wp_strip_all_tags($input['custom_css'] ?? '');
 
+    // URL base para página de detalle
+    $sanitized['detail_url_base'] = sanitize_title($input['detail_url_base'] ?? 'inmuebles');
+
     // Textos personalizados
     $sanitized['pagination_prev_text'] = sanitize_text_field($input['pagination_prev_text'] ?? 'Anterior');
     $sanitized['pagination_next_text'] = sanitize_text_field($input['pagination_next_text'] ?? 'Siguiente');
@@ -100,7 +103,8 @@ function inmovilla_get_ui_options() {
         'results_format' => 'Mostrando {from}-{to} de {total} inmuebles',
         'results_empty_text' => 'No se encontraron resultados',
         'filter_submit_text' => 'Buscar',
-        'filter_clear_text' => 'Limpiar'
+        'filter_clear_text' => 'Limpiar',
+        'detail_url_base' => 'inmuebles',
     ];
 
     $options = get_option('inmovilla_ui_options', []);
@@ -414,6 +418,24 @@ function inmovilla_render_settings_page() {
                                    id="filter_clear_text"
                                    value="<?php echo esc_attr($options['filter_clear_text']); ?>"
                                    class="regular-text">
+                        </td>
+                    </tr>
+                </table>
+
+                <h2>Página de Detalle</h2>
+                <table class="form-table">
+                    <tr>
+                        <th scope="row"><label for="detail_url_base">URL Base Detalle</label></th>
+                        <td>
+                            <input type="text"
+                                   name="inmovilla_ui[detail_url_base]"
+                                   id="detail_url_base"
+                                   value="<?php echo esc_attr($options['detail_url_base']); ?>"
+                                   class="regular-text">
+                            <p class="description">
+                                URL base para la página de detalle de inmuebles. Ejemplo: <code>inmuebles</code> genera URLs como <code>/inmuebles/REF123/</code><br>
+                                Usa el tag <code>{snap_inmovilla-inmuebles_detail_url}</code> en Bricks para enlazar las cards al detalle.
+                            </p>
                         </td>
                     </tr>
                 </table>

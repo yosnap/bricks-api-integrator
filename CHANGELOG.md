@@ -1,5 +1,48 @@
 # Changelog - Bricks API Integrator
 
+## [0.3.0-beta] - 2026-02-12
+
+### Página de Detalle de Inmuebles
+
+#### **Nueva Funcionalidad**
+Sistema completo para páginas de detalle de inmuebles con URLs amigables y Dynamic Tags.
+
+**Dynamic Tag `detail_url`:**
+- Nuevo tag `{snap_inmovilla-inmuebles_detail_url}` para enlazar cards al detalle
+- Genera URLs como `/inmuebles/REF123/` automáticamente
+- Busca la template Single configurada o usa fallback configurable
+
+**Resolución de tags en página single (sin Query Loop):**
+- Los tags `{snap_inmovilla-inmuebles_*}` se resuelven directamente en la página de detalle
+- No requiere Query Loop: consulta la API por referencia automáticamente
+- Cache estático para evitar múltiples peticiones por página
+- Método `get_inmovilla_single_data()` con consulta WHERE por `ref`
+
+**Template Single automática:**
+- Registro automático de template Single para Inmovilla al activar
+- Rewrite rule: `/inmuebles/{ref}/` captura la referencia del inmueble
+- Parámetro `ref` como query var para WordPress
+
+**Configuración:**
+- Nuevo campo "URL Base Detalle" en pestaña Textos de Inmovilla UI
+- Valor por defecto: `inmuebles`
+
+#### **Correcciones**
+- Setear `$bricks_api_current_item_id` en `template_redirect` para que funcione sin Query Loop
+- Filtro zona dependiente de ciudad via AJAX
+- Eliminar +100 llamadas `error_log()` de depuración
+- Corregir loop infinito en restauración de filtros desde URL
+- Evitar listeners duplicados en selects con onchange inline
+- No cachear arrays vacíos en transients de filtros
+
+#### **Archivos modificados**
+- `bricks-api-integrator.php` - Tags detail_url, método single data, limpieza logs
+- `includes/inmovilla-sources.php` - Tag detail_url, lógica single, template auto
+- `includes/inmovilla-settings.php` - Campo URL base detalle, pestaña shortcodes
+- `includes/templates.php` - Seteo de bricks_api_current_item_id en template_redirect
+
+---
+
 ## [0.2.1-beta] - 2026-02-01
 
 ### Panel de Configuración Inmovilla UI
