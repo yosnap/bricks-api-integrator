@@ -1,0 +1,36 @@
+# Archivos del sistema
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDEs y editores
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.classpath
+*.sublime-project
+*.sublime-workspace
+
+# Scripts de debug y test (temporales)
+debug-*.php
+test-*.php
+*-debug.php
+
+# Logs
+*.log
+debug.log
+
+# Dependencies
+node_modules/
+vendor/
+
+# Cache
+.cache/
+*.cache
