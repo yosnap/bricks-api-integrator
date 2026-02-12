@@ -148,12 +148,16 @@ function register_inmovilla_sources() {
     // Buscar el endpoint de Inmovilla
     $inmovilla_endpoint_id = null;
     foreach ($endpoints as $id => $endpoint) {
-        if (strpos($endpoint['url'], 'apiweb.inmovilla.com') !== false) {
+        if (!is_array($endpoint)) {
+            continue;
+        }
+        if (strpos($endpoint['url'] ?? '', 'apiweb.inmovilla.com') !== false) {
             $inmovilla_endpoint_id = $id;
             break;
         }
     }
 
+    // Si no hay endpoint, no registrar sources (debe existir primero)
     if ($inmovilla_endpoint_id === null) {
         return;
     }
@@ -309,6 +313,24 @@ function force_update_inmovilla_sources_tipo() {
 }
 add_action('admin_init', 'force_update_inmovilla_sources_tipo', 21);
 add_action('plugins_loaded', 'force_update_inmovilla_sources_tipo', 16);
+
+/**
+ * Limpiar transients de filtros al cargar el plugin (para asegurar datos frescos)
+ * También se ejecuta en admin_init para limpiar después de actualizaciones
+ */
+function clear_inmovilla_filter_transients() {
+    // Limpiar todos los transients de filtros
+    delete_transient('inmovilla_filter_options_ciudades');
+    delete_transient('inmovilla_filter_options_tipos');
+    delete_transient('inmovilla_filter_options_zonas');
+
+    // Limpiar zonas con parámetros de ciudad (0-99)
+    for ($i = 0; $i < 100; $i++) {
+        delete_transient('inmovilla_filter_options_zonas_' . $i);
+    }
+}
+add_action('plugins_loaded', 'clear_inmovilla_filter_transients', 17);
+add_action('admin_init', 'clear_inmovilla_filter_transients', 22);
 
 /**
  * Registrar template Single automática para detalle de inmuebles
@@ -631,8 +653,9 @@ class Inmovilla_Query_Handler {
         if (!empty($items_path) && isset($data[$items_path])) {
             $raw_items = $data[$items_path];
 
-            // Para paginacion, el primer elemento es metadata
-            if ($items_path === 'paginacion' && isset($raw_items[0]['total'])) {
+            // El primer elemento es siempre metadata (posicion, elementos, total)
+            // Aplica para: paginacion, ciudades, tipos, zonas, destacados, etc.
+            if (!empty($raw_items) && isset($raw_items[0]['total']) && isset($raw_items[0]['posicion'])) {
                 $total = intval($raw_items[0]['total']);
                 // Quitar el primer elemento (metadata)
                 array_shift($raw_items);

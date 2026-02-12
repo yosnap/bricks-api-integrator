@@ -442,8 +442,41 @@ function inmovilla_get_filter_options($source_type, $filter_params = []) {
     $sources = get_option('bricks_api_sources', []);
     $source_key = 'inmovilla_' . $source_type;
 
+    // Si el source no existe, intentar crear uno automáticamente
     if (!isset($sources[$source_key])) {
-        return $options;
+        // Buscar el endpoint de Inmovilla
+        $endpoints = get_option('bricks_api_endpoints', []);
+        $inmovilla_endpoint_id = null;
+        foreach ($endpoints as $id => $endpoint) {
+            if (!is_array($endpoint)) {
+                continue;
+            }
+            if (strpos($endpoint['url'] ?? '', 'apiweb.inmovilla.com') !== false) {
+                $inmovilla_endpoint_id = $id;
+                break;
+            }
+        }
+
+        // Si no hay endpoint, no se puede continuar
+        if ($inmovilla_endpoint_id === null) {
+            if (defined('WP_DEBUG') && WP_DEBUG) {
+                error_log('INMOVILLA FILTER_OPTIONS: No endpoint encontrado, source ' . $source_key . ' no puede crearse');
+            }
+            return $options;
+        }
+
+        // Crear el source dinámicamente
+        $sources[$source_key] = [
+            'name' => 'Inmovilla - ' . ucfirst($source_type),
+            'query_type_name' => ucfirst($source_type) . ' (Inmovilla)',
+            'endpoint_id' => $inmovilla_endpoint_id,
+            'items_path' => $source_type,
+            'tipo' => $source_type,
+            'pagination_type' => 'none',
+            'supports_filters' => $source_type === 'zonas',
+            'supports_sorting' => false,
+            'supports_pagination' => false,
+        ];
     }
 
     // Para zonas con cod_ciu, pasar en el where
@@ -479,8 +512,8 @@ function inmovilla_get_filter_options($source_type, $filter_params = []) {
                     }
                     break;
                 case 'ciudades':
-                    if (isset($item['cod_ciu']) && isset($item['ciudad'])) {
-                        $options[$item['cod_ciu']] = $item['ciudad'];
+                    if (isset($item['cod_ciu']) && isset($item['city'])) {
+                        $options[$item['cod_ciu']] = $item['city'];
                     }
                     break;
                 case 'zonas':
