@@ -287,6 +287,37 @@ function force_update_inmovilla_zonas_source() {
 add_action('admin_init', 'force_update_inmovilla_zonas_source', 20);
 
 /**
+ * Inyectar tags virtuales (detail_url) en los sources de Inmovilla
+ * Estos tags no vienen de la API sino que son calculados por el plugin
+ */
+function inject_inmovilla_virtual_tags() {
+    $sources = get_option('bricks_api_sources', []);
+    $updated = false;
+
+    // Sources que soportan detail_url
+    $sources_with_detail = ['inmovilla_inmuebles', 'inmovilla_destacados'];
+
+    foreach ($sources_with_detail as $source_key) {
+        if (!isset($sources[$source_key])) continue;
+
+        $tags = $sources[$source_key]['tags'] ?? [];
+        $source_slug = str_replace('_', '-', $source_key);
+        $detail_tag = '{snap_' . $source_slug . '_detail_url}';
+
+        if (!in_array($detail_tag, $tags)) {
+            $sources[$source_key]['tags'][] = $detail_tag;
+            $updated = true;
+        }
+    }
+
+    if ($updated) {
+        update_option('bricks_api_sources', $sources);
+    }
+}
+add_action('plugins_loaded', 'inject_inmovilla_virtual_tags', 16);
+add_action('admin_init', 'inject_inmovilla_virtual_tags', 21);
+
+/**
  * Forzar que todos los sources de Inmovilla tengan el campo 'tipo' correcto
  */
 function force_update_inmovilla_sources_tipo() {
